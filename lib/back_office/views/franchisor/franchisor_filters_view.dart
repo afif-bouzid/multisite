@@ -1,10 +1,18 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../core/auth_provider.dart';
-import '../../../core/constants.dart';
-import '../../../core/models/models.dart';
+import '/models.dart';
 import '../../../core/repository/repository.dart';
+
+// Palette de couleurs intégrée
+const List<String> _kLocalPalette = [
+  '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#2196F3',
+  '#03A9F4', '#00BCD4', '#009688', '#4CAF50', '#8BC34A',
+  '#CDDC39', '#FFC107', '#FF9800', '#FF5722', '#795548',
+  '#9E9E9E', '#607D8B', '#000000'
+];
 
 class FiltersView extends StatelessWidget {
   const FiltersView({super.key});
@@ -12,50 +20,130 @@ class FiltersView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    return StreamBuilder<List<ProductFilter>>(
-      stream: repository.getFiltersStream(authProvider.firebaseUser!.uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final filters = snapshot.data ?? [];
-        if (filters.isEmpty) {
-          return const Center(child: Text("Aucun filtre de rangement créé."));
-        }
+    final authProvider = Provider.of<AuthProvider>(context);
+    final user = authProvider.firebaseUser;
 
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: filters.length,
-          itemBuilder: (context, index) {
-            final filter = filters[index];
-            return Card(
-              child: ListTile(
-                title: Text(filter.name),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.red),
-                  onPressed: () async =>
-                      await repository.deleteFilter(filter.id),
+    // SÉCURITÉ : Si pas d'utilisateur, on affiche un message au lieu de planter
+    if (user == null) {
+      return const Scaffold(body: Center(child: Text("Utilisateur non connecté")));
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: StreamBuilder<List<ProductFilter>>(
+        stream: repository.getFiltersStream(user.uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final filters = snapshot.data ?? [];
+
+          filters.sort((a, b) => a.name.compareTo(b.name));
+
+          if (filters.isEmpty) {
+            return const Center(child: Text("Aucun filtre de rangement créé."));
+          }
+
+          return ListView.separated(
+            padding: const EdgeInsets.all(16),
+            itemCount: filters.length,
+            separatorBuilder: (c, i) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final filter = filters[index];
+              final color = _getColorFromHex(filter.color);
+
+              return Container(
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))
+                    ]
                 ),
-              ),
-            );
-          },
-        );
-      },
+                child: ListTile(
+                  leading: Container(
+                    width: 40, height: 40,
+                    decoration: BoxDecoration(
+                      color: color.withOpacity(0.2),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: color.withOpacity(0.5)),
+                    ),
+                    child: Icon(Icons.label, color: color, size: 20),
+                  ),
+                  title: Text(filter.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.black54),
+                        onPressed: () => showFilterDialog(context, filter: filter),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () => _confirmDelete(context, repository, filter),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        onPressed: () => showFilterDialog(context),
+        icon: const Icon(Icons.add),
+        label: const Text("Nouveau Filtre"),
+      ),
     );
   }
 
-  static void showFilterDialog(BuildContext context) {
+  void _confirmDelete(BuildContext context, FranchiseRepository repo, ProductFilter filter) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Supprimer ?"),
+        content: Text("Voulez-vous supprimer le filtre '${filter.name}' ?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              await repo.deleteFilter(filter.id);
+              if (ctx.mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Supprimer"),
+          )
+        ],
+      ),
+    );
+  }
+
+  static void showFilterDialog(BuildContext context, {ProductFilter? filter}) {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.firebaseUser;
+
+    // SÉCURITÉ : On vérifie l'utilisateur avant d'ouvrir la modale
+    if (user == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Erreur: Vous devez être connecté.")),
+      );
+      return;
+    }
+
     final repository = FranchiseRepository();
-    final nameController = TextEditingController();
-    String? selectedColorHex;
+    final nameController = TextEditingController(text: filter?.name ?? '');
+    String? selectedColorHex = filter?.color;
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text("Créer un filtre de rangement"),
+        title: Text(filter == null ? "Créer un filtre" : "Modifier le filtre"),
         content: _FilterDialogContent(
           nameController: nameController,
+          initialColor: selectedColorHex,
           onColorSelected: (color) {
             selectedColorHex = color;
           },
@@ -67,17 +155,31 @@ class FiltersView extends StatelessWidget {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
-                await repository.addFilter(
-                    nameController.text, selectedColorHex);
-                nameController.clear();
+                await repository.saveFilter(
+                  franchisorId: user.uid, // Utilisation de l'ID sécurisé
+                  id: filter?.id ?? const Uuid().v4(),        // Peut être null (création)
+                  name: nameController.text.trim(),
+                  color: selectedColorHex,
+                );
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
               }
             },
-            child: const Text("Créer"),
+            child: const Text("Enregistrer"),
           ),
         ],
       ),
     );
+  }
+
+  static Color _getColorFromHex(String? hexString) {
+    if (hexString == null || hexString.isEmpty) return Colors.grey;
+    try {
+      String hex = hexString.replaceAll("#", "");
+      if (hex.length == 6) hex = "FF$hex";
+      return Color(int.parse(hex, radix: 16));
+    } catch (_) {
+      return Colors.grey;
+    }
   }
 }
 
@@ -122,10 +224,11 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: kColorPalette.map((hexColor) {
-            final color = colorFromHex(hexColor);
+          children: _kLocalPalette.map((hexColor) {
+            final color = FiltersView._getColorFromHex(hexColor);
             final isSelected = _selectedColor == hexColor;
             return InkWell(
+              borderRadius: BorderRadius.circular(50),
               onTap: () {
                 setState(() {
                   _selectedColor = isSelected ? null : hexColor;
@@ -136,13 +239,13 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(
-                  color: color,
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color:
-                        isSelected ? Colors.blueAccent : Colors.grey.shade300,
-                    width: isSelected ? 3 : 1,
-                  ),
+                    color: color,
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: isSelected ? Colors.black : Colors.grey.shade300,
+                      width: isSelected ? 2.5 : 1,
+                    ),
+                    boxShadow: isSelected ? [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6)] : null
                 ),
                 child: isSelected
                     ? const Icon(Icons.check, color: Colors.white, size: 20)

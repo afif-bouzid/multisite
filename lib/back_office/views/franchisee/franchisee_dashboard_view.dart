@@ -502,7 +502,6 @@ class _KioskSwitchButton extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        // 3. ÉCOUTE : On écoute l'état 'isKioskActive' du MAGASIN (targetStoreId)
         return StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')

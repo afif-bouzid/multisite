@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 
 // --- DIALOGUE PAIEMENT ESPÈCES ---
 class CashPaymentDialog extends StatefulWidget {
@@ -38,8 +38,9 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
     double current = _amountReceived;
     setState(() {
       _currentInput = (current + amount).toStringAsFixed(2);
-      if (_currentInput.endsWith(".00"))
+      if (_currentInput.endsWith(".00")) {
         _currentInput = _currentInput.substring(0, _currentInput.length - 3);
+      }
     });
   }
 
@@ -117,7 +118,7 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [5, 10, 20, 50]
                   .map((val) => ActionChip(
-                        label: Text("+${val}€"),
+                        label: Text("+$val€"),
                         padding: const EdgeInsets.all(4),
                         backgroundColor: Colors.blue.shade50,
                         onPressed: () => _addCash(val),

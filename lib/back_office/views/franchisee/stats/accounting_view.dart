@@ -1,10 +1,10 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../auth_provider.dart';
-import '../../../../core/models/models.dart';
+import '/models.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/accounting_export_service.dart';
 
@@ -262,7 +262,7 @@ class AccountingView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: Colors.grey.shade300)),
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+              headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
               columns: const [
                 DataColumn(
                     label: Text("Taux TVA",
@@ -314,7 +314,7 @@ class AccountingView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
                 side: BorderSide(color: Colors.grey.shade300)),
             child: DataTable(
-              headingRowColor: MaterialStateProperty.all(Colors.grey.shade100),
+              headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
               columns: const [
                 DataColumn(
                     label: Text("Mode de Paiement",

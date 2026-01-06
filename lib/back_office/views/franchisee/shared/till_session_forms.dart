@@ -1,14 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../core/auth_provider.dart';
-import '../../../../core/models/models.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/printing_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '/models.dart';
 import 'transaction_dialogs.dart';
 
 class ActiveSessionPaidHistoryView extends StatelessWidget {
@@ -230,7 +230,7 @@ Widget _buildReprintButton(BuildContext context, Transaction transaction,
     ));
   }
 
-  Future<void> _reprint(String type) async {
+  Future<void> reprint(String type) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -316,7 +316,7 @@ Widget _buildReprintButton(BuildContext context, Transaction transaction,
 
   return PopupMenuButton<String>(
     icon: const Icon(Icons.print_outlined, color: Colors.blueGrey, size: 30),
-    onSelected: (String result) => _reprint(result),
+    onSelected: (String result) => reprint(result),
     itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
       const PopupMenuItem<String>(
         value: 'caisse',

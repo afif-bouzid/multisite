@@ -1,8 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/auth_provider.dart';
-import '../../../core/models/models.dart';
+import '/models.dart';
 import '../../../core/repository/repository.dart';
 
 class FranchiseesView extends StatelessWidget {
@@ -16,7 +16,8 @@ class FranchiseesView extends StatelessWidget {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Text("⚠️ Suppression Définitive"),
+        title: const Text("⚠️ Suppression Définitive",
+            style: TextStyle(fontWeight: FontWeight.bold)),
         content: Form(
           key: formKey,
           child: SingleChildScrollView(
@@ -30,12 +31,15 @@ class FranchiseesView extends StatelessWidget {
                 const Text("Cette action est IRREVERSIBLE et supprimera :",
                     style: TextStyle(fontWeight: FontWeight.bold)),
                 const Text(
-                    "- Son compte de connexion\n- Toutes ses données (sessions, transactions)\n- Toute sa configuration (prix, etc.)"),
+                    "- Son compte de connexion\n- Toutes ses données (sessions, transactions)\n- Toute sa configuration (prix, etc.)",
+                    style: TextStyle(color: Colors.grey)),
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: emailConfirmationController,
                   decoration: InputDecoration(
-                      labelText: "Tapez '${franchisee.email}' pour confirmer"),
+                    labelText: "Tapez '${franchisee.email}' pour confirmer",
+                    border: const OutlineInputBorder(),
+                  ),
                   validator: (value) => (value != franchisee.email)
                       ? "L'email ne correspond pas."
                       : null,
@@ -47,10 +51,14 @@ class FranchiseesView extends StatelessWidget {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Annuler")),
+              child:
+              const Text("Annuler", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red, foregroundColor: Colors.white),
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
             onPressed: () {
               if (formKey.currentState!.validate()) {
                 Navigator.pop(ctx, true);
@@ -71,7 +79,7 @@ class FranchiseesView extends StatelessWidget {
               child: Padding(
                   padding: EdgeInsets.all(20.0),
                   child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    CircularProgressIndicator(),
+                    CircularProgressIndicator(color: Colors.black),
                     SizedBox(width: 20),
                     Text("Suppression en cours...")
                   ]))));
@@ -96,74 +104,164 @@ class FranchiseesView extends StatelessWidget {
     final uid =
         Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
 
-    return StreamBuilder<List<FranchiseUser>>(
-      stream: repository.getFranchiseesStream(uid),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(child: Text("Erreur: ${snapshot.error}"));
-        }
-        if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("Aucun franchisé pour le moment."));
-        }
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
+      body: StreamBuilder<List<FranchiseUser>>(
+        stream: repository.getFranchiseesStream(uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text("Erreur: ${snapshot.error}"));
+          }
+          if (!snapshot.hasData || snapshot.data!.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.storefront, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text("Aucun franchisé pour le moment.",
+                      style:
+                      TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                ],
+              ),
+            );
+          }
 
-        final franchisees = snapshot.data!;
-        return ListView.builder(
-          padding: const EdgeInsets.all(16.0),
-          itemCount: franchisees.length,
-          itemBuilder: (context, index) {
-            final franchisee = franchisees[index];
-            return Card(
-              elevation: 2.0,
-              margin: const EdgeInsets.only(bottom: 16.0),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor:
-                        Theme.of(context).primaryColor.withOpacity(0.1),
-                    child: Icon(Icons.storefront,
-                        color: Theme.of(context).primaryColor),
-                  ),
-                  title: Text(franchisee.companyName ?? 'Nom non défini',
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          final franchisees = snapshot.data!;
+          return ListView.separated(
+            padding: const EdgeInsets.all(16.0),
+            itemCount: franchisees.length,
+            separatorBuilder: (c, i) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final franchisee = franchisees[index];
+              return Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      offset: const Offset(0, 2),
+                      blurRadius: 8,
+                    )
+                  ],
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
                     children: [
-                      Text(franchisee.email),
-                      Text(franchisee.contactName ?? '',
-                          style: Theme.of(context).textTheme.bodySmall),
-                    ],
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit_outlined),
-                        onPressed: () => Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (context) => FranchiseeFormView(
-                                    franchiseeToEdit: franchisee))),
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.storefront_rounded,
+                            color: Colors.blue.shade700),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_forever_outlined,
-                            color: Colors.red),
-                        onPressed: () =>
-                            _deleteFranchisee(context, repository, franchisee),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              franchisee.companyName ?? 'Nom non défini',
+                              style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Icon(Icons.email_outlined,
+                                    size: 14, color: Colors.grey.shade500),
+                                const SizedBox(width: 4),
+                                Text(franchisee.email,
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600)),
+                              ],
+                            ),
+                            if (franchisee.contactName != null) ...[
+                              const SizedBox(height: 2),
+                              Row(
+                                children: [
+                                  Icon(Icons.person_outline,
+                                      size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 4),
+                                  Text(franchisee.contactName!,
+                                      style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.grey.shade600)),
+                                ],
+                              ),
+                            ]
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          _buildActionButton(
+                            icon: Icons.edit_rounded,
+                            color: Colors.blue.shade400,
+                            onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (context) => FranchiseeFormView(
+                                        franchiseeToEdit: franchisee))),
+                          ),
+                          const SizedBox(width: 8),
+                          _buildActionButton(
+                            icon: Icons.delete_forever_rounded,
+                            color: Colors.red.shade300,
+                            onTap: () => _deleteFranchisee(
+                                context, repository, franchisee),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-              ),
-            );
-          },
-        );
-      },
+              );
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        elevation: 4,
+        icon: const Icon(Icons.add_business_rounded),
+        label: const Text("Nouveau Franchisé",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const FranchiseeFormView())),
+      ),
+    );
+  }
+
+  Widget _buildActionButton(
+      {required IconData icon,
+        required Color color,
+        required VoidCallback onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(50),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: color.withOpacity(0.2)),
+        ),
+        child: Icon(icon, size: 18, color: color),
+      ),
     );
   }
 }
@@ -275,21 +373,25 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title:
-            Text(_isEditing ? "Modifier un Franchisé" : "Créer un Franchisé"),
+        Text(_isEditing ? "Modifier un Franchisé" : "Créer un Franchisé"),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
-            child: ElevatedButton.icon(
+            child: TextButton.icon(
               icon: _isLoading
                   ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.save),
-              label: const Text("Sauvegarder"),
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.blue))
+                  : const Icon(Icons.check, color: Colors.blue),
+              label: Text("Sauvegarder",
+                  style: TextStyle(
+                      color: _isLoading ? Colors.grey : Colors.blue,
+                      fontWeight: FontWeight.bold)),
               onPressed: _isLoading ? null : _saveFranchisee,
             ),
           )
@@ -300,140 +402,198 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
         child: ListView(
           padding: const EdgeInsets.all(16.0),
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Informations sur l'entreprise",
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                        controller: _companyNameController,
-                        decoration: const InputDecoration(
-                            labelText: "Nom de la société",
-                            prefixIcon: Icon(Icons.business)),
-                        validator: (v) => v!.isEmpty ? "Requis" : null),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                        controller: _contactNameController,
-                        decoration: const InputDecoration(
-                            labelText: "Nom du contact principal",
-                            prefixIcon: Icon(Icons.person)),
-                        validator: (v) => v!.isEmpty ? "Requis" : null),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                        controller: _phoneController,
-                        decoration: const InputDecoration(
-                            labelText: "Numéro de téléphone",
-                            prefixIcon: Icon(Icons.phone)),
-                        validator: (v) => v!.isEmpty ? "Requis" : null),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                        controller: _addressController,
-                        decoration: const InputDecoration(
-                            labelText: "Adresse postale",
-                            prefixIcon: Icon(Icons.location_on_outlined)),
-                        validator: (v) => v!.isEmpty ? "Requis" : null),
-                  ],
-                ),
+            _buildSectionTitle("Informations Entreprise"),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  TextFormField(
+                      controller: _companyNameController,
+                      decoration: const InputDecoration(
+                          labelText: "Nom de la société",
+                          prefixIcon: Icon(Icons.business_rounded),
+                          border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? "Requis" : null),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                      controller: _contactNameController,
+                      decoration: const InputDecoration(
+                          labelText: "Nom du contact",
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                          border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? "Requis" : null),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                      controller: _phoneController,
+                      decoration: const InputDecoration(
+                          labelText: "Téléphone",
+                          prefixIcon: Icon(Icons.phone_rounded),
+                          border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? "Requis" : null),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                      controller: _addressController,
+                      decoration: const InputDecoration(
+                          labelText: "Adresse",
+                          prefixIcon: Icon(Icons.location_on_outlined),
+                          border: OutlineInputBorder()),
+                      validator: (v) => v!.isEmpty ? "Requis" : null),
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Identifiants de Connexion",
-                        style: Theme.of(context).textTheme.titleLarge),
-                    if (_isEditing)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
-                        child: Text(
-                            "L'email et le mot de passe ne peuvent pas être modifiés depuis cette interface.",
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: Colors.grey.shade700)),
+            const SizedBox(height: 32),
+            _buildSectionTitle("Connexion"),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
+              ),
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  if (_isEditing)
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(8),
                       ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline,
+                              color: Colors.blue.shade700, size: 20),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              "Email et mot de passe non modifiables ici.",
+                              style: TextStyle(
+                                  color: Colors.blue.shade900, fontSize: 13),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  TextFormField(
+                    controller: _emailController,
+                    readOnly: _isEditing,
+                    decoration: InputDecoration(
+                        labelText: "Email",
+                        prefixIcon: const Icon(Icons.email_outlined),
+                        filled: _isEditing,
+                        fillColor: _isEditing ? Colors.grey.shade100 : null,
+                        border: const OutlineInputBorder()),
+                    keyboardType: TextInputType.emailAddress,
+                    validator: (v) =>
+                    (v == null || v.isEmpty || !v.contains('@'))
+                        ? "Email invalide"
+                        : null,
+                  ),
+                  if (!_isEditing) ...[
                     const SizedBox(height: 16),
                     TextFormField(
-                      controller: _emailController,
-                      readOnly: _isEditing,
-                      decoration: InputDecoration(
-                          labelText: "Email de connexion",
-                          prefixIcon: const Icon(Icons.email_outlined),
-                          filled: _isEditing,
-                          fillColor: _isEditing ? Colors.grey.shade200 : null),
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) =>
-                          (v == null || v.isEmpty || !v.contains('@'))
-                              ? "Email invalide"
-                              : null,
+                      controller: _passwordController,
+                      decoration: const InputDecoration(
+                          labelText: "Mot de passe (8+ car.)",
+                          prefixIcon: Icon(Icons.lock_outline),
+                          border: OutlineInputBorder()),
+                      obscureText: true,
+                      validator: (v) => (v == null || v.length < 8)
+                          ? "8 caractères minimum"
+                          : null,
                     ),
-                    if (!_isEditing) ...[
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordController,
-                        decoration: const InputDecoration(
-                            labelText: "Mot de passe (8 caractères min.)",
-                            prefixIcon: Icon(Icons.lock_outline)),
-                        obscureText: true,
-                        validator: (v) => (v == null || v.length < 8)
-                            ? "8 caractères minimum requis"
-                            : null,
-                      ),
-                    ]
-                  ],
-                ),
+                  ]
+                ],
               ),
             ),
-            const SizedBox(height: 24),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text("Modules Activés",
-                        style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 16),
-                    SwitchListTile(
-                      title: const Text("Module Borne"),
-                      subtitle: const Text(
-                          "Donne accès à la configuration de la borne."),
-                      value: _moduleKioskEnabled,
-                      onChanged: (value) =>
-                          setState(() => _moduleKioskEnabled = value),
-                    ),
-                    SwitchListTile(
-                      title: const Text("Module Offres Promotionnelles"),
-                      subtitle: const Text(
-                          "Permet au franchisé de créer ses propres offres."),
-                      value: _moduleDealsEnabled,
-                      onChanged: (value) =>
-                          setState(() => _moduleDealsEnabled = value),
-                    ),
-                    SwitchListTile(
-                      title: const Text("Module Click & Collect"),
-                      subtitle: const Text(
-                          "Active la gestion des commandes en ligne."),
-                      value: _moduleClickAndCollectEnabled,
-                      onChanged: (value) =>
-                          setState(() => _moduleClickAndCollectEnabled = value),
-                    ),
-                  ],
-                ),
+            const SizedBox(height: 32),
+            _buildSectionTitle("Modules"),
+            Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.04),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4))
+                ],
+              ),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    activeThumbColor: Colors.black,
+                    title: const Text("Borne",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Accès à la configuration borne."),
+                    secondary:
+                    const Icon(Icons.touch_app, color: Colors.black87),
+                    value: _moduleKioskEnabled,
+                    onChanged: (value) =>
+                        setState(() => _moduleKioskEnabled = value),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    activeThumbColor: Colors.black,
+                    title: const Text("Offres Promos",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Création d'offres spéciales."),
+                    secondary:
+                    const Icon(Icons.local_offer, color: Colors.black87),
+                    value: _moduleDealsEnabled,
+                    onChanged: (value) =>
+                        setState(() => _moduleDealsEnabled = value),
+                  ),
+                  const Divider(height: 1),
+                  SwitchListTile(
+                    activeThumbColor: Colors.black,
+                    title: const Text("Click & Collect",
+                        style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: const Text("Gestion commandes en ligne."),
+                    secondary:
+                    const Icon(Icons.shopping_bag, color: Colors.black87),
+                    value: _moduleClickAndCollectEnabled,
+                    onChanged: (value) =>
+                        setState(() => _moduleClickAndCollectEnabled = value),
+                  ),
+                ],
               ),
             ),
-            if (_isEditing)
+            if (_isEditing) ...[
+              const SizedBox(height: 32),
               FranchiseeEmployeesSection(
                   franchiseeId: widget.franchiseeToEdit!.uid),
+            ],
+            const SizedBox(height: 80),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
+      child: Text(
+        title,
+        style: const TextStyle(
+            fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
       ),
     );
   }
@@ -457,6 +617,8 @@ class FranchiseeEmployeesSection extends StatelessWidget {
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text("Ajouter un employé"),
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Form(
             key: formKey,
             child: Column(
@@ -464,23 +626,28 @@ class FranchiseeEmployeesSection extends StatelessWidget {
               children: [
                 TextFormField(
                   controller: nameController,
-                  decoration: const InputDecoration(labelText: "Nom"),
+                  decoration: const InputDecoration(
+                      labelText: "Nom", border: OutlineInputBorder()),
                   validator: (v) => v!.isEmpty ? "Requis" : null,
                 ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: emailController,
-                  decoration: const InputDecoration(labelText: "Email"),
+                  decoration: const InputDecoration(
+                      labelText: "Email", border: OutlineInputBorder()),
                   validator: (v) => v!.contains('@') ? null : "Email invalide",
                 ),
+                const SizedBox(height: 12),
                 TextFormField(
                   controller: passwordController,
-                  decoration: const InputDecoration(labelText: "Mot de passe"),
+                  decoration: const InputDecoration(
+                      labelText: "Mot de passe", border: OutlineInputBorder()),
                   obscureText: true,
                   validator: (v) => v!.length < 6 ? "6 caractères min." : null,
                 ),
                 if (isLoading)
                   const Padding(
-                      padding: EdgeInsets.all(8.0),
+                      padding: EdgeInsets.all(16.0),
                       child: CircularProgressIndicator())
               ],
             ),
@@ -488,36 +655,39 @@ class FranchiseeEmployeesSection extends StatelessWidget {
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(ctx),
-                child: const Text("Annuler")),
+                child: const Text("Annuler",
+                    style: TextStyle(color: Colors.grey))),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black, foregroundColor: Colors.white),
               onPressed: isLoading
                   ? null
                   : () async {
-                      if (formKey.currentState!.validate()) {
-                        setState(() => isLoading = true);
-                        String? error = await repository.createEmployee(
-                          managerId: franchiseeId,
-                          name: nameController.text.trim(),
-                          email: emailController.text.trim(),
-                          password: passwordController.text.trim(),
-                        );
-                        setState(() => isLoading = false);
+                if (formKey.currentState!.validate()) {
+                  setState(() => isLoading = true);
+                  String? error = await repository.createEmployee(
+                    managerId: franchiseeId,
+                    name: nameController.text.trim(),
+                    email: emailController.text.trim(),
+                    password: passwordController.text.trim(),
+                  );
+                  setState(() => isLoading = false);
 
-                        if (context.mounted) {
-                          if (error == null) {
-                            Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text("Employé créé !"),
-                                    backgroundColor: Colors.green));
-                          } else {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text(error),
-                                backgroundColor: Colors.red));
-                          }
-                        }
-                      }
-                    },
+                  if (context.mounted) {
+                    if (error == null) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                              content: Text("Employé créé !"),
+                              backgroundColor: Colors.green));
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text(error),
+                          backgroundColor: Colors.red));
+                    }
+                  }
+                }
+              },
               child: const Text("Ajouter"),
             ),
           ],
@@ -528,85 +698,114 @@ class FranchiseeEmployeesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 16.0),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Gestion du Personnel",
-                    style: Theme.of(context).textTheme.titleLarge),
-                IconButton(
-                  icon: const Icon(Icons.person_add, color: Colors.blue),
-                  onPressed: () => _showAddEmployeeDialog(context),
-                  tooltip: "Ajouter un employé",
-                )
-              ],
+            const Padding(
+              padding: EdgeInsets.only(left: 4.0),
+              child: Text(
+                "Personnel",
+                style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black87),
+              ),
             ),
-            const Divider(),
-            StreamBuilder<List<FranchiseUser>>(
-              stream: repository.getStoreEmployeesStream(franchiseeId),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Text("Aucun employé enregistré pour ce magasin.",
-                        style: TextStyle(color: Colors.grey)),
-                  );
-                }
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: snapshot.data!.length,
-                  itemBuilder: (context, index) {
-                    final employee = snapshot.data![index];
-                    return ListTile(
-                      leading: const CircleAvatar(
-                          child: Icon(Icons.badge, size: 20)),
-                      title: Text(employee.companyName ?? "Sans nom"),
-                      subtitle: Text(employee.email),
-                      trailing: IconButton(
-                        icon:
-                            const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () async {
-                          final confirm = await showDialog<bool>(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text("Supprimer ?"),
-                              content: Text(
-                                  "Supprimer l'accès de ${employee.companyName} ?"),
-                              actions: [
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx, false),
-                                    child: const Text("Annuler")),
-                                TextButton(
-                                    onPressed: () => Navigator.pop(ctx, true),
-                                    child: const Text("Supprimer",
-                                        style: TextStyle(color: Colors.red))),
-                              ],
-                            ),
-                          );
-                          if (confirm == true) {
-                            await repository.deleteEmployee(employee.uid);
-                          }
-                        },
-                      ),
-                    );
-                  },
-                );
-              },
-            ),
+            TextButton.icon(
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text("Ajouter"),
+              onPressed: () => _showAddEmployeeDialog(context),
+            )
           ],
         ),
-      ),
+        const SizedBox(height: 8),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4))
+            ],
+          ),
+          child: StreamBuilder<List<FranchiseUser>>(
+            stream: repository.getStoreEmployeesStream(franchiseeId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                    child: Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator()));
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.all(24.0),
+                  child: Center(
+                    child: Text("Aucun employé enregistré.",
+                        style: TextStyle(color: Colors.grey)),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: snapshot.data!.length,
+                separatorBuilder: (c, i) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final employee = snapshot.data![index];
+                  return ListTile(
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 8),
+                    leading: CircleAvatar(
+                      backgroundColor: Colors.grey.shade100,
+                      child:
+                      Icon(Icons.badge_outlined, color: Colors.grey.shade600),
+                    ),
+                    title: Text(employee.companyName ?? "Sans nom",
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(employee.email),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete_outline,
+                          color: Colors.red.shade300),
+                      onPressed: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (ctx) => AlertDialog(
+                            title: const Text("Supprimer ?"),
+                            content: Text(
+                                "Révoquer l'accès de ${employee.companyName} ?"),
+                            actions: [
+                              TextButton(
+                                  onPressed: () => Navigator.pop(ctx, false),
+                                  child: const Text("Annuler",
+                                      style: TextStyle(color: Colors.grey))),
+                              ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.red,
+                                      foregroundColor: Colors.white),
+                                  onPressed: () => Navigator.pop(ctx, true),
+                                  child: const Text("Supprimer")),
+                            ],
+                          ),
+                        );
+                        if (confirm == true) {
+                          await repository.deleteEmployee(employee.uid);
+                        }
+                      },
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

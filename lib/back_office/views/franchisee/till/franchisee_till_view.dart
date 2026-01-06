@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 // Imports Core
 import '../../../../../core/auth_provider.dart';
-import '../../../../../core/models/models.dart';
+import '/models.dart';
 import '../../../../../core/repository/repository.dart';
 
 class FranchiseeTillView extends StatefulWidget {

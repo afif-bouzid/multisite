@@ -2,8 +2,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 // Importez vos modèles ici (MasterProduct, FranchiseeMenuItem, etc.)
-import '../../back_office/views/franchisee/franchisee_composite_overrides_dialog.dart';
-import '../../core/models/models.dart';
+import '../../../models.dart';
+import 'franchisee_composite_overrides_dialog.dart';
 
 class FranchiseeProductCard extends StatelessWidget {
   final MasterProduct product;
@@ -80,7 +80,7 @@ class FranchiseeProductCard extends StatelessWidget {
                 children: [
                   Switch(
                     value: isEnabled,
-                    activeColor: Colors.green,
+                    activeThumbColor: Colors.green,
                     onChanged: onToggleSwitch,
                   ),
                   if (isEnabled)

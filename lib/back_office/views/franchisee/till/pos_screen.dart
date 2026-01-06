@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../core/auth_provider.dart';
-import '../../../../../core/models/models.dart';
 import '../../../../../core/repository/repository.dart';
+import '../../../../models.dart';
 import 'pos_dialogs.dart';
 import 'widgets/cart_panel.dart';
 import 'widgets/product_view_content.dart';

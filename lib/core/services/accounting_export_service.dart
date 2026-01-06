@@ -7,7 +7,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 import 'package:universal_html/html.dart' as html;
-import '../models/models.dart';
+import '../../models.dart';
 
 class AccountingExportService {
   final dateFormatter = DateFormat('dd/MM/yyyy HH:mm');

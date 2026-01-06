@@ -1,5 +1,9 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+
+// ===========================================================================
+// 1. UTILISATEURS ET AUTHENTIFICATION
+// ===========================================================================
 
 enum OrderType { onSite, takeaway }
 
@@ -8,43 +12,113 @@ class FranchiseUser {
   final String email;
   final String role;
   final String? franchisorId;
+  final String? storeId;
   final String? companyName;
   final String? contactName;
   final String? phone;
   final String? address;
   final Map<String, bool> enabledModules;
 
+  // Champs étendus pour l'affichage borne/écran
+  final String? restaurantName;
+  final String? screensaverUrl;
+  final List<String> screensaverUrls;
+  final String? dineInImageUrl;
+  final String? takeawayImageUrl;
+
   FranchiseUser({
     required this.uid,
     required this.email,
     required this.role,
     this.franchisorId,
+    this.storeId,
     this.companyName,
     this.contactName,
     this.phone,
     this.address,
     this.enabledModules = const {},
+    this.restaurantName,
+    this.screensaverUrl,
+    this.screensaverUrls = const [],
+    this.dineInImageUrl,
+    this.takeawayImageUrl,
   });
 
   factory FranchiseUser.fromFirestore(Map<String, dynamic> data, String uid) {
     final modulesData = (data['enabledModules'] as Map<String, dynamic>?)
-            ?.map((key, value) => MapEntry(key, value as bool)) ??
+        ?.map((key, value) => MapEntry(key, value as bool)) ??
         {};
+
+    List<String> parsedScreensaverUrls = [];
+    if (data['screensaverUrls'] != null) {
+      parsedScreensaverUrls = List<String>.from(data['screensaverUrls'])
+          .where((url) => url.isNotEmpty)
+          .toList();
+    }
 
     return FranchiseUser(
       uid: uid,
       email: data['email'] ?? '',
       role: data['role'] ?? 'franchisee',
       franchisorId: data['franchisorId'],
+      storeId: data['storeId'],
       companyName: data['companyName'],
       contactName: data['contactName'],
       phone: data['phone'],
       address: data['address'],
       enabledModules: modulesData,
+      restaurantName: data['restaurantName'] ?? data['companyName'] ?? 'Restaurant Sans Nom',
+      screensaverUrl: data['screensaverUrl'],
+      screensaverUrls: parsedScreensaverUrls,
+      dineInImageUrl: data['dineInImageUrl'],
+      takeawayImageUrl: data['takeawayImageUrl'],
     );
   }
 
   bool get isFranchisor => role == 'franchisor';
+  bool get isFranchisee => role == 'franchisee';
+  bool get isEmployee => role == 'employee';
+  String get effectiveStoreId => role == 'franchisee' ? uid : (storeId ?? '');
+}
+
+// ===========================================================================
+// 2. PRODUITS ET OPTIONS (CATALOGUE)
+// ===========================================================================
+
+class ProductOption {
+  final String id;
+  final String name;
+  final List<String> sectionIds;
+  final String? imageUrl;
+  final double priceOverride;
+
+  ProductOption({
+    required this.id,
+    required this.name,
+    this.sectionIds = const [],
+    this.imageUrl,
+    this.priceOverride = 0.0,
+  });
+
+  factory ProductOption.fromMap(Map<String, dynamic> map) {
+    return ProductOption(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      sectionIds: List<String>.from(map['sectionIds'] ?? []),
+      imageUrl: map['imageUrl'],
+      priceOverride: (map['priceOverride'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'sectionIds': sectionIds,
+      'imageUrl': imageUrl,
+      'priceOverride': priceOverride,
+    };
+  }
 }
 
 class MasterProduct {
@@ -54,10 +128,14 @@ class MasterProduct {
   final String? description;
   final String? photoUrl;
   final List<String> sectionIds;
+  final List<ProductOption> options;
   final bool isComposite;
   final bool isIngredient;
+  final List<String> ingredientProductIds;
   final List<String> filterIds;
   final List<String> kioskFilterIds;
+  final int position;
+  final String? color;
 
   MasterProduct({
     required this.id,
@@ -66,10 +144,14 @@ class MasterProduct {
     this.description,
     this.photoUrl,
     this.sectionIds = const [],
+    this.options = const [],
     required this.isComposite,
     this.isIngredient = false,
+    this.ingredientProductIds = const [],
     this.filterIds = const [],
     this.kioskFilterIds = const [],
+    this.position = 9999,
+    this.color,
   });
 
   factory MasterProduct.fromFirestore(Map<String, dynamic> data, String id) =>
@@ -80,12 +162,41 @@ class MasterProduct {
         description: data['description'],
         photoUrl: data['photoUrl'],
         sectionIds: List<String>.from(data['sectionIds'] ?? []),
+        options: (data['options'] as List<dynamic>?)
+            ?.map((e) => ProductOption.fromMap(e as Map<String, dynamic>))
+            .toList() ??
+            [],
         isComposite: data['isComposite'] ?? false,
         isIngredient: data['isIngredient'] ?? false,
+        ingredientProductIds: List<String>.from(data['ingredientProductIds'] ?? []),
         filterIds: List<String>.from(data['filterIds'] ?? []),
         kioskFilterIds: List<String>.from(data['kioskFilterIds'] ?? []),
+        position: (data['position'] is num)
+            ? (data['position'] as num).toInt()
+            : int.tryParse(data['position']?.toString() ?? '9999') ?? 9999,
+        color: data['color'],
       );
+
+  Map<String, dynamic> toMap() => {
+    'productId': productId,
+    'name': name,
+    'description': description,
+    'photoUrl': photoUrl,
+    'sectionIds': sectionIds,
+    'options': options.map((e) => e.toMap()).toList(),
+    'isComposite': isComposite,
+    'isIngredient': isIngredient,
+    'ingredientProductIds': ingredientProductIds,
+    'filterIds': filterIds,
+    'kioskFilterIds': kioskFilterIds,
+    'position': position,
+    'color': color,
+  };
 }
+
+// ===========================================================================
+// 3. SECTIONS, FILTRES ET GROUPES
+// ===========================================================================
 
 class SectionItem {
   MasterProduct product;
@@ -104,39 +215,57 @@ class ProductSection {
   List<SectionItem> items;
   List<String> filterIds;
 
-  ProductSection(
-      {required this.id,
-      required this.sectionId,
-      this.title = '',
-      this.type = 'radio',
-      this.selectionMin = 1,
-      this.selectionMax = 1,
-      this.items = const [],
-      this.filterIds = const []});
+  ProductSection({
+    required this.id,
+    required this.sectionId,
+    this.title = '',
+    this.type = 'radio',
+    this.selectionMin = 1,
+    this.selectionMax = 1,
+    this.items = const [],
+    this.filterIds = const [],
+  });
 
   factory ProductSection.fromFirestore(
       DocumentSnapshot<Map<String, dynamic>> doc, List<SectionItem> items) {
     final data = doc.data() as Map<String, dynamic>;
     return ProductSection(
-        id: doc.id,
-        sectionId: data['sectionId'] ?? '',
-        title: data['title'] ?? '',
-        type: data['type'] ?? 'radio',
-        selectionMin: (data['selectionMin'] as num?)?.toInt() ?? 1,
-        selectionMax: (data['selectionMax'] as num?)?.toInt() ?? 1,
-        items: items,
-        filterIds: List<String>.from(data['filterIds'] ?? []));
+      id: doc.id,
+      sectionId: data['sectionId'] ?? '',
+      title: data['title'] ?? '',
+      type: data['type'] ?? 'radio',
+      selectionMin: (data['selectionMin'] as num?)?.toInt() ?? 1,
+      selectionMax: (data['selectionMax'] as num?)?.toInt() ?? 1,
+      items: items,
+      filterIds: List<String>.from(data['filterIds'] ?? []),
+    );
   }
 }
 
 class ProductFilter {
   final String id;
   final String name;
+  final int position;
+  final String? color;
 
-  ProductFilter({required this.id, required this.name});
+  ProductFilter({
+    required this.id,
+    required this.name,
+    this.position = 9999,
+    this.color,
+  });
 
-  factory ProductFilter.fromFirestore(DocumentSnapshot doc) => ProductFilter(
-      id: doc.id, name: (doc.data() as Map<String, dynamic>)['name'] ?? '');
+  factory ProductFilter.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return ProductFilter(
+      id: doc.id,
+      name: data['name'] ?? '',
+      position: (data['position'] is num)
+          ? (data['position'] as num).toInt()
+          : int.tryParse(data['position']?.toString() ?? '9999') ?? 9999,
+      color: data['color'],
+    );
+  }
 }
 
 class SectionGroup {
@@ -145,19 +274,66 @@ class SectionGroup {
   final List<String> sectionIds;
   final List<String> filterIds;
 
-  SectionGroup(
-      {required this.id,
-      required this.name,
-      this.sectionIds = const [],
-      this.filterIds = const []});
+  SectionGroup({
+    required this.id,
+    required this.name,
+    this.sectionIds = const [],
+    this.filterIds = const [],
+  });
 
   factory SectionGroup.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return SectionGroup(
-        id: doc.id,
-        name: data['name'] ?? '',
-        sectionIds: List<String>.from(data['sectionIds'] ?? []),
-        filterIds: List<String>.from(data['filterIds'] ?? []));
+      id: doc.id,
+      name: data['name'] ?? '',
+      sectionIds: List<String>.from(data['sectionIds'] ?? []),
+      filterIds: List<String>.from(data['filterIds'] ?? []),
+    );
+  }
+}
+
+// ===========================================================================
+// 4. STRUCTURE BORNE (KIOSK)
+// ===========================================================================
+
+class KioskMedia {
+  final String id;
+  final String franchisorId;
+  final String name;
+  final String type; // 'image' ou 'video'
+  final String url;
+  final String? thumbnailUrl;
+
+  KioskMedia({
+    required this.id,
+    required this.franchisorId,
+    required this.name,
+    required this.type,
+    required this.url,
+    this.thumbnailUrl,
+  });
+
+  factory KioskMedia.fromFirestore(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    return KioskMedia(
+      id: doc.id,
+      franchisorId: data['franchisorId'] ?? '',
+      name: data['name'] ?? 'Média sans nom',
+      type: data['type'] ?? 'image',
+      url: data['url'] ?? '',
+      thumbnailUrl: data['thumbnailUrl'],
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'franchisorId': franchisorId,
+      'name': name,
+      'type': type,
+      'url': url,
+      'thumbnailUrl': thumbnailUrl,
+      'createdAt': FieldValue.serverTimestamp(),
+    };
   }
 }
 
@@ -165,15 +341,36 @@ class KioskFilter {
   final String id;
   final String name;
   final int position;
+  final String? color;
+  final String? imageUrl;
 
-  KioskFilter({required this.id, required this.name, required this.position});
+  KioskFilter({
+    required this.id,
+    required this.name,
+    required this.position,
+    this.color,
+    this.imageUrl,
+  });
 
   factory KioskFilter.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return KioskFilter(
-        id: doc.id,
-        name: data['name'] ?? '',
-        position: (data['position'] as num?)?.toInt() ?? 0);
+      id: doc.id,
+      name: data['name'] ?? '',
+      position: (data['position'] as num?)?.toInt() ?? 0,
+      color: data['color'],
+      imageUrl: data['imageUrl'],
+    );
+  }
+
+  KioskFilter copyWith({String? id, String? name, int? position, String? color, String? imageUrl}) {
+    return KioskFilter(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      position: position ?? this.position,
+      color: color ?? this.color,
+      imageUrl: imageUrl ?? this.imageUrl,
+    );
   }
 }
 
@@ -181,24 +378,42 @@ class KioskCategory {
   final String id;
   final String name;
   final int position;
+  final String? imageUrl;
   final List<KioskFilter> filters;
 
-  KioskCategory(
-      {required this.id,
-      required this.name,
-      required this.position,
-      this.filters = const []});
+  KioskCategory({
+    required this.id,
+    required this.name,
+    required this.position,
+    this.imageUrl,
+    this.filters = const [],
+  });
 
-  factory KioskCategory.fromFirestore(
-      DocumentSnapshot doc, List<KioskFilter> filters) {
+  factory KioskCategory.fromFirestore(DocumentSnapshot doc, List<KioskFilter> filters) {
     final data = doc.data() as Map<String, dynamic>;
     return KioskCategory(
-        id: doc.id,
-        name: data['name'] ?? '',
-        position: (data['position'] as num?)?.toInt() ?? 0,
-        filters: filters);
+      id: doc.id,
+      name: data['name'] ?? '',
+      position: (data['position'] as num?)?.toInt() ?? 0,
+      imageUrl: data['imageUrl'],
+      filters: filters,
+    );
+  }
+
+  KioskCategory copyWith({String? id, String? name, int? position, String? imageUrl, List<KioskFilter>? filters}) {
+    return KioskCategory(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      position: position ?? this.position,
+      imageUrl: imageUrl ?? this.imageUrl,
+      filters: filters ?? this.filters,
+    );
   }
 }
+
+// ===========================================================================
+// 5. TRANSACTIONS, VENTES ET PANIER
+// ===========================================================================
 
 class Deal {
   final String id;
@@ -206,23 +421,24 @@ class Deal {
   final double price;
   final List<String> sectionIds;
 
-  Deal(
-      {required this.id,
-      required this.name,
-      required this.price,
-      required this.sectionIds});
+  Deal({
+    required this.id,
+    required this.name,
+    required this.price,
+    required this.sectionIds,
+  });
 
   factory Deal.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Deal(
-        id: doc.id,
-        name: data['name'] ?? '',
-        price: (data['price'] as num?)?.toDouble() ?? 0.0,
-        sectionIds: List<String>.from(data['sectionIds'] ?? []));
+      id: doc.id,
+      name: data['name'] ?? '',
+      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      sectionIds: List<String>.from(data['sectionIds'] ?? []),
+    );
   }
 
-  Map<String, dynamic> toMap() =>
-      {'name': name, 'price': price, 'sectionIds': sectionIds};
+  Map<String, dynamic> toMap() => {'name': name, 'price': price, 'sectionIds': sectionIds};
 }
 
 class TillSession {
@@ -234,37 +450,38 @@ class TillSession {
   final double? finalCash;
   final bool isClosed;
 
-  TillSession(
-      {required this.id,
-      required this.franchiseeId,
-      required this.openingTime,
-      required this.initialCash,
-      this.closingTime,
-      this.finalCash,
-      this.isClosed = false});
+  TillSession({
+    required this.id,
+    required this.franchiseeId,
+    required this.openingTime,
+    required this.initialCash,
+    this.closingTime,
+    this.finalCash,
+    this.isClosed = false,
+  });
 
   factory TillSession.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    DateTime? parseTimestamp(dynamic value) =>
-        (value is Timestamp) ? value.toDate() : null;
+    DateTime? parseTimestamp(dynamic value) => (value is Timestamp) ? value.toDate() : null;
     return TillSession(
-        id: doc.id,
-        franchiseeId: data['franchiseeId'] ?? '',
-        openingTime: parseTimestamp(data['openingTime']) ?? DateTime.now(),
-        initialCash: (data['initialCash'] as num?)?.toDouble() ?? 0.0,
-        closingTime: parseTimestamp(data['closingTime']),
-        finalCash: (data['finalCash'] as num?)?.toDouble(),
-        isClosed: data['isClosed'] ?? false);
+      id: doc.id,
+      franchiseeId: data['franchiseeId'] ?? '',
+      openingTime: parseTimestamp(data['openingTime']) ?? DateTime.now(),
+      initialCash: (data['initialCash'] as num?)?.toDouble() ?? 0.0,
+      closingTime: parseTimestamp(data['closingTime']),
+      finalCash: (data['finalCash'] as num?)?.toDouble(),
+      isClosed: data['isClosed'] ?? false,
+    );
   }
 
   Map<String, dynamic> toMap() => {
-        'franchiseeId': franchiseeId,
-        'openingTime': openingTime,
-        'initialCash': initialCash,
-        'closingTime': closingTime,
-        'finalCash': finalCash,
-        'isClosed': isClosed
-      };
+    'franchiseeId': franchiseeId,
+    'openingTime': openingTime,
+    'initialCash': initialCash,
+    'closingTime': closingTime,
+    'finalCash': finalCash,
+    'isClosed': isClosed,
+  };
 }
 
 class Transaction {
@@ -273,11 +490,17 @@ class Transaction {
   final String franchiseeId;
   final DateTime timestamp;
   final List<Map<String, dynamic>> items;
+  final double subTotal;
+  final double discountAmount;
   final double total;
   final double vatTotal;
   final Map<String, dynamic> paymentMethods;
   final String status;
   final String orderType;
+  final String identifier; // "Table 12" ou "A-001"
+  final String source;
+  final String? customerName;
+  final String? kioskName;
 
   Transaction({
     required this.id,
@@ -285,89 +508,170 @@ class Transaction {
     required this.franchiseeId,
     required this.timestamp,
     required this.items,
+    required this.subTotal,
+    required this.discountAmount,
     required this.total,
     required this.vatTotal,
     required this.paymentMethods,
     required this.status,
     required this.orderType,
+    required this.identifier,
+    this.source = 'caisse',
+    this.customerName,
+    this.kioskName,
   });
 
   factory Transaction.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
+    final total = (data['total'] as num?)?.toDouble() ?? 0.0;
+    final discountAmount = (data['discountAmount'] as num?)?.toDouble() ?? 0.0;
+    final subTotal = (data['subTotal'] as num?)?.toDouble() ?? (total + discountAmount);
+
     return Transaction(
       id: doc.id,
       sessionId: data['sessionId'] ?? '',
       franchiseeId: data['franchiseeId'] ?? '',
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       items: List<Map<String, dynamic>>.from(data['items'] ?? []),
-      total: (data['total'] as num?)?.toDouble() ?? 0.0,
+      subTotal: subTotal,
+      discountAmount: discountAmount,
+      total: total,
       vatTotal: (data['vatTotal'] as num?)?.toDouble() ?? 0.0,
       paymentMethods: data['paymentMethods'] != null
           ? Map<String, dynamic>.from(data['paymentMethods'])
-          : {'Card': (data['total'] as num?)?.toDouble() ?? 0.0},
+          : {'Card': total},
       status: data['status'] ?? 'pending',
       orderType: data['orderType'] ?? 'onSite',
+      identifier: data['identifier'] ?? '',
+      source: data['source'] ?? 'caisse',
+      customerName: data['customerName'],
+      kioskName: data['kioskName'],
     );
   }
 
   Map<String, dynamic> toMap() => {
-        'sessionId': sessionId,
-        'franchiseeId': franchiseeId,
-        'timestamp': timestamp,
-        'items': items,
-        'total': total,
-        'vatTotal': vatTotal,
-        'paymentMethods': paymentMethods,
-        'status': status,
-        'orderType': orderType,
-      };
+    'sessionId': sessionId,
+    'franchiseeId': franchiseeId,
+    'timestamp': timestamp,
+    'items': items,
+    'subTotal': subTotal,
+    'discountAmount': discountAmount,
+    'total': total,
+    'vatTotal': vatTotal,
+    'paymentMethods': paymentMethods,
+    'status': status,
+    'orderType': orderType,
+    'identifier': identifier,
+    'source': source,
+    'customerName': customerName,
+    'kioskName': kioskName,
+  };
 }
 
 class FranchiseeMenuItem {
   final String masterProductId;
   final double price;
+  final Map<String, double> optionPrices;
   final bool isVisible;
   final double vatRate;
+  final double takeawayVatRate;
   final bool isAvailable;
+  final int position;
+  final String? availableStartTime;
+  final String? availableEndTime;
+  final bool hidePriceOnCard;
 
-  FranchiseeMenuItem(
-      {required this.masterProductId,
-      this.price = 0.0,
-      this.isVisible = false,
-      this.vatRate = 10.0,
-      this.isAvailable = true});
+  FranchiseeMenuItem({
+    required this.masterProductId,
+    this.price = 0.0,
+    this.optionPrices = const {},
+    this.isVisible = false,
+    this.vatRate = 10.0,
+    this.takeawayVatRate = 5.5,
+    this.isAvailable = true,
+    this.position = 0,
+    this.availableStartTime,
+    this.availableEndTime,
+    this.hidePriceOnCard = false,
+  });
 
-  factory FranchiseeMenuItem.fromFirestore(Map<String, dynamic> data) =>
-      FranchiseeMenuItem(
-          masterProductId: data['masterProductId'] ?? '',
-          price: (data['price'] as num?)?.toDouble() ?? 0.0,
-          isVisible: data['isVisible'] ?? false,
-          vatRate: (data['vatRate'] as num?)?.toDouble() ?? 10.0,
-          isAvailable: data['isAvailable'] ?? true);
+  factory FranchiseeMenuItem.fromFirestore(Map<String, dynamic> data) {
+    final rawOptionPrices = data['optionPrices'] as Map<String, dynamic>?;
+    final parsedOptionPrices = rawOptionPrices
+        ?.map((key, value) => MapEntry(key, (value as num).toDouble())) ??
+        {};
+    return FranchiseeMenuItem(
+      masterProductId: data['masterProductId'] ?? '',
+      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      optionPrices: parsedOptionPrices,
+      isVisible: data['isVisible'] ?? false,
+      vatRate: (data['vatRate'] as num?)?.toDouble() ?? 10.0,
+      takeawayVatRate: (data['takeawayVatRate'] as num?)?.toDouble() ?? 5.5,
+      isAvailable: data['isAvailable'] ?? true,
+      position: (data['position'] as num?)?.toInt() ?? 0,
+      availableStartTime: data['availableStartTime'],
+      availableEndTime: data['availableEndTime'],
+      hidePriceOnCard: data['hidePriceOnCard'] ?? false,
+    );
+  }
+
+  bool isCurrentlyAvailableInTimeSlot() {
+    if (availableStartTime == null || availableEndTime == null) return true;
+    if (availableStartTime!.isEmpty || availableEndTime!.isEmpty) return true;
+
+    final now = DateTime.now();
+    final currentTime = now.hour * 60 + now.minute;
+    try {
+      final startParts = availableStartTime!.split(':');
+      final endParts = availableEndTime!.split(':');
+      final start = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final end = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      return currentTime >= start && currentTime <= end;
+    } catch (e) {
+      return true;
+    }
+  }
 }
 
 class CartItem {
   final String id = const Uuid().v4();
   final MasterProduct product;
-  final double price;
-  final double vatRate;
+  final int priceCents;
+  double vatRate;
   final Map<String, List<SectionItem>> selectedOptions;
+  final List<String> removedIngredientProductIds;
+  final List<String> removedIngredientNames;
   bool isSentToKitchen;
+  final List<ProductSection> baseSections;
+  int quantity;
 
   CartItem({
     required this.product,
-    required this.price,
+    required double price,
     required this.vatRate,
     this.selectedOptions = const {},
+    this.removedIngredientProductIds = const [],
+    this.removedIngredientNames = const [],
     this.isSentToKitchen = false,
-  });
+    this.baseSections = const [],
+    this.quantity = 1,
+  }) : priceCents = (price * 100).round();
 
-  double get total {
-    double finalPrice = price;
-    selectedOptions.forEach((_, items) => finalPrice +=
-        items.fold(0.0, (sum, item) => sum + item.supplementPrice));
-    return finalPrice;
+  double get price => priceCents / 100.0;
+
+  int get totalCents {
+    int unitPriceCents = priceCents;
+    selectedOptions.forEach((_, items) {
+      for (var item in items) {
+        unitPriceCents += (item.supplementPrice * 100).round();
+      }
+    });
+    return unitPriceCents * quantity;
   }
+
+  double get total => totalCents / 100.0;
+
+  double get totalArticlePrice => (priceCents * quantity) / 100.0;
 }
 
 class PendingOrder {
@@ -377,14 +681,19 @@ class PendingOrder {
   final List<Map<String, dynamic>> itemsAsMap;
   final DateTime timestamp;
   final double total;
+  final String source;
+  final String orderType;
 
-  PendingOrder(
-      {required this.id,
-      required this.franchiseeId,
-      required this.identifier,
-      required this.itemsAsMap,
-      required this.timestamp,
-      required this.total});
+  PendingOrder({
+    required this.id,
+    required this.franchiseeId,
+    required this.identifier,
+    required this.itemsAsMap,
+    required this.timestamp,
+    required this.total,
+    this.source = 'pos',
+    this.orderType = 'onSite',
+  });
 
   factory PendingOrder.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -395,12 +704,17 @@ class PendingOrder {
       itemsAsMap: List<Map<String, dynamic>>.from(data['items'] ?? []),
       timestamp: (data['timestamp'] as Timestamp).toDate(),
       total: (data['total'] as num?)?.toDouble() ?? 0.0,
+      source: data['source'] ?? 'pos',
+      orderType: data['orderType'] ?? 'onSite',
     );
   }
 }
 
-enum PrinterType { escpos }
+// ===========================================================================
+// 6. IMPRESSION ET CONFIGURATION
+// ===========================================================================
 
+enum PrinterType { escpos }
 enum PaperWidth { mm58, mm80 }
 
 class PrinterConfig {
@@ -408,8 +722,6 @@ class PrinterConfig {
   final String ipAddress;
   final PrinterType type;
   final PaperWidth paperWidth;
-
-  // --- CORRECTION : Champ manquant ajouté ---
   final bool isKitchenPrintingEnabled;
 
   PrinterConfig({
@@ -417,7 +729,6 @@ class PrinterConfig {
     this.ipAddress = '192.168.1.100',
     this.type = PrinterType.escpos,
     this.paperWidth = PaperWidth.mm80,
-    // --- CORRECTION : Valeur par défaut ajoutée ---
     this.isKitchenPrintingEnabled = true,
   });
 
@@ -426,14 +737,13 @@ class PrinterConfig {
       name: data['name'] ?? 'Imprimante Cuisine',
       ipAddress: data['ipAddress'] ?? '192.168.1.100',
       type: PrinterType.values.firstWhere(
-        (e) => e.toString() == data['type'],
+            (e) => e.toString() == data['type'],
         orElse: () => PrinterType.escpos,
       ),
       paperWidth: PaperWidth.values.firstWhere(
-        (e) => e.toString() == data['paperWidth'],
+            (e) => e.toString() == data['paperWidth'],
         orElse: () => PaperWidth.mm80,
       ),
-      // --- CORRECTION : Logique de lecture ajoutée (avec valeur par défaut pour la compatibilité) ---
       isKitchenPrintingEnabled: data['isKitchenPrintingEnabled'] ?? true,
     );
   }
@@ -444,7 +754,6 @@ class PrinterConfig {
       'ipAddress': ipAddress,
       'type': type.toString(),
       'paperWidth': paperWidth.toString(),
-      // --- CORRECTION : Ajouté à la sauvegarde ---
       'isKitchenPrintingEnabled': isKitchenPrintingEnabled,
     };
   }

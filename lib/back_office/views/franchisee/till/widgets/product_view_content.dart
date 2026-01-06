@@ -1,16 +1,17 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../../../core/cart_provider.dart';
-import '../../../../../core/models/models.dart';
+import '/models.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../pos_dialogs.dart';
 
 Color? _colorFromHex(String? hexString) {
-  if (hexString == null || hexString.isEmpty || !hexString.startsWith('#'))
+  if (hexString == null || hexString.isEmpty || !hexString.startsWith('#')) {
     return null;
+  }
   try {
     return Color(int.parse("0xFF${hexString.substring(1)}"));
   } catch (e) {

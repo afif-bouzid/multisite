@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -182,8 +182,9 @@ class FranchiseRepository {
       return "Erreur inconnue.";
     } on FirebaseAuthException catch (e) {
       if (e.code == 'weak-password') return 'Le mot de passe est trop faible.';
-      if (e.code == 'email-already-in-use')
+      if (e.code == 'email-already-in-use') {
         return 'Cette adresse email est déjà utilisée.';
+      }
       return e.message;
     } catch (e) {
       return 'Une erreur est survenue: $e';
@@ -310,29 +311,25 @@ class FranchiseRepository {
         .delete();
   }
 
+// --- GESTION DES FILTRES (Back-Office) ---
+
   Stream<List<ProductFilter>> getFiltersStream(String franchisorId) {
     return _firestore
-        .collection('product_filters')
+        .collection('product_filters') // On garde votre nom de collection
         .where('createdBy', isEqualTo: franchisorId)
         .snapshots()
         .map((snapshot) =>
-            snapshot.docs.map(ProductFilter.fromFirestore).toList());
+        snapshot.docs.map(ProductFilter.fromFirestore).toList());
   }
-
-  Future<void> addFilter(String name) async => await _firestore
-      .collection('product_filters')
-      .add({'name': name, 'createdBy': _currentUserId});
-
-  Future<void> deleteFilter(String filterId) async =>
-      await _firestore.collection('product_filters').doc(filterId).delete();
 
   Stream<List<ProductSection>> getSectionsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
         .collection('product_sections')
         .where('createdBy', isEqualTo: franchisorId);
-    if (filterIds.isNotEmpty)
+    if (filterIds.isNotEmpty) {
       query = query.where('filterIds', arrayContainsAny: filterIds);
+    }
     return query.snapshots().asyncMap((snapshot) async {
       List<ProductSection> sections = [];
       for (var doc in snapshot.docs) {
@@ -486,8 +483,9 @@ class FranchiseRepository {
     Query query = _firestore
         .collection('section_groups')
         .where('createdBy', isEqualTo: franchisorId);
-    if (filterIds.isNotEmpty)
+    if (filterIds.isNotEmpty) {
       query = query.where('filterIds', arrayContainsAny: filterIds);
+    }
     return query.snapshots().map(
         (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
   }
@@ -527,8 +525,9 @@ class FranchiseRepository {
     Query query = _firestore
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId);
-    if (filterIds.isNotEmpty)
+    if (filterIds.isNotEmpty) {
       query = query.where('filterIds', arrayContainsAny: filterIds);
+    }
     return query.snapshots().map((snapshot) => snapshot.docs
         .map((doc) => MasterProduct.fromFirestore(
             doc.data() as Map<String, dynamic>, doc.id))
@@ -642,11 +641,13 @@ class FranchiseRepository {
         .collection('sessions')
         .where('franchiseeId', isEqualTo: franchiseeId)
         .orderBy('openingTime', descending: true);
-    if (startDate != null)
+    if (startDate != null) {
       query = query.where('openingTime', isGreaterThanOrEqualTo: startDate);
-    if (endDate != null)
+    }
+    if (endDate != null) {
       query = query.where('openingTime',
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
+    }
     return query.snapshots().map(
         (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
   }

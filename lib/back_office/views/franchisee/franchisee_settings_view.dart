@@ -2,9 +2,9 @@
 import 'package:provider/provider.dart';
 
 import '../../../core/auth_provider.dart';
-import '../../../core/models/models.dart';
 import '../../../core/repository/repository.dart';
 import '../../../core/services/local_config_service.dart';
+import '../../../models.dart';
 
 class FranchiseeSettingsView extends StatelessWidget {
   const FranchiseeSettingsView({super.key});

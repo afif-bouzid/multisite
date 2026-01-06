@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../../../../core/models/models.dart';
 import '../../../../core/repository/repository.dart';
+import '../../../../models.dart';
 
 class CategoryEditorDialog extends StatefulWidget {
   final KioskCategory? category;

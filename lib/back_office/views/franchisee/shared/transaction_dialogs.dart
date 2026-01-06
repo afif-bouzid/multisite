@@ -1,10 +1,8 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-// --- CORRECTION CRITIQUE : Import du bon modèle Transaction ---
-// On pointe vers le dossier 'core' et non plus vers la racine 'lib/models.dart'
-import '../../../../../core/models/models.dart';
 import '../../../../../core/repository/repository.dart';
+import '../../../../models.dart';
 
 class SessionTransactionsDialog extends StatelessWidget {
   final List<Transaction> transactions;

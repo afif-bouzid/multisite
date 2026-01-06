@@ -1,7 +1,7 @@
 import 'dart:io';
 
 void main() async {
-  final outputFile = File('tout_le_code.txt');
+  final outputFile = File('tout_le_code_de_la_caisse.txt');
   final buffer = StringBuffer();
 
   // -----------------------------------------------------------

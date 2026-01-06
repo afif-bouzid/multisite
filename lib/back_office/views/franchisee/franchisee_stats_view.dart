@@ -1,4 +1,4 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -6,9 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../../../core/auth_provider.dart';
 import '../../../core/cart_provider.dart';
-import '../../../core/models/models.dart';
 import '../../../core/repository/repository.dart';
 import '../../../core/services/printing_service.dart';
+import '/models.dart';
 import 'shared/transaction_dialogs.dart';
 import 'stats/accounting_view.dart';
 import 'stats/stats_dashboard.dart';

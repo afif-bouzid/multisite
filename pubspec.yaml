@@ -28,6 +28,7 @@ dependencies:
 
   fl_chart: ^0.69.0
 
+
   # --- UI & UX ---
   flutter_colorpicker: ^1.0.0
   auto_size_text: ^3.0.0

@@ -1,9 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../../../../../core/cart_provider.dart';
-import '../../../../../core/models/models.dart';
+import '/models.dart';
 import '../../../../../core/repository/repository.dart';
 import '../../../../../core/services/printing_service.dart';
 import '../../franchisee_stats_view.dart';
@@ -145,9 +145,10 @@ class _CartPanelState extends State<CartPanel>
                                   onNumber: (num) =>
                                       setStateDialog(() => currentInput += num),
                                   onBackspace: () => setStateDialog(() {
-                                    if (currentInput.isNotEmpty)
+                                    if (currentInput.isNotEmpty) {
                                       currentInput = currentInput.substring(
                                           0, currentInput.length - 1);
+                                    }
                                   }),
                                   onClear: () =>
                                       setStateDialog(() => currentInput = ""),
@@ -161,9 +162,10 @@ class _CartPanelState extends State<CartPanel>
                                   onInput: (char) => setStateDialog(
                                       () => currentInput += char),
                                   onBackspace: () => setStateDialog(() {
-                                    if (currentInput.isNotEmpty)
+                                    if (currentInput.isNotEmpty) {
                                       currentInput = currentInput.substring(
                                           0, currentInput.length - 1);
+                                    }
                                   }),
                                   onSpace: () =>
                                       setStateDialog(() => currentInput += " "),
@@ -194,8 +196,9 @@ class _CartPanelState extends State<CartPanel>
                         elevation: 2,
                       ),
                       onPressed: () {
-                        if (currentInput.trim().isNotEmpty)
+                        if (currentInput.trim().isNotEmpty) {
                           Navigator.pop(context, currentInput.trim());
+                        }
                       },
                       child: const Text("VALIDER",
                           style: TextStyle(
@@ -266,14 +269,16 @@ class _CartPanelState extends State<CartPanel>
                         Expanded(
                           child: Numpad(
                             onNumber: (num) {
-                              if (num == '.' && currentInput.contains('.'))
+                              if (num == '.' && currentInput.contains('.')) {
                                 return;
+                              }
                               setStateDialog(() => currentInput += num);
                             },
                             onBackspace: () => setStateDialog(() {
-                              if (currentInput.isNotEmpty)
+                              if (currentInput.isNotEmpty) {
                                 currentInput = currentInput.substring(
                                     0, currentInput.length - 1);
+                              }
                             }),
                             onClear: () =>
                                 setStateDialog(() => currentInput = ""),
@@ -395,10 +400,11 @@ class _CartPanelState extends State<CartPanel>
           isUpdate: false,
           isReprint: true,
         );
-        if (mounted)
+        if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
               content: Text("Réimpression envoyée."),
               backgroundColor: Colors.blue));
+        }
       }
       return;
     }
@@ -551,17 +557,19 @@ class _CartPanelState extends State<CartPanel>
         barrierDismissible: false,
         builder: (dialogContext) {
           Future.delayed(const Duration(milliseconds: 1500), () {
-            if (Navigator.of(dialogContext).canPop())
+            if (Navigator.of(dialogContext).canPop()) {
               Navigator.of(dialogContext).pop();
+            }
           });
           return const PaymentSuccessDialog();
         },
       );
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text("Erreur d'enregistrement: $e"),
             backgroundColor: Colors.red));
+      }
     }
   }
 
@@ -603,8 +611,9 @@ class _CartPanelState extends State<CartPanel>
                         context: context,
                         builder: (_) =>
                             CashPaymentDialog(totalDue: cart.total));
-                    if (paid == true)
+                    if (paid == true) {
                       _processPayment({'Cash': cart.total}, cart);
+                    }
                   }),
                   _buildPaymentButton(Icons.receipt_long, "TICKET RESTO",
                       const Color(0xFFF57C00), () async {
@@ -613,8 +622,9 @@ class _CartPanelState extends State<CartPanel>
                         context: context,
                         builder: (_) =>
                             TicketPaymentDialog(totalDue: cart.total));
-                    if (amount != null)
+                    if (amount != null) {
                       _processPayment({'Ticket': amount}, cart);
+                    }
                   }),
                   _buildPaymentButton(
                       Icons.call_split, "MIXTE", const Color(0xFF546E7A),
@@ -731,8 +741,9 @@ class _CartPanelState extends State<CartPanel>
       builder: (context, cart, child) {
         if (_identifierController.text != cart.orderIdentifier) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted)
+            if (mounted) {
               _identifierController.text = cart.orderIdentifier ?? '';
+            }
           });
         }
 

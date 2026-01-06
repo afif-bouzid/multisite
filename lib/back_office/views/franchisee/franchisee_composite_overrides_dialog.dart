@@ -1,9 +1,9 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../../core/models/models.dart';
 import '../../../core/repository/repository.dart';
+import '../../../models.dart';
 
 class SectionOverrideData {
   final ProductSection section;
@@ -37,8 +37,8 @@ class FranchiseeCompositeOverridesDialog extends StatefulWidget {
 class _FranchiseeCompositeOverridesDialogState
     extends State<FranchiseeCompositeOverridesDialog> {
   late Future<List<SectionOverrideData>> _dataFuture;
-  Map<String, TextEditingController> _priceControllers = {};
-  Map<String, List<SectionItem>> _orderedItems = {};
+  final Map<String, TextEditingController> _priceControllers = {};
+  final Map<String, List<SectionItem>> _orderedItems = {};
   bool _isLoading = false;
 
   // Référence à la sous-collection du menu franchisé pour ce produit
@@ -174,7 +174,9 @@ class _FranchiseeCompositeOverridesDialogState
 
   @override
   void dispose() {
-    _priceControllers.values.forEach((controller) => controller.dispose());
+    for (var controller in _priceControllers.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 

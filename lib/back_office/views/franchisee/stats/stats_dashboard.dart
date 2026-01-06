@@ -1,9 +1,9 @@
-﻿import 'package:collection/collection.dart';
+import 'package:collection/collection.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../core/models/models.dart';
+import '/models.dart';
 import '../../../../core/repository/repository.dart';
 
 class StatsDashboard extends StatefulWidget {
@@ -163,8 +163,9 @@ class _StatsDashboardState extends State<StatsDashboard> {
                                     getTitlesWidget: (value, meta) {
                                       int interval =
                                           (sortedKeys.length / 7).ceil();
-                                      if (value.toInt() % interval != 0)
+                                      if (value.toInt() % interval != 0) {
                                         return const SizedBox.shrink();
+                                      }
                                       if (value.toInt() >= 0 &&
                                           value.toInt() < sortedKeys.length) {
                                         final date = DateTime.parse(

@@ -1,11 +1,11 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/auth_provider.dart';
-import '../../../core/models/models.dart';
 import '../../../core/repository/repository.dart';
+import '../../../models.dart';
 
 class FranchiseeDealsView extends StatelessWidget {
   const FranchiseeDealsView({super.key});
@@ -27,11 +27,13 @@ class FranchiseeDealsView extends StatelessWidget {
       body: StreamBuilder<QuerySnapshot>(
         stream: dealsRef.snapshots(),
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting)
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty)
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
                 child: Text("Créez votre première offre promotionnelle !"));
+          }
 
           final deals = snapshot.data!.docs
               .map((doc) => Deal.fromFirestore(doc))
@@ -148,9 +150,10 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       await dealsRef.doc(deal.id).set(deal.toMap());
       if (context.mounted) Navigator.pop(context);
     } catch (e) {
-      if (context.mounted)
+      if (context.mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text("Erreur de sauvegarde: $e")));
+      }
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -203,12 +206,14 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
                   StreamBuilder<List<ProductSection>>(
                     stream: repository.getSectionsStream(franchisorId),
                     builder: (context, snapshot) {
-                      if (!snapshot.hasData)
+                      if (!snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
+                      }
                       final allSections = snapshot.data ?? [];
-                      if (allSections.isEmpty)
+                      if (allSections.isEmpty) {
                         return const Text(
                             "Le franchiseur doit d'abord créer des sections.");
+                      }
 
                       return Column(
                         children: allSections.map((section) {

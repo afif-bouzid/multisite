@@ -1,4 +1,5 @@
-﻿import 'dart:io';
+import 'dart:async';
+import 'dart:io';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -6,14 +7,14 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/auth_provider.dart';
 import '../../../core/constants.dart';
-import '../../../core/models/models.dart';
+import '/models.dart';
 import '../../../core/repository/repository.dart';
 
 enum ProductTypeFilter { all, sellable, ingredients }
-
 enum SellableTypeFilter { all, simple, composite }
 
 class CatalogueView extends StatefulWidget {
@@ -25,343 +26,519 @@ class CatalogueView extends StatefulWidget {
 
 class _CatalogueViewState extends State<CatalogueView> {
   final _searchController = TextEditingController();
+
+  List<MasterProduct> _allProducts = [];
+  List<MasterProduct> _filteredProducts = [];
+  Map<String, String> _sectionNames = {};
+
+  List<ProductFilter> _cachedFilters = [];
+  List<KioskCategory> _cachedKioskCategories = [];
+  Map<String, String> _kioskFilterNames = {};
+
+  final List<StreamSubscription> _subscriptions = [];
+
   String _searchQuery = '';
   final Set<String> _selectedFilterIds = {};
   ProductTypeFilter _productTypeFilter = ProductTypeFilter.all;
   SellableTypeFilter _sellableTypeFilter = SellableTypeFilter.all;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(
-        () => setState(() => _searchQuery = _searchController.text));
+    final repository = FranchiseRepository();
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+
+    _subscriptions.add(repository.getMasterProductsStream(uid).listen((products) {
+      if (mounted) {
+        setState(() {
+          _allProducts = products;
+          _isLoading = false;
+          _applyFilters();
+        });
+      }
+    }));
+
+    _subscriptions.add(repository.getSectionsStream(uid).listen((sections) {
+      final map = <String, String>{};
+      for (var s in sections) {
+        map[s.sectionId] = s.title;
+      }
+      if (mounted) setState(() => _sectionNames = map);
+    }));
+
+    _subscriptions.add(repository.getKioskCategoriesStream(uid).listen((categories) {
+      final map = <String, String>{};
+      for (var cat in categories) {
+        for (var filter in cat.filters) {
+          map[filter.id] = "${cat.name} > ${filter.name}";
+        }
+      }
+      if (mounted) {
+        setState(() {
+          _cachedKioskCategories = categories;
+          _kioskFilterNames = map;
+        });
+      }
+    }));
+
+    _subscriptions.add(repository.getFiltersStream(uid).listen((filters) {
+      if (mounted) setState(() => _cachedFilters = filters);
+    }));
+
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  void _onSearchChanged() {
+    final query = _searchController.text;
+    setState(() {
+      _searchQuery = query;
+      if (query.isNotEmpty) {
+        _selectedFilterIds.clear();
+        _productTypeFilter = ProductTypeFilter.all;
+        _sellableTypeFilter = SellableTypeFilter.all;
+      }
+      _applyFilters();
+    });
+  }
+
+  void _applyFilters() {
+    List<MasterProduct> temp = List.from(_allProducts);
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      temp = temp.where((p) => p.name.toLowerCase().contains(q)).toList();
+    } else {
+      if (_productTypeFilter == ProductTypeFilter.sellable) {
+        temp = temp.where((p) => !p.isIngredient).toList();
+        if (_sellableTypeFilter == SellableTypeFilter.simple) {
+          temp = temp.where((p) => !p.isComposite).toList();
+        } else if (_sellableTypeFilter == SellableTypeFilter.composite) {
+          temp = temp.where((p) => p.isComposite).toList();
+        }
+      } else if (_productTypeFilter == ProductTypeFilter.ingredients) {
+        temp = temp.where((p) => p.isIngredient).toList();
+      }
+
+      if (_selectedFilterIds.isNotEmpty) {
+        temp = temp.where((p) => p.filterIds.any((id) => _selectedFilterIds.contains(id))).toList();
+      }
+    }
+
+    temp.sort((a, b) => a.name.compareTo(b.name));
+    _filteredProducts = temp;
+  }
+
+  Set<String> _getRelevantFilterIds() {
+    List<MasterProduct> preFiltered = List.from(_allProducts);
+
+    if (_searchQuery.isNotEmpty) {
+      final q = _searchQuery.toLowerCase();
+      preFiltered = preFiltered.where((p) => p.name.toLowerCase().contains(q)).toList();
+    } else {
+      if (_productTypeFilter == ProductTypeFilter.sellable) {
+        preFiltered = preFiltered.where((p) => !p.isIngredient).toList();
+        if (_sellableTypeFilter == SellableTypeFilter.simple) {
+          preFiltered = preFiltered.where((p) => !p.isComposite).toList();
+        } else if (_sellableTypeFilter == SellableTypeFilter.composite) {
+          preFiltered = preFiltered.where((p) => p.isComposite).toList();
+        }
+      } else if (_productTypeFilter == ProductTypeFilter.ingredients) {
+        preFiltered = preFiltered.where((p) => p.isIngredient).toList();
+      }
+    }
+
+    final relevantIds = <String>{};
+    for (var p in preFiltered) {
+      relevantIds.addAll(p.filterIds);
+    }
+    return relevantIds;
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    for (var sub in _subscriptions) {
+      sub.cancel();
+    }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
-    final uid =
-        Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+
     return Scaffold(
       body: Column(
         children: [
-          _buildSearchAndFilterBar(context, repository, uid),
+          _buildSearchAndFilterBar(context),
           Expanded(
-            child: StreamBuilder<List<MasterProduct>>(
-              stream: repository.getMasterProductsStream(uid,
-                  filterIds: _selectedFilterIds.toList()),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                if (snapshot.hasError) {
-                  return Center(child: Text("Erreur: ${snapshot.error}"));
-                }
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return const Center(child: Text("Aucun produit créé."));
-                }
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : _filteredProducts.isEmpty
+                ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.search_off, size: 64, color: Colors.grey[300]),
+                  const SizedBox(height: 16),
+                  Text("Aucun produit trouvé.", style: TextStyle(color: Colors.grey[600], fontSize: 18)),
+                ],
+              ),
+            )
+                : ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+              itemCount: _filteredProducts.length,
+              itemBuilder: (context, index) =>
+                  _buildProductCard(context, _filteredProducts[index], repository),
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: SizedBox(
+        height: 80,
+        width: 80,
+        child: FloatingActionButton(
+            backgroundColor: Theme.of(context).primaryColor,
+            child: const Icon(Icons.add, size: 40, color: Colors.white),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProductFormView()))),
+      ),
+    );
+  }
 
-                List<MasterProduct> products = snapshot.data!;
-                if (_productTypeFilter == ProductTypeFilter.sellable) {
-                  products = products.where((p) => !p.isIngredient).toList();
-                  if (_sellableTypeFilter == SellableTypeFilter.simple) {
-                    products = products.where((p) => !p.isComposite).toList();
-                  } else if (_sellableTypeFilter ==
-                      SellableTypeFilter.composite) {
-                    products = products.where((p) => p.isComposite).toList();
+  Widget _buildProductCard(BuildContext context, MasterProduct product, FranchiseRepository repository) {
+    final bool isMenu = product.isComposite;
+    final bool isIngredient = product.isIngredient;
+
+    List<String> stepNames = [];
+    for(var id in product.sectionIds) {
+      if(_sectionNames.containsKey(id)) {
+        stepNames.add(_sectionNames[id]!);
+      }
+    }
+
+    String? kioskLabel;
+    if (product.kioskFilterIds.isNotEmpty) {
+      for (var id in product.kioskFilterIds) {
+        if (_kioskFilterNames.containsKey(id)) {
+          kioskLabel = _kioskFilterNames[id];
+          break;
+        }
+      }
+    }
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      height: 160,
+      child: Card(
+        elevation: 4,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => ProductFormView(productToEdit: product))),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 140,
+                height: double.infinity,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (product.photoUrl != null && product.photoUrl!.isNotEmpty)
+                      CachedNetworkImage(
+                        imageUrl: product.photoUrl!,
+                        fit: BoxFit.cover,
+                        memCacheWidth: 300,
+                        placeholder: (_, __) => Container(color: Colors.grey[200]),
+                        errorWidget: (_, __, ___) => Container(color: Colors.grey[200], child: const Icon(Icons.broken_image)),
+                      )
+                    else
+                      Container(
+                        color: product.color != null ? colorFromHex(product.color!) : Colors.grey[200],
+                        child: Icon(isIngredient ? Icons.blender : (isMenu ? Icons.fastfood : Icons.restaurant), color: Colors.grey[600], size: 50),
+                      ),
+                    if (isMenu)
+                      Positioned(
+                        top: 8, left: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.orange, borderRadius: BorderRadius.circular(8), boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)]),
+                          child: const Text("MENU", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (kioskLabel != null)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4.0),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(color: Colors.purple.shade50, borderRadius: BorderRadius.circular(4), border: Border.all(color: Colors.purple.shade200)),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.touch_app, size: 12, color: Colors.purple.shade700),
+                                const SizedBox(width: 4),
+                                Flexible(child: Text(kioskLabel, style: TextStyle(fontSize: 11, color: Colors.purple.shade900, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      Text(
+                        product.description != null && product.description!.isNotEmpty
+                            ? product.description!
+                            : (isIngredient ? "Ingrédient interne" : "Produit à la carte"),
+                        style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const Spacer(),
+                      if (stepNames.isNotEmpty)
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.blue.shade50, borderRadius: BorderRadius.circular(6)),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text("${stepNames.length} étape(s) :", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.blue.shade800)),
+                              Text(stepNames.join(", "), style: TextStyle(fontSize: 11, color: Colors.blue.shade900), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: 70,
+                decoration: BoxDecoration(border: Border(left: BorderSide(color: Colors.grey.shade200))),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ProductFormView(productToEdit: product, isDuplicating: true))),
+                        child: Center(child: Icon(Icons.copy_all, size: 30, color: Colors.blueGrey.shade400)),
+                      ),
+                    ),
+                    Divider(height: 1, color: Colors.grey.shade300),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () => _deleteProduct(context, repository, product),
+                        child: Center(child: Icon(Icons.delete_outline, size: 30, color: Colors.red.shade400)),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- MODIFICATION ICI : Barre de recherche parallèle aux filtres ---
+  Widget _buildSearchAndFilterBar(BuildContext context) {
+    return Container(
+      color: Colors.white,
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        children: [
+          // LIGNE 1 : Recherche (Expanded) + Filtres côte à côte
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 50, // Hauteur ajustée pour matcher les boutons
+                  child: TextField(
+                      controller: _searchController,
+                      style: const TextStyle(fontSize: 16),
+                      textAlignVertical: TextAlignVertical.center, // Centrage vertical du texte
+                      decoration: InputDecoration(
+                          hintText: 'Rechercher...',
+                          prefixIcon: const Icon(Icons.search, size: 24),
+                          filled: true,
+                          fillColor: Colors.grey[100],
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(icon: const Icon(Icons.clear, size: 20), onPressed: () => _searchController.clear())
+                              : null)),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Filtre Vendables
+              _buildBigFilterButton("Vendables", Icons.point_of_sale, _productTypeFilter == ProductTypeFilter.sellable, () {
+                setState(() {
+                  _searchController.clear();
+                  if (_productTypeFilter == ProductTypeFilter.sellable) {
+                    _productTypeFilter = ProductTypeFilter.all;
+                  } else {
+                    _productTypeFilter = ProductTypeFilter.sellable;
                   }
-                } else if (_productTypeFilter ==
-                    ProductTypeFilter.ingredients) {
-                  products = products.where((p) => p.isIngredient).toList();
-                }
+                  _sellableTypeFilter = SellableTypeFilter.all;
+                  _selectedFilterIds.clear();
+                  _applyFilters();
+                });
+              }),
+              const SizedBox(width: 12),
+              // Filtre Ingrédients
+              _buildBigFilterButton("Ingrédients", Icons.blender_outlined, _productTypeFilter == ProductTypeFilter.ingredients, () {
+                setState(() {
+                  _searchController.clear();
+                  if (_productTypeFilter == ProductTypeFilter.ingredients) {
+                    _productTypeFilter = ProductTypeFilter.all;
+                  } else {
+                    _productTypeFilter = ProductTypeFilter.ingredients;
+                  }
+                  _selectedFilterIds.clear();
+                  _applyFilters();
+                });
+              }),
+            ],
+          ),
 
-                if (_searchQuery.isNotEmpty) {
-                  products = products
-                      .where((p) => p.name
-                          .toLowerCase()
-                          .contains(_searchQuery.toLowerCase()))
-                      .toList();
-                }
+          if (_productTypeFilter == ProductTypeFilter.sellable) ...[
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 50,
+              // LIGNE 2 (Optionnelle) : Simple / Composés
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _buildChipChoice("Produits Simples", _sellableTypeFilter == SellableTypeFilter.simple, () {
+                    setState(() {
+                      _searchController.clear();
+                      _selectedFilterIds.clear();
+                      if (_sellableTypeFilter == SellableTypeFilter.simple) {
+                        _sellableTypeFilter = SellableTypeFilter.all;
+                      } else {
+                        _sellableTypeFilter = SellableTypeFilter.simple;
+                      }
+                      _applyFilters();
+                    });
+                  }),
+                  const SizedBox(width: 10),
+                  _buildChipChoice("Menus / Composés", _sellableTypeFilter == SellableTypeFilter.composite, () {
+                    setState(() {
+                      _searchController.clear();
+                      _selectedFilterIds.clear();
+                      if (_sellableTypeFilter == SellableTypeFilter.composite) {
+                        _sellableTypeFilter = SellableTypeFilter.all;
+                      } else {
+                        _sellableTypeFilter = SellableTypeFilter.composite;
+                      }
+                      _applyFilters();
+                    });
+                  }),
+                ],
+              ),
+            ),
+          ],
 
-                if (products.isEmpty) {
-                  return const Center(
-                      child: Text(
-                          "Aucun résultat pour les filtres sélectionnés."));
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) =>
-                      _buildProductCard(context, products[index], repository),
+          const Divider(height: 24),
+          // Filtres dynamiques (inchangé)
+          SizedBox(
+            width: double.infinity,
+            child: Builder(
+              builder: (context) {
+                final relevantIds = _getRelevantFilterIds();
+                final visibleFilters = _cachedFilters.where((f) => relevantIds.contains(f.id)).toList();
+
+                if (visibleFilters.isEmpty) return const SizedBox.shrink();
+
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: visibleFilters.map((filter) {
+                    final isSelected = _selectedFilterIds.contains(filter.id);
+                    return FilterChip(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        label: Text(filter.name, style: TextStyle(fontSize: 16, color: isSelected ? Colors.white : Colors.black87)),
+                        selected: isSelected,
+                        selectedColor: Theme.of(context).primaryColor,
+                        checkmarkColor: Colors.white,
+                        onSelected: (selected) {
+                          setState(() {
+                            _searchController.clear();
+                            if (selected) { _selectedFilterIds.add(filter.id); } else { _selectedFilterIds.remove(filter.id); }
+                            _applyFilters();
+                          });
+                        });
+                  }).toList(),
                 );
               },
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-          icon: const Icon(Icons.add),
-          label: const Text("Nouveau Produit"),
-          onPressed: () => Navigator.push(
-              context,
-              MaterialPageRoute(
-                  builder: (context) => const ProductFormView()))),
     );
   }
 
-  Widget _buildProductCard(BuildContext context, MasterProduct product,
-      FranchiseRepository repository) {
-    String subtitleText;
-    IconData iconData;
-    Color color;
-    String typeLabel;
-
-    if (product.isIngredient) {
-      subtitleText = "Ingrédient / Non vendable";
-      iconData = Icons.blender_outlined;
-      color = Colors.grey.shade600;
-      typeLabel = "Ingrédient";
-    } else if (product.isComposite) {
-      subtitleText = "Menu - ${product.sectionIds.length} section(s)";
-      iconData = Icons.widgets_outlined;
-      color = Theme.of(context).primaryColor;
-      typeLabel = "Composite";
-    } else {
-      subtitleText = product.description ?? "Produit simple";
-      iconData = Icons.fastfood_outlined;
-      color = const Color(0xFF3F51B5);
-      typeLabel = "Simple";
-    }
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      shape: RoundedRectangleBorder(
-          side: BorderSide(color: color.withOpacity(0.3)),
-          borderRadius: BorderRadius.circular(12)),
-      elevation: 1,
-      clipBehavior: Clip.antiAlias,
-      child: IntrinsicHeight(
+  Widget _buildBigFilterButton(String label, IconData icon, bool isSelected, VoidCallback onTap) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        height: 50,
+        padding: const EdgeInsets.symmetric(horizontal: 16), // Padding légèrement réduit pour gagner de la place
+        decoration: BoxDecoration(
+            color: isSelected ? Theme.of(context).primaryColor : Colors.grey[200],
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: isSelected ? [BoxShadow(color: Theme.of(context).primaryColor.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : null
+        ),
         child: Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(width: 6, color: color),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                child: ListTile(
-                  contentPadding:
-                      const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-                  leading: CircleAvatar(
-                    backgroundColor: color.withOpacity(0.1),
-                    child: Icon(iconData, color: color),
-                  ),
-                  title: Row(
-                    children: [
-                      Flexible(
-                          child: Text(product.name,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
-                              overflow: TextOverflow.ellipsis)),
-                      const SizedBox(width: 8),
-                      Chip(
-                        label: Text(typeLabel),
-                        labelStyle: TextStyle(
-                            color: color,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold),
-                        backgroundColor: color.withOpacity(0.1),
-                        padding: EdgeInsets.zero,
-                        side: BorderSide.none,
-                      )
-                    ],
-                  ),
-                  subtitle: Text(subtitleText,
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                          icon: const Icon(Icons.copy_outlined, size: 20),
-                          tooltip: "Dupliquer",
-                          onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => ProductFormView(
-                                      productToEdit: product,
-                                      isDuplicating: true)))),
-                      IconButton(
-                          icon: const Icon(Icons.edit_outlined, size: 20),
-                          tooltip: "Modifier",
-                          onPressed: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => ProductFormView(
-                                      productToEdit: product)))),
-                      IconButton(
-                          icon: const Icon(Icons.delete_outline,
-                              color: Colors.red, size: 20),
-                          tooltip: "Supprimer",
-                          onPressed: () =>
-                              _deleteProduct(context, repository, product)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            Icon(icon, size: 22, color: isSelected ? Colors.white : Colors.black87),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)), // Police légèrement réduite
           ],
         ),
       ),
     );
   }
 
-  Widget _buildSearchAndFilterBar(
-      BuildContext context, FranchiseRepository repository, String uid) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        children: [
-          TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                  labelText: 'Rechercher un produit...',
-                  prefixIcon: const Icon(Icons.search),
-                  suffixIcon: _searchQuery.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear),
-                          onPressed: () => _searchController.clear())
-                      : null)),
-          const SizedBox(height: 16),
-          SegmentedButton<ProductTypeFilter>(
-            segments: const <ButtonSegment<ProductTypeFilter>>[
-              ButtonSegment<ProductTypeFilter>(
-                  value: ProductTypeFilter.all,
-                  label: Text('Tous'),
-                  icon: Icon(Icons.list)),
-              ButtonSegment<ProductTypeFilter>(
-                  value: ProductTypeFilter.sellable,
-                  label: Text('Vendables'),
-                  icon: Icon(Icons.point_of_sale)),
-              ButtonSegment<ProductTypeFilter>(
-                  value: ProductTypeFilter.ingredients,
-                  label: Text('Ingrédients'),
-                  icon: Icon(Icons.blender_outlined)),
-            ],
-            selected: <ProductTypeFilter>{_productTypeFilter},
-            onSelectionChanged: (Set<ProductTypeFilter> newSelection) {
-              setState(() {
-                _productTypeFilter = newSelection.first;
-                _sellableTypeFilter = SellableTypeFilter.all;
-              });
-            },
-          ),
-          if (_productTypeFilter == ProductTypeFilter.sellable)
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: const EdgeInsets.only(top: 16.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Affiner les produits vendables :",
-                      style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                          label: const Text("Tous"),
-                          selected:
-                              _sellableTypeFilter == SellableTypeFilter.all,
-                          onSelected: (selected) => setState(() =>
-                              _sellableTypeFilter = SellableTypeFilter.all)),
-                      ChoiceChip(
-                          label: const Text("Simples"),
-                          selected:
-                              _sellableTypeFilter == SellableTypeFilter.simple,
-                          onSelected: (selected) => setState(() =>
-                              _sellableTypeFilter = SellableTypeFilter.simple)),
-                      ChoiceChip(
-                          label: const Text("Menus Composés"),
-                          selected: _sellableTypeFilter ==
-                              SellableTypeFilter.composite,
-                          onSelected: (selected) => setState(() =>
-                              _sellableTypeFilter =
-                                  SellableTypeFilter.composite)),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          const Divider(height: 24),
-          StreamBuilder<List<ProductFilter>>(
-            stream: repository.getFiltersStream(uid),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) return const SizedBox.shrink();
-              return Wrap(
-                spacing: 8,
-                children: snapshot.data!
-                    .map((filter) => FilterChip(
-                        label: Text(filter.name),
-                        selected: _selectedFilterIds.contains(filter.id),
-                        onSelected: (selected) {
-                          setState(() {
-                            if (selected) {
-                              _selectedFilterIds.add(filter.id);
-                            } else {
-                              _selectedFilterIds.remove(filter.id);
-                            }
-                            _productTypeFilter = ProductTypeFilter.all;
-                          });
-                        }))
-                    .toList(),
-              );
-            },
-          ),
-        ],
-      ),
+  Widget _buildChipChoice(String label, bool isSelected, VoidCallback onTap) {
+    return ChoiceChip(
+      label: Text(label, style: TextStyle(fontSize: 15, color: isSelected ? Colors.white : Colors.black)),
+      selected: isSelected,
+      onSelected: (_) => onTap(),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      selectedColor: Colors.orange,
     );
   }
 
-  void _deleteProduct(BuildContext context, FranchiseRepository repository,
-      MasterProduct product) async {
+  void _deleteProduct(BuildContext context, FranchiseRepository repository, MasterProduct product) async {
     final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-              title: const Text("Confirmer la suppression"),
-              content: Text(
-                  "Supprimer '${product.name}' ? Cette action estirréversible et supprimera le produit pour tous les franchisés."),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx, false),
-                    child: const Text("Annuler")),
-                ElevatedButton(
-                    onPressed: () => Navigator.pop(ctx, true),
-                    child: const Text("Supprimer"),
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white))
-              ],
-            ));
+          title: const Text("Confirmer la suppression"),
+          content: Text("Supprimer '${product.name}' ?"),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Annuler", style: TextStyle(fontSize: 18))),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.red, padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                child: const Text("Supprimer", style: TextStyle(fontSize: 18, color: Colors.white)))
+          ],
+        ));
+
     if (confirm == true) {
-      if (!mounted) return;
-      showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (BuildContext context) => const Dialog(
-              child: Padding(
-                  padding: EdgeInsets.all(20.0),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    CircularProgressIndicator(),
-                    SizedBox(width: 20),
-                    Text("Suppression...")
-                  ]))));
       await repository.deleteMasterProduct(product);
-      if (mounted) Navigator.of(context).pop();
     }
   }
 }
@@ -370,8 +547,7 @@ class ProductFormView extends StatefulWidget {
   final MasterProduct? productToEdit;
   final bool isDuplicating;
 
-  const ProductFormView(
-      {super.key, this.productToEdit, this.isDuplicating = false});
+  const ProductFormView({super.key, this.productToEdit, this.isDuplicating = false});
 
   @override
   State<ProductFormView> createState() => _ProductFormViewState();
@@ -380,23 +556,15 @@ class ProductFormView extends StatefulWidget {
 class ProductPickerDialog extends StatefulWidget {
   final List<MasterProduct> initialSelection;
   final bool ingredientsOnly;
-
-  const ProductPickerDialog({
-    super.key,
-    this.initialSelection = const [],
-    this.ingredientsOnly = false,
-  });
-
+  const ProductPickerDialog({super.key, this.initialSelection = const [], this.ingredientsOnly = false});
   @override
   State<ProductPickerDialog> createState() => _ProductPickerDialogState();
 }
-
 class _ProductPickerDialogState extends State<ProductPickerDialog> {
   late List<MasterProduct> _selectedProducts;
   late Future<Map<String, dynamic>> _groupedProductsFuture;
   final _searchController = TextEditingController();
   String _searchQuery = '';
-
   @override
   void initState() {
     super.initState();
@@ -406,161 +574,75 @@ class _ProductPickerDialogState extends State<ProductPickerDialog> {
       setState(() => _searchQuery = _searchController.text.toLowerCase());
     });
   }
-
   @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
+  void dispose() { _searchController.dispose(); super.dispose(); }
   Future<Map<String, dynamic>> _loadAndGroupProducts() async {
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final uid = authProvider.firebaseUser!.uid;
-
-    final results = await Future.wait([
-      repository.getFiltersStream(uid).first,
-      repository.getMasterProductsStream(uid).first,
-    ]);
+    final results = await Future.wait([repository.getFiltersStream(uid).first, repository.getMasterProductsStream(uid).first]);
     final allFilters = results[0] as List<ProductFilter>;
     final allProducts = results[1] as List<MasterProduct>;
-
     List<MasterProduct> usableProducts;
-    if (widget.ingredientsOnly) {
-      usableProducts = allProducts.where((p) => p.isIngredient).toList();
-    } else {
-      usableProducts = allProducts.where((p) => !p.isComposite).toList();
-    }
-
+    if (widget.ingredientsOnly) { usableProducts = allProducts.where((p) => p.isIngredient).toList(); }
+    else { usableProducts = allProducts.where((p) => !p.isComposite).toList(); }
     final Map<String, List<MasterProduct>> grouped = {};
     final List<MasterProduct> ungrouped = [];
     for (final product in usableProducts) {
-      if (product.filterIds.isEmpty) {
-        ungrouped.add(product);
-      } else {
-        for (final filterId in product.filterIds) {
-          grouped.putIfAbsent(filterId, () => []).add(product);
-        }
-      }
+      if (product.filterIds.isEmpty) { ungrouped.add(product); }
+      else { for (final filterId in product.filterIds) { grouped.putIfAbsent(filterId, () => []).add(product); } }
     }
-
     allFilters.sort((a, b) => a.name.compareTo(b.name));
-    return {
-      'filters': allFilters,
-      'groupedProducts': grouped,
-      'ungroupedProducts': ungrouped,
-    };
+    return { 'filters': allFilters, 'groupedProducts': grouped, 'ungroupedProducts': ungrouped };
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text("Sélectionner des produits"),
-      content: SizedBox(
-        width: 600,
-        height: 500,
-        child: Column(
-          children: [
-            TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                labelText: 'Rechercher un produit...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => _searchController.clear())
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: FutureBuilder<Map<String, dynamic>>(
-                future: _groupedProductsFuture,
-                builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snapshot.hasError || !snapshot.hasData) {
-                    return const Center(
-                        child: Text("Erreur de chargement des produits."));
-                  }
-
-                  final data = snapshot.data!;
-                  final filters = data['filters'] as List<ProductFilter>;
-                  final groupedProducts = data['groupedProducts']
-                      as Map<String, List<MasterProduct>>;
-                  final ungroupedProducts =
-                      data['ungroupedProducts'] as List<MasterProduct>;
-                  return ListView(
-                    children: [
-                      ...filters.map((filter) {
-                        List<MasterProduct> products =
-                            groupedProducts[filter.id] ?? [];
-                        if (_searchQuery.isNotEmpty) {
-                          products = products
-                              .where((p) =>
-                                  p.name.toLowerCase().contains(_searchQuery))
-                              .toList();
-                        }
-                        if (products.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-
-                        return _buildProductGroup(filter.name, products);
-                      }).toList(),
-                      _buildProductGroup(
-                          "Produits non classés",
-                          ungroupedProducts
-                              .where((p) =>
-                                  p.name.toLowerCase().contains(_searchQuery))
-                              .toList()),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
+      content: SizedBox( width: 600, height: 500,
+        child: Column( children: [
+          TextField(controller: _searchController, decoration: InputDecoration(labelText: 'Rechercher...', prefixIcon: const Icon(Icons.search), suffixIcon: _searchQuery.isNotEmpty ? IconButton(icon: const Icon(Icons.clear), onPressed: () => _searchController.clear()) : null)),
+          const SizedBox(height: 16),
+          Expanded(child: FutureBuilder<Map<String, dynamic>>(
+            future: _groupedProductsFuture,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+              final data = snapshot.data!;
+              final filters = data['filters'] as List<ProductFilter>;
+              final groupedProducts = data['groupedProducts'] as Map<String, List<MasterProduct>>;
+              final ungroupedProducts = data['ungroupedProducts'] as List<MasterProduct>;
+              return ListView(children: [
+                ...filters.map((filter) {
+                  List<MasterProduct> products = groupedProducts[filter.id] ?? [];
+                  if (_searchQuery.isNotEmpty) products = products.where((p) => p.name.toLowerCase().contains(_searchQuery)).toList();
+                  if (products.isEmpty) return const SizedBox.shrink();
+                  return ExpansionTile(title: Text(filter.name), initiallyExpanded: true, children: products.map((p) => CheckboxListTile(title: Text(p.name), value: _selectedProducts.any((sp) => sp.id == p.id), onChanged: (val) { setState(() { if(val!) {
+                    _selectedProducts.add(p);
+                  } else {
+                    _selectedProducts.removeWhere((x)=>x.id==p.id);
+                  } }); })).toList());
+                }),
+                if(ungroupedProducts.isNotEmpty) ExpansionTile(title: const Text("Non classés"), initiallyExpanded: true, children: ungroupedProducts.where((p)=>p.name.toLowerCase().contains(_searchQuery)).map((p) => CheckboxListTile(title: Text(p.name), value: _selectedProducts.any((sp) => sp.id == p.id), onChanged: (val) { setState(() { if(val!) {
+                  _selectedProducts.add(p);
+                } else {
+                  _selectedProducts.removeWhere((x)=>x.id==p.id);
+                } }); })).toList())
+              ]);
+            },
+          ),
+          ),
+        ],
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler")),
-        ElevatedButton(
-            onPressed: () => Navigator.pop(context, _selectedProducts),
-            child: const Text("Valider la Sélection")),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(fontSize: 18))),
+        ElevatedButton(onPressed: () => Navigator.pop(context, _selectedProducts), style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)), child: const Text("Valider", style: TextStyle(fontSize: 18))),
       ],
-    );
-  }
-
-  Widget _buildProductGroup(String title, List<MasterProduct> products) {
-    if (products.isEmpty) return const SizedBox.shrink();
-    return ExpansionTile(
-      title: Text("$title (${products.length})",
-          style: const TextStyle(fontWeight: FontWeight.bold)),
-      initiallyExpanded: true,
-      children: products.map((product) {
-        final isSelected = _selectedProducts.any((p) => p.id == product.id);
-        return CheckboxListTile(
-          title: Text(product.name),
-          value: isSelected,
-          onChanged: (selected) {
-            setState(() {
-              if (selected!) {
-                _selectedProducts.add(product);
-              } else {
-                _selectedProducts.removeWhere((p) => p.id == product.id);
-              }
-            });
-          },
-        );
-      }).toList(),
     );
   }
 }
 
-class _ProductFormViewState extends State<ProductFormView> {
+class _ProductFormViewState extends State<ProductFormView> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -578,19 +660,40 @@ class _ProductFormViewState extends State<ProductFormView> {
   List<String> _selectedKioskFilterIds = [];
   List<ProductOption> _productOptions = [];
   bool _isLoading = false;
-  Map<String, XFile?> _pendingOptionImages = {};
+
+  bool _isLoadingSectionGroup = false;
+  bool _isLoadingSingleSection = false;
+
+  List<ProductSection>? _cachedAllSections;
+
+  final Map<String, XFile?> _pendingOptionImages = {};
+  late TabController _tabController;
+
+  List<ProductFilter> _loadedFilters = [];
+  List<KioskCategory> _loadedKioskCategories = [];
+  final List<StreamSubscription> _subscriptions = [];
 
   @override
   void initState() {
     super.initState();
-    if (widget.productToEdit != null) {
-      _nameController.text =
-          widget.productToEdit!.name + (widget.isDuplicating ? ' (Copie)' : '');
-      _descriptionController.text = widget.productToEdit!.description ?? '';
+    _tabController = TabController(length: 3, vsync: this);
 
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+    final repository = FranchiseRepository();
+
+    _subscriptions.add(repository.getFiltersStream(uid).listen((data) {
+      if(mounted) setState(() => _loadedFilters = data);
+    }));
+
+    _subscriptions.add(repository.getKioskCategoriesStream(uid).listen((data) {
+      if(mounted) setState(() => _loadedKioskCategories = data);
+    }));
+
+    if (widget.productToEdit != null) {
+      _nameController.text = widget.productToEdit!.name + (widget.isDuplicating ? ' (Copie)' : '');
+      _descriptionController.text = widget.productToEdit!.description ?? '';
       _selectedColorHex = widget.productToEdit!.color;
       _photoUrlController.text = widget.productToEdit!.photoUrl ?? '';
-
       _isComposite = widget.productToEdit!.isComposite;
       _isIngredient = widget.productToEdit!.isIngredient;
       _selectedFilterIds = List.from(widget.productToEdit!.filterIds);
@@ -606,10 +709,14 @@ class _ProductFormViewState extends State<ProductFormView> {
 
   @override
   void dispose() {
+    for (var sub in _subscriptions) {
+      sub.cancel();
+    }
     _nameController.dispose();
     _descriptionController.dispose();
     _photoUrlController.dispose();
     _colorController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
@@ -617,26 +724,17 @@ class _ProductFormViewState extends State<ProductFormView> {
     setState(() => _isLoading = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final repository = FranchiseRepository();
-    final sections = await repository.getSectionsForProduct(
-        authProvider.firebaseUser!.uid, widget.productToEdit!.sectionIds);
+    final sections = await repository.getSectionsForProduct(authProvider.firebaseUser!.uid, widget.productToEdit!.sectionIds);
     if (!mounted) return;
-    setState(() {
-      _associatedSections = sections;
-      _isLoading = false;
-    });
+    setState(() { _associatedSections = sections; _isLoading = false; });
   }
 
-  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _performChunkedQuery(
-          Query collectionQuery, String field, List<dynamic> ids) async {
-    if (ids.isEmpty) {
-      return [];
-    }
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _performChunkedQuery(Query collectionQuery, String field, List<dynamic> ids) async {
+    if (ids.isEmpty) return [];
     final List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
     for (var i = 0; i < ids.length; i += 30) {
       final sublist = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
-      futures.add(collectionQuery.where(field, whereIn: sublist).get()
-          as Future<QuerySnapshot<Map<String, dynamic>>>);
+      futures.add(collectionQuery.where(field, whereIn: sublist).get() as Future<QuerySnapshot<Map<String, dynamic>>>);
     }
     final snapshots = await Future.wait(futures);
     final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
@@ -649,33 +747,168 @@ class _ProductFormViewState extends State<ProductFormView> {
   Future<void> _loadIngredientsForProduct() async {
     setState(() => _isLoading = true);
     final baseQuery = FirebaseFirestore.instance.collection('master_products');
-    final productDocs = await _performChunkedQuery(
-        baseQuery, 'productId', widget.productToEdit!.ingredientProductIds);
-    final productMap = {
-      for (var doc in productDocs)
-        doc.data()['productId']: MasterProduct.fromFirestore(doc.data(), doc.id)
-    };
+    final productDocs = await _performChunkedQuery(baseQuery, 'productId', widget.productToEdit!.ingredientProductIds);
+    final productMap = { for (var doc in productDocs) doc.data()['productId']: MasterProduct.fromFirestore(doc.data(), doc.id) };
     if (!mounted) return;
     setState(() {
-      _associatedIngredients = widget.productToEdit!.ingredientProductIds
-          .map((id) => productMap[id])
-          .whereType<MasterProduct>()
-          .toList();
+      _associatedIngredients = widget.productToEdit!.ingredientProductIds.map((id) => productMap[id]).whereType<MasterProduct>().toList();
       _isLoading = false;
     });
   }
 
-  void _removeSection(int index) =>
-      setState(() => _associatedSections.removeAt(index));
-
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _pickedImage = image;
-        _photoUrlController.text = image.name;
-      });
+      final int sizeInBytes = await image.length();
+      if (sizeInBytes > 500 * 1024) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("L'image est trop lourde (Max 500 Ko)."), backgroundColor: Colors.red));
+        return;
+      }
+      setState(() { _pickedImage = image; _photoUrlController.text = image.name; });
     }
+  }
+
+  Future<void> _saveProduct() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _isLoading = true);
+    try {
+      final repository = FranchiseRepository();
+      List<ProductOption> finalOptions = [];
+      for (var opt in _productOptions) {
+        String? imageUrl = opt.imageUrl;
+        if (_pendingOptionImages.containsKey(opt.id) && _pendingOptionImages[opt.id] != null) {
+          final path = 'product_options/${widget.productToEdit?.productId ?? const Uuid().v4()}/${opt.id}/${_pendingOptionImages[opt.id]!.name}';
+          imageUrl = await repository.uploadImage(_pendingOptionImages[opt.id]!, path);
+        }
+        finalOptions.add(ProductOption(id: opt.id, name: opt.name, sectionIds: opt.sectionIds, imageUrl: imageUrl));
+      }
+      MasterProduct? productToUpdate;
+      String? existingPhotoUrl;
+      if (widget.productToEdit != null) {
+        existingPhotoUrl = widget.productToEdit!.photoUrl;
+        if (!widget.isDuplicating) productToUpdate = widget.productToEdit;
+      }
+      bool imageRemoved = _pickedImage == null && _photoUrlController.text.isEmpty && existingPhotoUrl != null;
+      String? urlToKeep = imageRemoved ? null : existingPhotoUrl;
+
+      await repository.saveProduct(
+        product: productToUpdate,
+        name: _nameController.text,
+        description: _descriptionController.text,
+        imageFile: _pickedImage,
+        existingPhotoUrl: urlToKeep,
+        color: _selectedColorHex,
+        isComposite: _isComposite,
+        isIngredient: _isIngredient,
+        filterIds: _selectedFilterIds,
+        sectionIds: _associatedSections.map((s) => s.sectionId).toList(),
+        options: finalOptions,
+        ingredientProductIds: _associatedIngredients.map((p) => p.productId).toList(),
+        kioskFilterIds: _isIngredient ? [] : _selectedKioskFilterIds,
+        photoUrl: '',
+      );
+      if (!mounted) return;
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _addSectionsFromGroup() async {
+    setState(() => _isLoadingSectionGroup = true);
+    try {
+      final repository = FranchiseRepository();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final groups = await repository.getSectionGroupsStream(authProvider.firebaseUser!.uid).first;
+
+      if (!mounted) return;
+      setState(() => _isLoadingSectionGroup = false);
+
+      final selectedGroup = await showDialog<SectionGroup>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text("Choisir un groupe"),
+            content: SizedBox(width: 400, height: 400,
+                child: ListView.builder(itemCount: groups.length, itemBuilder: (context, index) => ListTile(contentPadding: const EdgeInsets.all(12), title: Text(groups[index].name, style: const TextStyle(fontSize: 18)), onTap: () => Navigator.pop(context, groups[index])))),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(fontSize: 18)))],
+          ));
+
+      if (selectedGroup != null) {
+        setState(() => _isLoadingSectionGroup = true);
+        final sectionsFromGroup = await repository.getSectionsForProduct(authProvider.firebaseUser!.uid, selectedGroup.sectionIds);
+        if (!mounted) return;
+        setState(() {
+          for (var section in sectionsFromGroup) {
+            if (!_associatedSections.any((s) => s.sectionId == section.sectionId)) {
+              _associatedSections.add(section);
+            }
+          }
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingSectionGroup = false);
+    }
+  }
+
+  Future<void> _addSingleSection() async {
+    if (_cachedAllSections != null) {
+      _showSingleSectionDialog(_cachedAllSections!);
+      return;
+    }
+
+    setState(() => _isLoadingSingleSection = true);
+    try {
+      final repository = FranchiseRepository();
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      _cachedAllSections = await repository.getSectionsStream(authProvider.firebaseUser!.uid).first;
+
+      if (!mounted) return;
+      setState(() => _isLoadingSingleSection = false);
+
+      if (_cachedAllSections != null) {
+        _showSingleSectionDialog(_cachedAllSections!);
+      }
+    } finally {
+      if (mounted) setState(() => _isLoadingSingleSection = false);
+    }
+  }
+
+  void _showSingleSectionDialog(List<ProductSection> allSections) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Ajouter une Section"),
+        content: SizedBox(
+          width: 400, height: 500,
+          child: ListView.builder(
+            itemCount: allSections.length,
+            itemBuilder: (context, i) {
+              final s = allSections[i];
+              final isAlreadyAdded = _associatedSections.any((as) => as.sectionId == s.sectionId);
+              return ListTile(
+                title: Text(s.title, style: TextStyle(fontWeight: FontWeight.bold, color: isAlreadyAdded ? Colors.grey : Colors.black)),
+                subtitle: Text("${s.items.length} choix possibles"),
+                trailing: isAlreadyAdded ? const Icon(Icons.check, color: Colors.green) : const Icon(Icons.add_circle_outline),
+                enabled: !isAlreadyAdded,
+                onTap: () {
+                  setState(() {
+                    _associatedSections.add(s);
+                  });
+                  Navigator.pop(ctx);
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer", style: TextStyle(fontSize: 18)))
+        ],
+      ),
+    );
   }
 
   void _manageOptions() {
@@ -693,496 +926,456 @@ class _ProductFormViewState extends State<ProductFormView> {
     );
   }
 
-  Future<void> _saveProduct() async {
-    if (!_formKey.currentState!.validate()) return;
-    setState(() => _isLoading = true);
-    try {
-      final repository = FranchiseRepository();
-      List<ProductOption> finalOptions = [];
-      for (var opt in _productOptions) {
-        String? imageUrl = opt.imageUrl;
-        if (_pendingOptionImages.containsKey(opt.id) &&
-            _pendingOptionImages[opt.id] != null) {
-          final path =
-              'product_options/${widget.productToEdit?.productId ?? const Uuid().v4()}/${opt.id}/${_pendingOptionImages[opt.id]!.name}';
-          imageUrl =
-              await repository.uploadImage(_pendingOptionImages[opt.id]!, path);
-        }
-        finalOptions.add(ProductOption(
-            id: opt.id,
-            name: opt.name,
-            sectionIds: opt.sectionIds,
-            imageUrl: imageUrl));
-      }
-      MasterProduct? productToUpdate;
-      String? existingPhotoUrl;
-      if (widget.productToEdit != null) {
-        existingPhotoUrl = widget.productToEdit!.photoUrl;
-        if (!widget.isDuplicating) {
-          productToUpdate = widget.productToEdit;
-        }
-      }
+  void _showAddFilterDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Nouveau Filtre Back-Office"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nom du filtre (ex: À tester)", border: OutlineInputBorder()),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                final name = controller.text.trim();
+                final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
 
-      bool imageRemoved = _pickedImage == null &&
-          _photoUrlController.text.isEmpty &&
-          existingPhotoUrl != null;
-      String? urlToKeep = imageRemoved ? null : existingPhotoUrl;
+                final tempFilter = ProductFilter(id: const Uuid().v4(), name: name);
+                setState(() {
+                  _loadedFilters.add(tempFilter);
+                  _selectedFilterIds.add(tempFilter.id);
+                });
 
-      await repository.saveProduct(
-        product: productToUpdate,
-        name: _nameController.text,
-        description: _descriptionController.text,
-        imageFile: _pickedImage,
-        existingPhotoUrl: urlToKeep,
-        color: _selectedColorHex,
-        isComposite: _isComposite,
-        isIngredient: _isIngredient,
-        filterIds: _selectedFilterIds,
-        sectionIds: _associatedSections.map((s) => s.sectionId).toList(),
-        options: finalOptions,
-        ingredientProductIds:
-            _associatedIngredients.map((p) => p.productId).toList(),
-        kioskFilterIds: _isIngredient ? [] : _selectedKioskFilterIds,
-        photoUrl: '',
-      );
-      if (!mounted) return;
-      Navigator.pop(context);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Erreur: $e")));
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
+                Navigator.pop(ctx);
+                await FranchiseRepository().addProductFilter(uid, name);
+              }
+            },
+            child: const Text("Ajouter"),
+          )
+        ],
+      ),
+    );
   }
 
-  Future<void> _addSectionsFromGroup() async {
-    final repository = FranchiseRepository();
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final groups = await repository
-        .getSectionGroupsStream(authProvider.firebaseUser!.uid)
-        .first;
-    if (!mounted) return;
-    final selectedGroup = await showDialog<SectionGroup>(
-        context: context,
-        builder: (context) => AlertDialog(
-              title: const Text("Choisir un groupe"),
-              content: SizedBox(
-                  width: 300,
-                  child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: groups.length,
-                      itemBuilder: (context, index) => ListTile(
-                          title: Text(groups[index].name),
-                          onTap: () => Navigator.pop(context, groups[index])))),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text("Annuler"))
+  void _showAddCategoryDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Nouvelle Catégorie Borne"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nom (ex: Nos Burgers)", border: OutlineInputBorder()),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                final name = controller.text.trim();
+                final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+
+                final tempCategory = KioskCategory(id: const Uuid().v4(), name: name, filters: [], position: 999);
+                setState(() => _loadedKioskCategories.add(tempCategory));
+
+                Navigator.pop(ctx);
+                await FranchiseRepository().addKioskCategory(uid, name);
+              }
+            },
+            child: const Text("Ajouter"),
+          )
+        ],
+      ),
+    );
+  }
+
+  void _showAddKioskFilterDialog(KioskCategory category) {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("Ajouter dans : ${category.name}"),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(labelText: "Nom de la sous-catégorie (ex: Spicy)", border: OutlineInputBorder()),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          ElevatedButton(
+            onPressed: () async {
+              if (controller.text.isNotEmpty) {
+                final name = controller.text.trim();
+                final newFilter = KioskFilter(id: const Uuid().v4(), name: name, position: 99);
+
+                setState(() {
+                  final index = _loadedKioskCategories.indexWhere((c) => c.id == category.id);
+                  if (index != -1) {
+                    _loadedKioskCategories[index].filters.add(newFilter);
+                    _selectedKioskFilterIds.add(newFilter.id);
+                  }
+                });
+
+                Navigator.pop(ctx);
+                await FranchiseRepository().saveKioskFilter(categoryId: category.id, name: name, position: 99);
+              }
+            },
+            child: const Text("Ajouter"),
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+          toolbarHeight: 80,
+          title: Text(widget.productToEdit == null ? "Nouveau Produit" : "Modifier le produit", style: const TextStyle(fontSize: 24)),
+          bottom: TabBar(
+            controller: _tabController,
+            labelPadding: const EdgeInsets.symmetric(vertical: 12),
+            labelStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            tabs: const [
+              Tab(icon: Icon(Icons.info_outline, size: 30), text: "Général"),
+              Tab(icon: Icon(Icons.layers, size: 30), text: "Composition"),
+              Tab(icon: Icon(Icons.category, size: 30), text: "Classement"),
+            ],
+          ),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.green, padding: const EdgeInsets.symmetric(horizontal: 24)),
+                  icon: const Icon(Icons.save, size: 28),
+                  label: const Text("ENREGISTRER", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                  onPressed: _isLoading ? null : _saveProduct),
+            )
+          ]),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
+        key: _formKey,
+        child: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildGeneralTab(),
+            _buildCompositionTab(),
+            _buildClassificationTab(),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGeneralTab() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            flex: 1,
+            child: Column(
+              children: [
+                _buildImagePreview(),
               ],
-            ));
-    if (selectedGroup != null) {
-      final sectionsFromGroup = await repository.getSectionsForProduct(
-          authProvider.firebaseUser!.uid, selectedGroup.sectionIds);
-      if (!mounted) return;
-      setState(() {
-        for (var section in sectionsFromGroup) {
-          if (!_associatedSections
-              .any((s) => s.sectionId == section.sectionId)) {
-            _associatedSections.add(section);
-          }
-        }
-      });
+            ),
+          ),
+          const SizedBox(width: 32),
+          Expanded(
+            flex: 2,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextFormField(
+                    controller: _nameController,
+                    style: const TextStyle(fontSize: 18),
+                    decoration: const InputDecoration(
+                        labelText: "Nom du produit",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        isDense: true
+                    ),
+                    validator: (v) => v!.isEmpty ? "Requis" : null),
+                const SizedBox(height: 16),
+                TextFormField(
+                    controller: _descriptionController,
+                    maxLines: 3,
+                    style: const TextStyle(fontSize: 16),
+                    decoration: const InputDecoration(
+                        labelText: "Description",
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.all(16)
+                    )),
+                const SizedBox(height: 20),
+                const Text("Couleur de fond", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10, runSpacing: 10,
+                  children: kColorPalette.map((hexColor) {
+                    final color = colorFromHex(hexColor);
+                    final isSelected = _selectedColorHex == hexColor;
+                    return InkWell(
+                      onTap: () => setState(() => _selectedColorHex = isSelected ? null : hexColor),
+                      child: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                            color: color,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                                color: isSelected ? Colors.black : Colors.grey.shade300,
+                                width: isSelected ? 3 : 1
+                            )
+                        ),
+                        child: isSelected ? const Icon(Icons.check, color: Colors.white, size: 20) : null,
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  decoration: BoxDecoration(
+                      color: _isIngredient ? Colors.orange.shade50 : Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _isIngredient ? Colors.orange.shade200 : Colors.grey.shade300)
+                  ),
+                  child: SwitchListTile(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                    dense: true,
+                    title: const Text("Ingrédient non vendable ?", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    subtitle: const Text("Cocher si ce produit ne peut pas être vendu seul.", style: TextStyle(fontSize: 13)),
+                    value: _isIngredient,
+                    activeThumbColor: Colors.orange,
+                    onChanged: (val) => setState(() => _isIngredient = val),
+                  ),
+                ),
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompositionTab() {
+    if (_isIngredient) {
+      return const Center(child: Text("Un ingrédient n'a pas de composition complexe.", style: TextStyle(fontSize: 22)));
     }
+
+    return ListView(
+      padding: const EdgeInsets.all(32),
+      children: [
+        SwitchListTile(
+            contentPadding: const EdgeInsets.all(16),
+            title: const Text("Produit Menu / Composite ?", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            subtitle: const Text("Activez si ce produit contient des étapes de choix (ex: Menu Burger).", style: TextStyle(fontSize: 16)),
+            value: _isComposite,
+            onChanged: (val) => setState(() => _isComposite = val)),
+
+        const Divider(height: 40),
+
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            const Text("Ingrédients de base", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add, size: 24),
+              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15)),
+              label: const Text("Ajouter Ingrédient", style: TextStyle(fontSize: 16)),
+              onPressed: () async {
+                final selectedProducts = await showDialog<List<MasterProduct>>(
+                    context: context,
+                    builder: (context) => ProductPickerDialog(ingredientsOnly: true, initialSelection: _associatedIngredients));
+                if (selectedProducts != null) setState(() => _associatedIngredients = selectedProducts);
+              },
+            )
+          ],
+        ),
+        if (_associatedIngredients.isEmpty)
+          const Padding(padding: EdgeInsets.symmetric(vertical: 20), child: Text("Aucun ingrédient associé.", style: TextStyle(color: Colors.grey, fontSize: 18)))
+        else
+          ..._associatedIngredients.map((ingredient) => Card(
+            margin: const EdgeInsets.symmetric(vertical: 8),
+            child: ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: const Icon(Icons.blender_outlined, size: 30),
+              title: Text(ingredient.name, style: const TextStyle(fontSize: 18)),
+              trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 30), onPressed: () => setState(() => _associatedIngredients.remove(ingredient))),
+            ),
+          )),
+
+        const Divider(height: 40),
+
+        if (!_isComposite)
+          const Padding(padding: EdgeInsets.all(16.0), child: Text("Activez 'Produit Menu / Composite' pour ajouter des étapes.", style: TextStyle(color: Colors.grey, fontSize: 18, fontStyle: FontStyle.italic)))
+        else ...[
+          ListTile(
+            tileColor: Colors.blue[50],
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+            contentPadding: const EdgeInsets.all(20),
+            title: const Text("Déclinaisons & Options", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.blue, fontSize: 20)),
+            subtitle: Text("${_productOptions.length} option(s) configurée(s)", style: const TextStyle(fontSize: 16)),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 24),
+            onTap: _manageOptions,
+          ),
+
+          const SizedBox(height: 30),
+
+          if (_productOptions.isEmpty) ...[
+            Row(
+              children: [
+                const Text("Sections Globales", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+                const Spacer(),
+
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    icon: _isLoadingSingleSection
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.add),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), backgroundColor: Colors.orange),
+                    onPressed: _isLoadingSingleSection ? null : _addSingleSection,
+                    label: Text(_isLoadingSingleSection ? " Chargement..." : "Une Section", style: const TextStyle(fontSize: 16)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    icon: _isLoadingSectionGroup
+                        ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Icon(Icons.playlist_add),
+                    style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10)),
+                    onPressed: _isLoadingSectionGroup ? null : _addSectionsFromGroup,
+                    label: Text(_isLoadingSectionGroup ? " Chargement..." : "Un Groupe", style: const TextStyle(fontSize: 16)),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (_associatedSections.isEmpty)
+              const Text("Aucune section.", style: TextStyle(color: Colors.grey, fontSize: 18))
+            else
+              ..._associatedSections.asMap().entries.map((entry) => Card(
+                margin: const EdgeInsets.symmetric(vertical: 8),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(16),
+                  title: Text(entry.value.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  subtitle: Text("Choix Min: ${entry.value.selectionMin}, Max: ${entry.value.selectionMax}", style: const TextStyle(fontSize: 16)),
+                  trailing: IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 30), onPressed: () => setState(() => _associatedSections.removeAt(entry.key))),
+                ),
+              )),
+          ]
+        ]
+      ],
+    );
+  }
+
+  Widget _buildClassificationTab() {
+    return ListView(
+      padding: const EdgeInsets.all(32),
+      children: [
+        Row(
+          children: [
+            const Text("Filtres Back-Office", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(width: 16),
+            IconButton(
+              onPressed: _showAddFilterDialog,
+              icon: const Icon(Icons.add_circle, color: Colors.green, size: 32),
+              tooltip: "Ajouter un nouveau filtre",
+            )
+          ],
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 12, runSpacing: 12,
+          children: _loadedFilters.map((filter) => FilterChip(
+              padding: const EdgeInsets.all(12),
+              label: Text(filter.name, style: const TextStyle(fontSize: 16)),
+              selected: _selectedFilterIds.contains(filter.id),
+              onSelected: (selected) => setState(() { selected ? _selectedFilterIds.add(filter.id) : _selectedFilterIds.remove(filter.id); })
+          )).toList(),
+        ),
+        if (!_isIngredient) ...[
+          const Divider(height: 48),
+          Row(
+            children: [
+              const Text("Affichage sur la Borne", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(width: 16),
+              IconButton(
+                onPressed: _showAddCategoryDialog,
+                icon: const Icon(Icons.add_circle, color: Colors.green, size: 32),
+                tooltip: "Ajouter une nouvelle catégorie",
+              )
+            ],
+          ),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: _loadedKioskCategories.map((category) => Container(
+              margin: const EdgeInsets.only(bottom: 20),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(border: Border.all(color: Colors.grey[300]!), borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(category.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                      IconButton(
+                        icon: const Icon(Icons.add_circle_outline, color: Colors.blue),
+                        onPressed: () => _showAddKioskFilterDialog(category),
+                        tooltip: "Ajouter une sous-catégorie dans ${category.name}",
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12, runSpacing: 12,
+                    children: category.filters.map((filter) => FilterChip(
+                        padding: const EdgeInsets.all(12),
+                        label: Text(filter.name, style: const TextStyle(fontSize: 16)),
+                        selected: _selectedKioskFilterIds.contains(filter.id),
+                        onSelected: (selected) => setState(() { selected ? _selectedKioskFilterIds.add(filter.id) : _selectedKioskFilterIds.remove(filter.id); })
+                    )).toList(),
+                  ),
+                ],
+              ),
+            )).toList(),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildImagePreview() {
     Widget? imageWidget;
     if (_pickedImage != null) {
-      imageWidget = kIsWeb
-          ? Image.network(_pickedImage!.path, fit: BoxFit.cover)
-          : Image.file(File(_pickedImage!.path), fit: BoxFit.cover);
+      imageWidget = kIsWeb ? Image.network(_pickedImage!.path, fit: BoxFit.cover) : Image.file(File(_pickedImage!.path), fit: BoxFit.cover);
     } else if (_photoUrlController.text.isNotEmpty) {
-      imageWidget = Image.network(
-        _photoUrlController.text,
-        fit: BoxFit.cover,
-        errorBuilder: (context, error, stackTrace) {
-          return Container(
-            color: Colors.grey[200],
-            child: const Center(
-                child: Icon(Icons.broken_image, color: Colors.grey)),
-          );
-        },
-      );
+      imageWidget = CachedNetworkImage(imageUrl: _photoUrlController.text, fit: BoxFit.cover, errorWidget: (_,__,___) => const Icon(Icons.broken_image, size: 50));
     }
 
-    if (imageWidget != null) {
-      return Padding(
-          padding: const EdgeInsets.only(top: 16.0),
-          child: Align(
-            alignment: Alignment.center,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxHeight: 350,
-              ),
-              child: AspectRatio(
-                aspectRatio: 4 / 5,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8.0),
-                  child: imageWidget,
-                ),
-              ),
-            ),
-          ));
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isEditing = widget.productToEdit != null && !widget.isDuplicating;
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-    return Scaffold(
-      appBar: AppBar(
-          title: Text(isEditing ? "Modifier un Produit" : "Créer un Produit"),
-          actions: [
-            IconButton(
-                icon: const Icon(Icons.save),
-                onPressed: _isLoading ? null : _saveProduct)
-          ]),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  Text("Informations Principales",
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                      controller: _nameController,
-                      decoration:
-                          const InputDecoration(labelText: "Nom du produit"),
-                      validator: (v) => v!.isEmpty ? "Requis" : null),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                      controller: _descriptionController,
-                      decoration:
-                          const InputDecoration(labelText: "Description")),
-                  const SizedBox(height: 24),
-                  Text("Image de référence",
-                      style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: _photoUrlController,
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            labelText: "Image sélectionnée",
-                            hintText: "Aucune",
-                            suffixIcon: _pickedImage != null ||
-                                    (_photoUrlController.text.isNotEmpty)
-                                ? IconButton(
-                                    icon: const Icon(Icons.clear),
-                                    onPressed: () {
-                                      setState(() {
-                                        _pickedImage = null;
-                                        _photoUrlController.clear();
-                                      });
-                                    },
-                                  )
-                                : null,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.upload_file),
-                        onPressed: _pickImage,
-                        tooltip: "Choisir une image",
-                      ),
-                    ],
-                  ),
-                  _buildImagePreview(),
-                  const SizedBox(height: 24),
-                  Text("Couleur de fond (si pas d'image)",
-                      style: Theme.of(context).textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: kColorPalette.map((hexColor) {
-                      final color = colorFromHex(hexColor);
-                      final isSelected = _selectedColorHex == hexColor;
-                      return InkWell(
-                        onTap: () => setState(() =>
-                            _selectedColorHex = isSelected ? null : hexColor),
-                        child: Container(
-                          width: 36,
-                          height: 36,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: isSelected
-                                  ? Colors.blueAccent
-                                  : Colors.grey.shade300,
-                              width: isSelected ? 3 : 1,
-                            ),
-                          ),
-                          child: isSelected
-                              ? const Icon(Icons.check,
-                                  color: Colors.white, size: 20)
-                              : null,
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 24),
-                  SwitchListTile(
-                      title: const Text("Produit composite ?"),
-                      subtitle: const Text(
-                          "Cochez si ce produit est un menu personnalisable."),
-                      value: _isComposite,
-                      onChanged: (val) => setState(() => _isComposite = val)),
-                  SwitchListTile(
-                    title: const Text("Produit interne / Ingrédient ?"),
-                    subtitle: const Text(
-                        "Cochez si ce produit ne doit pas être vendu seul (ex: une sauce, un steak...)."),
-                    value: _isIngredient,
-                    onChanged: (val) => setState(() => _isIngredient = val),
-                  ),
-                  if (!_isIngredient) ...[
-                    const Divider(height: 40),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text("Composition (Ingrédients)",
-                            style: Theme.of(context).textTheme.headlineSmall),
-                        TextButton.icon(
-                          icon: const Icon(Icons.edit_outlined),
-                          label: const Text("Gérer les ingrédients"),
-                          onPressed: () async {
-                            final selectedProducts =
-                                await showDialog<List<MasterProduct>>(
-                                    context: context,
-                                    builder: (context) => ProductPickerDialog(
-                                        ingredientsOnly: true,
-                                        initialSelection:
-                                            _associatedIngredients));
-                            if (selectedProducts != null) {
-                              setState(() {
-                                _associatedIngredients = selectedProducts;
-                              });
-                            }
-                          },
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    if (_associatedIngredients.isEmpty)
-                      const Padding(
-                          padding: EdgeInsets.all(16.0),
-                          child: Center(
-                              child: Text("Aucun ingrédient de base associé.")))
-                    else
-                      ListView.builder(
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        itemCount: _associatedIngredients.length,
-                        itemBuilder: (context, index) {
-                          final ingredient = _associatedIngredients[index];
-                          return Card(
-                            key: ValueKey(ingredient.id),
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: const Icon(Icons.blender_outlined),
-                              title: Text(ingredient.name),
-                            ),
-                          );
-                        },
-                      ),
-                  ],
-                  const Divider(height: 40),
-                  _buildBackOfficeFilterSelector(context, authProvider),
-                  if (!_isIngredient) ...[
-                    const Divider(height: 40),
-                    _buildKioskFilterSelector(context, authProvider),
-                  ],
-                  if (_isComposite) ...[
-                    const Divider(height: 40),
-                    ListTile(
-                      title: const Text("Déclinaisons (Menu, Seul...)"),
-                      subtitle: Text(
-                          "${_productOptions.length} option(s) définie(s)"),
-                      trailing: const Icon(Icons.edit_outlined),
-                      onTap: _manageOptions,
-                    ),
-                    if (_productOptions.isEmpty) ...[
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text("Sections de Personnalisation",
-                              style: Theme.of(context).textTheme.headlineSmall),
-                          ElevatedButton.icon(
-                              icon: const Icon(Icons.add_circle_outline),
-                              onPressed: _addSectionsFromGroup,
-                              label: const Text("Ajouter un groupe"),
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      Theme.of(context).primaryColor,
-                                  foregroundColor: Colors.white))
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      if (_associatedSections.isEmpty)
-                        const Padding(
-                            padding: EdgeInsets.all(16.0),
-                            child:
-                                Center(child: Text("Aucune section associée.")))
-                      else
-                        ListView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _associatedSections.length,
-                          itemBuilder: (context, index) {
-                            final section = _associatedSections[index];
-                            return Card(
-                              key: ValueKey(section.id),
-                              margin: const EdgeInsets.only(bottom: 10),
-                              child: ListTile(
-                                title: Text(section.title),
-                                subtitle: Text(
-                                    "Type: ${section.type}, Min: ${section.selectionMin}, Max: ${section.selectionMax}"),
-                                trailing: IconButton(
-                                    icon: const Icon(Icons.close,
-                                        color: Colors.red),
-                                    tooltip: "Dissocier",
-                                    onPressed: () => _removeSection(index)),
-                              ),
-                            );
-                          },
-                        ),
-                    ] else ...[
-                      const Padding(
-                        padding: EdgeInsets.all(16.0),
-                        child: Text(
-                            "Les sections sont gérées via les déclinaisons. Cliquez sur 'Déclinaisons' pour configurer.",
-                            style: TextStyle(
-                                fontStyle: FontStyle.italic,
-                                color: Colors.grey)),
-                      )
-                    ]
-                  ]
-                ],
-              ),
-            ),
-    );
-  }
-
-  Widget _buildBackOfficeFilterSelector(
-      BuildContext context, AuthProvider authProvider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Filtres de Rangement (Back-Office)",
-            style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        StreamBuilder<List<ProductFilter>>(
-          stream: FranchiseRepository()
-              .getFiltersStream(authProvider.firebaseUser!.uid),
-          builder: (context, snapshot) {
-            if (!snapshot.hasData) return const SizedBox.shrink();
-
-            return Wrap(
-              spacing: 8,
-              children: snapshot.data!.map((filter) {
-                final isSelected = _selectedFilterIds.contains(filter.id);
-                return FilterChip(
-                    label: Text(filter.name),
-                    selected: isSelected,
-                    onSelected: (selected) {
-                      setState(() {
-                        if (selected) {
-                          _selectedFilterIds.add(filter.id);
-                        } else {
-                          _selectedFilterIds.remove(filter.id);
-                        }
-                      });
-                    });
-              }).toList(),
-            );
-          },
+    return GestureDetector(
+      onTap: _pickImage,
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          decoration: BoxDecoration(color: Colors.grey[100], borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.grey[300]!)),
+          child: imageWidget != null
+              ? ClipRRect(borderRadius: BorderRadius.circular(20), child: imageWidget)
+              : const Column(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.add_a_photo, size: 60, color: Colors.grey), SizedBox(height: 16), Text("Ajouter une image", style: TextStyle(color: Colors.grey, fontSize: 18))]),
         ),
-      ],
-    );
-  }
-
-  Widget _buildKioskFilterSelector(
-      BuildContext context, AuthProvider authProvider) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text("Catégorisation",
-            style: Theme.of(context).textTheme.headlineSmall),
-        const SizedBox(height: 16),
-        StreamBuilder<List<KioskCategory>>(
-          stream: FranchiseRepository()
-              .getKioskCategoriesStream(authProvider.firebaseUser!.uid),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Text(
-                  "Veuillez d'abord créer la structure dans l'onglet 'Structure'.");
-            }
-
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: snapshot.data!
-                  .map((category) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(category.name,
-                                style: Theme.of(context).textTheme.titleMedium),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              children: category.filters.map((filter) {
-                                final isSelected =
-                                    _selectedKioskFilterIds.contains(filter.id);
-                                return FilterChip(
-                                  label: Text(filter.name),
-                                  selected: isSelected,
-                                  onSelected: (selected) => setState(() {
-                                    if (selected) {
-                                      _selectedKioskFilterIds.add(filter.id);
-                                    } else {
-                                      _selectedKioskFilterIds.remove(filter.id);
-                                    }
-                                  }),
-                                );
-                              }).toList(),
-                            ),
-                          ],
-                        ),
-                      ))
-                  .toList(),
-            );
-          },
-        ),
-      ],
+      ),
     );
   }
 }
@@ -1190,29 +1383,20 @@ class _ProductFormViewState extends State<ProductFormView> {
 class _ProductOptionsDialog extends StatefulWidget {
   final List<ProductOption> initialOptions;
   final Function(List<ProductOption>, Map<String, XFile?>) onConfirm;
-
-  const _ProductOptionsDialog(
-      {super.key, required this.initialOptions, required this.onConfirm});
-
+  const _ProductOptionsDialog({required this.initialOptions, required this.onConfirm});
   @override
   State<_ProductOptionsDialog> createState() => _ProductOptionsDialogState();
 }
-
 class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
   late List<ProductOption> _options;
   final Map<String, XFile?> _newImages = {};
   final ImagePicker _picker = ImagePicker();
-
   @override
-  void initState() {
-    super.initState();
-    _options = List.from(widget.initialOptions);
-  }
+  void initState() { super.initState(); _options = List.from(widget.initialOptions); }
 
   void _addOption() {
     final nameController = TextEditingController();
     XFile? tempImage;
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1224,78 +1408,39 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
               children: [
                 GestureDetector(
                   onTap: () async {
-                    final XFile? image =
-                        await _picker.pickImage(source: ImageSource.gallery);
+                    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
                     if (image != null) {
-                      setStateDialog(() {
-                        tempImage = image;
-                      });
+                      final int sizeInBytes = await image.length();
+                      if (sizeInBytes > 500 * 1024) {
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Image option trop lourde (Max 500Ko)"), backgroundColor: Colors.red));
+                        return;
+                      }
+                      setStateDialog(() => tempImage = image);
                     }
                   },
                   child: Container(
-                    width: 100,
-                    height: 100,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey[400]!),
-                      image: tempImage != null
-                          ? DecorationImage(
-                              image: kIsWeb
-                                  ? NetworkImage(tempImage!.path)
-                                  : FileImage(File(tempImage!.path))
-                                      as ImageProvider,
-                              fit: BoxFit.cover,
-                            )
-                          : null,
-                    ),
-                    child: tempImage == null
-                        ? const Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.add_a_photo,
-                                  color: Colors.grey, size: 30),
-                              SizedBox(height: 4),
-                              Text("Ajouter photo",
-                                  style: TextStyle(
-                                      fontSize: 10, color: Colors.grey))
-                            ],
-                          )
-                        : null,
+                    width: 120, height: 120,
+                    decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey[400]!),
+                        image: tempImage != null ? DecorationImage(image: kIsWeb ? NetworkImage(tempImage!.path) : FileImage(File(tempImage!.path)) as ImageProvider, fit: BoxFit.cover) : null),
+                    child: tempImage == null ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
                   ),
                 ),
                 const SizedBox(height: 20),
-                TextField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: "Nom (ex: Menu XL)",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+                TextField(controller: nameController, decoration: const InputDecoration(labelText: "Nom (ex: Menu XL)", border: OutlineInputBorder())),
               ],
             ),
             actions: [
-              TextButton(
-                  onPressed: () => Navigator.pop(ctx),
-                  child: const Text("Annuler")),
-              ElevatedButton(
-                onPressed: () {
-                  if (nameController.text.isNotEmpty) {
-                    this.setState(() {
-                      final newId = const Uuid().v4();
-                      _options.add(ProductOption(
-                          id: newId,
-                          name: nameController.text,
-                          sectionIds: []));
-                      if (tempImage != null) {
-                        _newImages[newId] = tempImage;
-                      }
-                    });
-                    Navigator.pop(ctx);
-                  }
-                },
-                child: const Text("Créer"),
-              )
+              TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler", style: TextStyle(fontSize: 18))),
+              ElevatedButton(onPressed: () {
+                if (nameController.text.isNotEmpty) {
+                  setState(() {
+                    final newId = const Uuid().v4();
+                    _options.add(ProductOption(id: newId, name: nameController.text, sectionIds: []));
+                    if (tempImage != null) _newImages[newId] = tempImage;
+                  });
+                  Navigator.pop(ctx);
+                }
+              }, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)), child: const Text("Créer", style: TextStyle(fontSize: 18)))
             ],
           );
         },
@@ -1306,64 +1451,48 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
   Future<void> _pickImageForOption(String optionId) async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _newImages[optionId] = image;
-      });
+      final int sizeInBytes = await image.length();
+      if (sizeInBytes > 500 * 1024) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Image trop lourde (Max 500Ko)"), backgroundColor: Colors.red));
+        return;
+      }
+      setState(() => _newImages[optionId] = image);
     }
   }
 
   void _configureSectionsForOption(int index) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final repository = FranchiseRepository();
-    final allSections = await repository
-        .getSectionsStream(authProvider.firebaseUser!.uid)
-        .first;
+    final allSections = await repository.getSectionsStream(authProvider.firebaseUser!.uid).first;
     final option = _options[index];
-
     final currentSectionIds = Set<String>.from(option.sectionIds);
+
     await showDialog(
         context: context,
         builder: (ctx) => StatefulBuilder(builder: (context, setStateDialog) {
-              return AlertDialog(
-                title: Text("Sections pour : ${option.name}"),
-                content: SizedBox(
-                  width: 400,
-                  height: 500,
-                  child: ListView.builder(
-                    itemCount: allSections.length,
-                    itemBuilder: (context, i) {
-                      final s = allSections[i];
-                      final isSelected =
-                          currentSectionIds.contains(s.sectionId);
-                      return CheckboxListTile(
-                        title: Text(s.title),
-                        subtitle: Text("${s.items.length} produits"),
-                        value: isSelected,
-                        onChanged: (val) {
-                          setStateDialog(() {
-                            if (val == true)
-                              currentSectionIds.add(s.sectionId);
-                            else
-                              currentSectionIds.remove(s.sectionId);
-                          });
-                        },
-                      );
-                    },
-                  ),
-                ),
-                actions: [
-                  TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: const Text("Fermer"))
-                ],
-              );
-            }));
+          return AlertDialog(
+            title: Text("Sections pour : ${option.name}"),
+            content: SizedBox(width: 500, height: 600,
+              child: ListView.builder(
+                itemCount: allSections.length,
+                itemBuilder: (context, i) {
+                  final s = allSections[i];
+                  return CheckboxListTile(
+                    contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+                    title: Text(s.title, style: const TextStyle(fontSize: 18)),
+                    subtitle: Text("${s.items.length} produits"),
+                    value: currentSectionIds.contains(s.sectionId),
+                    onChanged: (val) => setStateDialog(() => val == true ? currentSectionIds.add(s.sectionId) : currentSectionIds.remove(s.sectionId)),
+                  );
+                },
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Fermer", style: TextStyle(fontSize: 18)))],
+          );
+        }));
     setState(() {
-      _options[index] = ProductOption(
-          id: option.id,
-          name: option.name,
-          sectionIds: currentSectionIds.toList(),
-          imageUrl: option.imageUrl);
+      _options[index] = ProductOption(id: option.id, name: option.name, sectionIds: currentSectionIds.toList(), imageUrl: option.imageUrl);
     });
   }
 
@@ -1371,87 +1500,44 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text("Gérer les déclinaisons"),
-      content: SizedBox(
-        width: 600,
-        height: 500,
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                itemCount: _options.length,
-                itemBuilder: (context, index) {
-                  final opt = _options[index];
-                  final hasNewImage = _newImages.containsKey(opt.id);
-
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      leading: GestureDetector(
-                        onTap: () => _pickImageForOption(opt.id),
-                        child: Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.grey[300]!),
-                          ),
-                          child: hasNewImage
-                              ? (kIsWeb
-                                  ? Image.network(_newImages[opt.id]!.path,
-                                      fit: BoxFit.cover)
-                                  : Image.file(File(_newImages[opt.id]!.path),
-                                      fit: BoxFit.cover))
-                              : (opt.imageUrl != null
-                                  ? Image.network(opt.imageUrl!,
-                                      fit: BoxFit.cover)
-                                  : const Icon(Icons.image,
-                                      size: 20, color: Colors.grey)),
-                        ),
-                      ),
-                      title: Text(opt.name,
-                          style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text(
-                          "${opt.sectionIds.length} section(s) associée(s)"),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.settings_input_component,
-                                color: Colors.blue),
-                            tooltip: "Configurer les étapes",
-                            onPressed: () => _configureSectionsForOption(index),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () =>
-                                setState(() => _options.removeAt(index)),
-                          ),
-                        ],
-                      ),
+      content: SizedBox(width: 700, height: 600,
+        child: Column(children: [
+          Expanded(child: ListView.builder(
+            itemCount: _options.length,
+            itemBuilder: (context, index) {
+              final opt = _options[index];
+              final hasNewImage = _newImages.containsKey(opt.id);
+              return Card(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.all(12),
+                  leading: GestureDetector(
+                    onTap: () => _pickImageForOption(opt.id),
+                    child: Container(width: 60, height: 60, decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8), border: Border.all(color: Colors.grey[300]!)),
+                      child: hasNewImage ? (kIsWeb ? Image.network(_newImages[opt.id]!.path, fit: BoxFit.cover) : Image.file(File(_newImages[opt.id]!.path), fit: BoxFit.cover))
+                          : (opt.imageUrl != null ? Image.network(opt.imageUrl!, fit: BoxFit.cover) : const Icon(Icons.image, size: 30, color: Colors.grey)),
                     ),
-                  );
-                },
-              ),
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text("Ajouter une option"),
-              onPressed: _addOption,
-            )
-          ],
+                  ),
+                  title: Text(opt.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  subtitle: Text("${opt.sectionIds.length} section(s) associée(s)", style: const TextStyle(fontSize: 16)),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    IconButton(icon: const Icon(Icons.settings_input_component, color: Colors.blue, size: 30), onPressed: () => _configureSectionsForOption(index)),
+                    const SizedBox(width: 16),
+                    IconButton(icon: const Icon(Icons.delete, color: Colors.red, size: 30), onPressed: () => setState(() => _options.removeAt(index))),
+                  ],
+                  ),
+                ),
+              );
+            },
+          ),
+          ),
+          ElevatedButton.icon(icon: const Icon(Icons.add, size: 28), label: const Text("Ajouter une option", style: TextStyle(fontSize: 18)), style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(20)), onPressed: _addOption)
+        ],
         ),
       ),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler")),
-        ElevatedButton(
-            onPressed: () {
-              widget.onConfirm(_options, _newImages);
-              Navigator.pop(context);
-            },
-            child: const Text("Valider")),
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler", style: TextStyle(fontSize: 18))),
+        ElevatedButton(onPressed: () { widget.onConfirm(_options, _newImages); Navigator.pop(context); }, style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(20)), child: const Text("Valider", style: TextStyle(fontSize: 18))),
       ],
     );
   }

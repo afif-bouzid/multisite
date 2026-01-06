@@ -3,7 +3,7 @@ import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
-import '../models/models.dart';
+import '../../models.dart';
 
 class PrintJobData {
   final String ipAddress;
