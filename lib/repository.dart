@@ -182,9 +182,8 @@ class FranchiseRepository {
       return "Erreur inconnue.";
     } on FirebaseAuthException catch (e) {
       if (e.code == 'weak-password') return 'Le mot de passe est trop faible.';
-      if (e.code == 'email-already-in-use') {
+      if (e.code == 'email-already-in-use')
         return 'Cette adresse email est déjà utilisée.';
-      }
       return e.message;
     } catch (e) {
       return 'Une erreur est survenue: $e';
@@ -483,9 +482,8 @@ class FranchiseRepository {
     Query query = _firestore
         .collection('section_groups')
         .where('createdBy', isEqualTo: franchisorId);
-    if (filterIds.isNotEmpty) {
+    if (filterIds.isNotEmpty)
       query = query.where('filterIds', arrayContainsAny: filterIds);
-    }
     return query.snapshots().map(
         (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
   }
@@ -525,9 +523,8 @@ class FranchiseRepository {
     Query query = _firestore
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId);
-    if (filterIds.isNotEmpty) {
+    if (filterIds.isNotEmpty)
       query = query.where('filterIds', arrayContainsAny: filterIds);
-    }
     return query.snapshots().map((snapshot) => snapshot.docs
         .map((doc) => MasterProduct.fromFirestore(
             doc.data() as Map<String, dynamic>, doc.id))
@@ -644,10 +641,9 @@ class FranchiseRepository {
     if (startDate != null) {
       query = query.where('openingTime', isGreaterThanOrEqualTo: startDate);
     }
-    if (endDate != null) {
+    if (endDate != null)
       query = query.where('openingTime',
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
-    }
     return query.snapshots().map(
         (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
   }

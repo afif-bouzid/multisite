@@ -47,9 +47,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
   List<ProductFilter> _allBackOfficeFilters = [];
   List<KioskCategory> _allKioskCategories = [];
-  final Map<String, KioskFilter> _kioskFilterMap = {};
-  final Map<String, String> _kioskFilterIdToCategoryId = {};
-  final Map<String, KioskCategory> _kioskCategoryMap = {};
+  Map<String, KioskFilter> _kioskFilterMap = {};
+  Map<String, String> _kioskFilterIdToCategoryId = {};
+  Map<String, KioskCategory> _kioskCategoryMap = {};
 
   bool _isLoadingFilters = true;
   _CatalogueMode _mode = _CatalogueMode.ordering;
@@ -142,7 +142,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       for (var cat in kioskCategories) {
         _kioskCategoryMap[cat.id] = cat;
         for (var filter in cat.filters) {
-          _kioskFilterMap[filter.id] = filter;
+          _kioskFilterMap[filter.id] = filter as KioskFilter;
           _kioskFilterIdToCategoryId[filter.id] = cat.id;
         }
       }
@@ -817,14 +817,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
       final batch = FirebaseFirestore.instance.batch();
       final overridesSnapshot = await overridesColRef.get();
-      for (final doc in overridesSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
+      for (final doc in overridesSnapshot.docs) batch.delete(doc.reference);
 
       final sectionOverridesSnapshot = await sectionOverridesColRef.get();
-      for (final doc in sectionOverridesSnapshot.docs) {
+      for (final doc in sectionOverridesSnapshot.docs)
         batch.delete(doc.reference);
-      }
 
       batch.set(
           mainDocRef,
@@ -1236,11 +1233,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
               );
               if (picked != null) {
                 setStateDialog(() {
-                  if (isStart) {
+                  if (isStart)
                     startTime = picked;
-                  } else {
+                  else
                     endTime = picked;
-                  }
                 });
               }
             }
@@ -1255,7 +1251,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<double>(
-                          initialValue: selectedVat,
+                          value: selectedVat,
                           decoration:
                               const InputDecoration(labelText: "TVA Sur Place"),
                           items: vatRates
@@ -1269,7 +1265,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       const SizedBox(width: 16),
                       Expanded(
                         child: DropdownButtonFormField<double>(
-                          initialValue: selectedTakeawayVat,
+                          value: selectedTakeawayVat,
                           decoration:
                               const InputDecoration(labelText: "TVA Emporter"),
                           items: vatRates
@@ -1354,7 +1350,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                               decimal: true),
                         ),
                       );
-                    }),
+                    }).toList(),
                   ]
                 ],
               ),

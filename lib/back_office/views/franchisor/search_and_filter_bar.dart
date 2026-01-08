@@ -1,5 +1,4 @@
-﻿import 'dart:async';
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -24,155 +23,73 @@ class FiltersView extends StatefulWidget {
 
 class _FiltersViewState extends State<FiltersView> {
   final _searchController = TextEditingController();
-
-  // -- CACHE MEMOIRE --
-  List<ProductFilter> _allFilters = [];
-  bool _isLoading = true;
-  StreamSubscription? _subscription;
-
-  // -- ETAT RECHERCHE --
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
-    final repository = FranchiseRepository();
-    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
-    // Abonnement unique au flux de données
-    _subscription = repository.getFiltersStream(uid).listen((filters) {
-      if (mounted) {
-        setState(() {
-          _allFilters = filters;
-          _isLoading = false;
-        });
-      }
-    });
-
     _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text);
+      if (mounted) setState(() => _searchQuery = _searchController.text);
     });
   }
 
   @override
   void dispose() {
     _searchController.dispose();
-    _subscription?.cancel();
     super.dispose();
   }
 
-  // Filtrage et Tri instantané sur la RAM
-  List<ProductFilter> _getFilteredData() {
-    List<ProductFilter> processed = List.from(_allFilters);
-
+  List<ProductFilter> _processFilters(List<ProductFilter> filters) {
+    List<ProductFilter> processed = List.from(filters);
     if (_searchQuery.isNotEmpty) {
       processed = processed
           .where((f) => f.name.toLowerCase().contains(_searchQuery.toLowerCase()))
           .toList();
     }
-
-    // Tri alphabétique
     processed.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     return processed;
   }
 
-  // --- LOGIQUE OPTIMISTE (INSTANTANÉE) ---
-
-  void _openFilterDialog(ProductFilter? filter) async {
-    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
-    // On attend l'objet créé/modifié par le dialogue
-    final result = await showDialog<ProductFilter>(
-      context: context,
-      builder: (_) => FilterEditorDialog(
-          franchisorId: uid,
-          filter: filter
-      ),
-    );
-
-    if (result != null) {
-      setState(() {
-        // Mise à jour locale immédiate
-        final index = _allFilters.indexWhere((f) => f.id == result.id);
-        if (index != -1) {
-          _allFilters[index] = result;
-        } else {
-          _allFilters.add(result);
-        }
-      });
-
-      // Sauvegarde arrière-plan
-      final repo = FranchiseRepository();
-      try {
-        await repo.saveFilter(
-          franchisorId: uid,
-          id: result.id,
-          name: result.name,
-          color: result.color,
-        );
-      } catch (e) {
-        print("Erreur de sauvegarde: $e");
-      }
-    }
-  }
-
-  void _confirmDelete(ProductFilter filter) async {
-    final repo = FranchiseRepository();
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Supprimer ?"),
-        content: Text("Le filtre '${filter.name}' sera supprimé définitivement."),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text("Annuler"),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
-            onPressed: () async {
-              Navigator.pop(ctx); // Ferme le dialogue
-
-              // 1. Suppression visuelle immédiate
-              setState(() {
-                _allFilters.removeWhere((f) => f.id == filter.id);
-              });
-
-              // 2. Suppression base de données
-              await repo.deleteFilter(filter.id);
-            },
-            child: const Text("Supprimer"),
-          )
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final displayedFilters = _getFilteredData();
+    final repository = FranchiseRepository();
+    // On récupère l'ID de l'utilisateur connecté
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-        children: [
-          _buildHeader(),
-          Expanded(
-            child: displayedFilters.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-              itemCount: displayedFilters.length,
-              separatorBuilder: (c, i) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return _buildFilterCard(context, displayedFilters[index]);
-              },
-            ),
-          ),
-        ],
+      body: StreamBuilder<List<ProductFilter>>(
+        stream: repository.getFiltersStream(uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasError) {
+            return Center(child: Text("Erreur: ${snapshot.error}", style: const TextStyle(color: Colors.red)));
+          }
+
+          final allFilters = snapshot.data ?? [];
+          final displayedFilters = _processFilters(allFilters);
+
+          return Column(
+            children: [
+              _buildHeader(),
+              Expanded(
+                child: displayedFilters.isEmpty
+                    ? _buildEmptyState()
+                    : ListView.separated(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                  itemCount: displayedFilters.length,
+                  separatorBuilder: (c, i) => const SizedBox(height: 12),
+                  itemBuilder: (context, index) {
+                    return _buildFilterCard(context, displayedFilters[index], repository);
+                  },
+                ),
+              ),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.black,
@@ -180,7 +97,11 @@ class _FiltersViewState extends State<FiltersView> {
         elevation: 4,
         icon: const Icon(Icons.add_rounded),
         label: const Text("Nouveau Filtre", style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _openFilterDialog(null),
+        // IMPORTANT : On passe le UID à la modale
+        onPressed: () => showDialog(
+          context: context,
+          builder: (_) => FilterEditorDialog(franchisorId: uid),
+        ),
       ),
     );
   }
@@ -235,7 +156,9 @@ class _FiltersViewState extends State<FiltersView> {
     );
   }
 
-  Widget _buildFilterCard(BuildContext context, ProductFilter filter) {
+  Widget _buildFilterCard(BuildContext context, ProductFilter filter, FranchiseRepository repo) {
+    // On récupère le UID ici aussi au cas où pour la suppression (si besoin de vérifier les droits)
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
     final Color chipColor = colorFromHex(filter.color);
 
     return Container(
@@ -267,30 +190,58 @@ class _FiltersViewState extends State<FiltersView> {
           children: [
             IconButton(
               icon: const Icon(Icons.edit_outlined, color: Colors.black54),
-              onPressed: () => _openFilterDialog(filter),
+              // IMPORTANT : On passe le UID et le filtre à éditer
+              onPressed: () => showDialog(
+                context: context,
+                builder: (_) => FilterEditorDialog(franchisorId: uid, filter: filter),
+              ),
             ),
             IconButton(
               icon: Icon(Icons.delete_outline, color: Colors.red.shade300),
-              onPressed: () => _confirmDelete(filter),
+              onPressed: () => _confirmDelete(context, repo, filter),
             ),
           ],
         ),
       ),
     );
   }
+
+  void _confirmDelete(BuildContext context, FranchiseRepository repo, ProductFilter filter) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Supprimer ?"),
+        content: Text("Le filtre '${filter.name}' sera supprimé définitivement."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            onPressed: () async {
+              await repo.deleteFilter(filter.id);
+              if (mounted) Navigator.pop(ctx);
+            },
+            child: const Text("Supprimer"),
+          )
+        ],
+      ),
+    );
+  }
 }
 
 // -----------------------------------------------------------------------------
-// --- DIALOGUE D'ÉDITION (Retourne l'objet) ---
+// --- DIALOGUE D'ÉDITION ---
 // -----------------------------------------------------------------------------
 
 class FilterEditorDialog extends StatefulWidget {
-  final String franchisorId;
+  final String franchisorId; // <--- On reçoit l'ID ici
   final ProductFilter? filter;
 
   const FilterEditorDialog({
     super.key,
-    required this.franchisorId,
+    required this.franchisorId, // <--- Requis
     this.filter
   });
 
@@ -302,11 +253,14 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   String? _selectedColorHex;
+  bool _isUploading = false;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.filter?.name ?? '');
+
+    // Initialisation couleur
     if (widget.filter?.color != null && widget.filter!.color!.isNotEmpty) {
       _selectedColorHex = widget.filter!.color!.toUpperCase();
     } else {
@@ -314,20 +268,28 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
     }
   }
 
-  void _submit() {
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+    setState(() => _isUploading = true);
 
-    final filterId = widget.filter?.id ?? const Uuid().v4();
+    try {
+      final repository = FranchiseRepository();
+      final filterId = widget.filter?.id ?? const Uuid().v4();
 
-    // Création de l'objet complet
-    final newFilter = ProductFilter(
+      // On sauvegarde avec le franchisorId passé en paramètre
+      await repository.saveFilter(
+        franchisorId: widget.franchisorId, // <--- ENVOI DE L'ID
         id: filterId,
         name: _nameController.text.trim(),
-        color: _selectedColorHex
-    );
+        color: _selectedColorHex, // Peut être null
+      );
 
-    // Retour immédiat vers la vue parente avec l'objet
-    Navigator.pop(context, newFilter);
+      if (mounted) Navigator.pop(context);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
   @override
@@ -366,9 +328,9 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
                     onTap: () {
                       setState(() {
                         if (isSelected) {
-                          _selectedColorHex = null;
+                          _selectedColorHex = null; // Désélectionner
                         } else {
-                          _selectedColorHex = paletteHex.toUpperCase();
+                          _selectedColorHex = paletteHex.toUpperCase(); // Sélectionner
                         }
                       });
                     },
@@ -391,6 +353,7 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
                   );
                 }).toList(),
               ),
+              if (_isUploading) const Padding(padding: EdgeInsets.only(top: 24), child: LinearProgressIndicator(color: Colors.black))
             ],
           ),
         ),
@@ -398,7 +361,7 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
         ElevatedButton(
-          onPressed: _submit,
+          onPressed: _isUploading ? null : _save,
           style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white),
           child: const Text("Enregistrer"),
         )

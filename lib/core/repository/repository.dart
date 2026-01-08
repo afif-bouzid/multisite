@@ -21,6 +21,8 @@ class FranchiseRepository {
 
   FranchiseRepository._internal();
 
+  // --- GESTION FILTRES BACK-OFFICE ---
+
   Future<void> saveFilter({
     required String franchisorId,
     required String id,
@@ -30,7 +32,6 @@ class FranchiseRepository {
     try {
       final docRef =
       FirebaseFirestore.instance.collection('product_filters').doc(id);
-
       await docRef.set({
         'id': id,
         'createdBy': franchisorId,
@@ -60,26 +61,12 @@ class FranchiseRepository {
     });
   }
 
-  Future<void> updateKioskFiltersOrder(
-      String categoryId, List<KioskFilter> filters) async {
-    final batch = FirebaseFirestore.instance.batch();
-    for (int i = 0; i < filters.length; i++) {
-      final docRef = FirebaseFirestore.instance
-          .collection('kiosk_categories')
-          .doc(categoryId)
-          .collection('filters')
-          .doc(filters[i].id);
-
-      batch.update(docRef, {'position': i});
-    }
-    await batch.commit();
-  }
+  // --- UTILITAIRES STORAGE ---
 
   Future<String> uploadUniversalFile(XFile file, String path) async {
     final ref = _storage.ref().child(path);
     final Uint8List data = await file.readAsBytes();
     final metadata = SettableMetadata(contentType: 'image/jpeg');
-
     await ref.putData(data, metadata);
     return await ref.getDownloadURL();
   }
@@ -88,14 +75,12 @@ class FranchiseRepository {
     try {
       final ref = _storage.ref(path);
       UploadTask uploadTask;
-
       if (kIsWeb) {
         final data = await imageFile.readAsBytes();
         uploadTask = ref.putData(data);
       } else {
         uploadTask = ref.putFile(File(imageFile.path));
       }
-
       final snapshot = await uploadTask.whenComplete(() => {});
       final downloadUrl = await snapshot.ref.getDownloadURL();
       return downloadUrl;
@@ -103,6 +88,8 @@ class FranchiseRepository {
       return null;
     }
   }
+
+  // --- CONFIGURATION GLOBAL ---
 
   Future<void> updateKioskScreensaver(
       String franchiseeId, List<String> urls) async {
@@ -119,12 +106,64 @@ class FranchiseRepository {
 
   Future<void> updateGlobalButtonImages(
       String franchisorId, String? dineInUrl, String? takeawayUrl) async {
-    await _firestore.collection('users').doc(franchisorId).update({
-      'dineInImageUrl': dineInUrl,
-      'takeawayImageUrl': takeawayUrl,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
+    try {
+      final docSnap =
+      await _firestore.collection('users').doc(franchisorId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null) {
+          final oldDineIn = data['dineInImageUrl'] as String?;
+          final oldTakeaway = data['takeawayImageUrl'] as String?;
+
+          if (dineInUrl != null &&
+              oldDineIn != null &&
+              oldDineIn != dineInUrl) {
+            await _deleteFileFromUrl(oldDineIn);
+          }
+          if (takeawayUrl != null &&
+              oldTakeaway != null &&
+              oldTakeaway != takeawayUrl) {
+            await _deleteFileFromUrl(oldTakeaway);
+          }
+        }
+      }
+
+      await _firestore.collection('users').doc(franchisorId).update({
+        'dineInImageUrl': dineInUrl,
+        'takeawayImageUrl': takeawayUrl,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      print("Erreur updateGlobalButtonImages: $e");
+      rethrow;
+    }
   }
+
+  Future<void> deleteGlobalButtonImage(
+      String franchisorId, String typeKey) async {
+    final String fieldName =
+    (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
+
+    try {
+      final docSnap =
+      await _firestore.collection('users').doc(franchisorId).get();
+      if (docSnap.exists) {
+        final url = docSnap.data()?[fieldName] as String?;
+        if (url != null) {
+          await _deleteFileFromUrl(url);
+        }
+      }
+
+      await _firestore.collection('users').doc(franchisorId).update({
+        fieldName: FieldValue.delete(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // --- MEDIAS & ASSETS ---
 
   Future<void> addMasterMedia({
     required String name,
@@ -134,10 +173,8 @@ class FranchiseRepository {
   }) async {
     try {
       final String mediaId = const Uuid().v4();
-
       final String ext = type == 'video' ? 'mp4' : 'jpg';
       final String path = 'franchisor_assets/$_currentUserId/$mediaId.$ext';
-
       final String? url = await uploadImage(file, path);
 
       if (url == null) throw Exception("Impossible d'uploader le fichier.");
@@ -164,6 +201,18 @@ class FranchiseRepository {
 
   Future<void> deleteMasterMedia(String mediaId) async {
     try {
+      final docSnap =
+      await _firestore.collection('kiosk_medias').doc(mediaId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null) {
+          final url = data['url'] as String?;
+          final thumbUrl = data['thumbnailUrl'] as String?;
+
+          await _deleteFileFromUrl(url);
+          await _deleteFileFromUrl(thumbUrl);
+        }
+      }
       await _firestore.collection('kiosk_medias').doc(mediaId).delete();
     } catch (e) {
       rethrow;
@@ -218,6 +267,8 @@ class FranchiseRepository {
     }, SetOptions(merge: true));
   }
 
+  // --- GESTION PRODUITS & REQUETES FRANCHISE ---
+
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
   _performChunkedQuery(
       Query collectionQuery, String field, List<dynamic> ids) async {
@@ -226,7 +277,8 @@ class FranchiseRepository {
     }
     final List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
     for (var i = 0; i < ids.length; i += 30) {
-      final sublist = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+      final sublist =
+      ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
       futures.add(collectionQuery.where(field, whereIn: sublist).get()
       as Future<QuerySnapshot<Map<String, dynamic>>>);
     }
@@ -293,6 +345,8 @@ class FranchiseRepository {
     });
   }
 
+  // --- GESTION UTILISATEURS (Franchisés / Employés) ---
+
   Future<String?> createFranchisee({
     required String email,
     required String password,
@@ -327,7 +381,6 @@ class FranchiseRepository {
         });
 
         final batch = _firestore.batch();
-
         final masterProductsSnapshot = await _firestore
             .collection('master_products')
             .where('createdBy', isEqualTo: currentFranchisorId)
@@ -337,7 +390,6 @@ class FranchiseRepository {
           for (final productDoc in masterProductsSnapshot.docs) {
             final product =
             MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
-
             final newMenuItemRef = _firestore
                 .collection('users')
                 .doc(newUser.uid)
@@ -359,7 +411,6 @@ class FranchiseRepository {
             .doc(newUser.uid)
             .collection('config')
             .doc('printer');
-
         final defaultPrinterConfig = PrinterConfig();
         batch.set(printerConfigRef, defaultPrinterConfig.toMap());
 
@@ -368,7 +419,6 @@ class FranchiseRepository {
             .doc(newUser.uid)
             .collection('config')
             .doc('receipt');
-
         final defaultReceiptConfig = ReceiptConfig();
         batch.set(receiptConfigRef, defaultReceiptConfig.toMap());
 
@@ -398,7 +448,6 @@ class FranchiseRepository {
     try {
       final managerDoc =
       await _firestore.collection('users').doc(managerId).get();
-
       if (!managerDoc.exists) return "Erreur : Compte manager introuvable.";
 
       final String franchisorId = managerDoc.get('franchisorId');
@@ -411,7 +460,6 @@ class FranchiseRepository {
       );
 
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
-
       UserCredential userCredential =
       await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
@@ -507,10 +555,10 @@ class FranchiseRepository {
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
       final callable = functions.httpsCallable('deleteFranchiseeData');
-
       final result = await callable.call<Map<String, dynamic>>({
         'franchiseeId': franchiseeId,
       });
+
       if (result.data['success'] == true) {
         return null;
       } else {
@@ -526,6 +574,8 @@ class FranchiseRepository {
     }
   }
 
+  // --- GESTION CATEGORIES BORNE ---
+
   Stream<List<KioskCategory>> getKioskCategoriesStream(String franchisorId) {
     return _firestore
         .collection('kiosk_categories')
@@ -537,7 +587,6 @@ class FranchiseRepository {
       for (var doc in snapshot.docs) {
         final filtersSnapshot =
         await doc.reference.collection('filters').orderBy('position').get();
-
         final filters = filtersSnapshot.docs
             .map((filterDoc) => KioskFilter.fromFirestore(filterDoc))
             .toList();
@@ -547,28 +596,44 @@ class FranchiseRepository {
     });
   }
 
+  // --- SAUVEGARDE CATEGORIE BORNE AVEC SUPPRESSION IMAGE ---
   Future<void> saveKioskCategory({
     String? id,
     required String name,
     required int position,
     XFile? imageFile,
     String? existingImageUrl,
+    required String imageUrl, // L'URL finale souhaitée (ou "" si suppression)
   }) async {
     final docRef = id != null
         ? _firestore.collection('kiosk_categories').doc(id)
         : _firestore.collection('kiosk_categories').doc();
 
-    String? finalImageUrl = existingImageUrl;
+    String? finalImageUrl = imageUrl;
+
     if (imageFile != null) {
+      // 1. Nouvelle image : suppression de l'ancienne + upload
+      if (existingImageUrl != null && existingImageUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingImageUrl);
+      }
       final path = 'category_images/${docRef.id}/${imageFile.name}';
       finalImageUrl = await uploadImage(imageFile, path);
+    } else {
+      // 2. Pas de nouvelle image : Si on demande une URL vide alors qu'il y en avait une -> Suppression
+      if (finalImageUrl.isEmpty &&
+          existingImageUrl != null &&
+          existingImageUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingImageUrl);
+        finalImageUrl = "";
+      }
     }
 
     await docRef.set({
       'name': name,
       'position': position,
       'imageUrl': finalImageUrl,
-      'createdBy': _currentUserId
+      'createdBy': _currentUserId,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
 
@@ -595,10 +660,25 @@ class FranchiseRepository {
     await batch.commit();
   }
 
-  Future<void> deleteKioskCategory(String categoryId) async =>
+  Future<void> deleteKioskCategory(String categoryId) async {
+    try {
+      final docSnap =
+      await _firestore.collection('kiosk_categories').doc(categoryId).get();
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null && data['imageUrl'] != null) {
+          await _deleteFileFromUrl(data['imageUrl']);
+        }
+      }
       await _firestore.collection('kiosk_categories').doc(categoryId).delete();
-// DANS repository.dart
+    } catch (e) {
+      rethrow;
+    }
+  }
 
+  // --- GESTION FILTRES BORNE ---
+
+  // --- SAUVEGARDE FILTRE BORNE AVEC SUPPRESSION IMAGE ---
   Future<void> saveKioskFilter({
     required String categoryId,
     String? filterId,
@@ -606,17 +686,30 @@ class FranchiseRepository {
     required int position,
     XFile? imageFile,
     String? existingImageUrl,
+    required String imageUrl, // L'URL finale souhaitée (ou "" si suppression)
     String? color,
   }) async {
-    // ... (votre code d'upload image existant) ...
-    String? imageUrl = existingImageUrl;
+    String? finalImageUrl = imageUrl;
+
     if (imageFile != null) {
-      final path = 'kiosk_filters/$categoryId/${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
-      imageUrl = await uploadUniversalFile(imageFile, path);
+      // 1. Nouvelle image : suppression de l'ancienne + upload
+      if (existingImageUrl != null && existingImageUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingImageUrl);
+      }
+      final path =
+          'kiosk_filters/$categoryId/${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
+      finalImageUrl = await uploadUniversalFile(imageFile, path);
+    } else {
+      // 2. Pas de nouvelle image : Si on demande une URL vide alors qu'il y en avait une -> Suppression
+      if (finalImageUrl.isEmpty &&
+          existingImageUrl != null &&
+          existingImageUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingImageUrl);
+        finalImageUrl = "";
+      }
     }
 
     final id = filterId ?? const Uuid().v4();
-
     await _firestore
         .collection('kiosk_categories')
         .doc(categoryId)
@@ -626,25 +719,62 @@ class FranchiseRepository {
       'id': id,
       'name': name,
       'position': position,
-      'imageUrl': imageUrl,
+      'imageUrl': finalImageUrl,
       'color': color,
     }, SetOptions(merge: true));
 
-    // --- LIGNE CRUCIALE A AJOUTER POUR LE RAFRAICHISSEMENT ---
-    await _firestore.collection('kiosk_categories').doc(categoryId).update({'updatedAt': FieldValue.serverTimestamp()});
-  }
-
-  Future<void> deleteKioskFilter({required String categoryId, required String filterId}) async {
     await _firestore
         .collection('kiosk_categories')
         .doc(categoryId)
-        .collection('filters')
-        .doc(filterId)
-        .delete();
-
-    await _firestore.collection('kiosk_categories').doc(categoryId).update({'updatedAt': FieldValue.serverTimestamp()});
+        .update({'updatedAt': FieldValue.serverTimestamp()});
   }
 
+  Future<void> deleteKioskFilter(
+      {required String categoryId, required String filterId}) async {
+    try {
+      final docSnap = await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .collection('filters')
+          .doc(filterId)
+          .get();
+
+      if (docSnap.exists) {
+        final data = docSnap.data();
+        if (data != null && data['imageUrl'] != null) {
+          await _deleteFileFromUrl(data['imageUrl']);
+        }
+      }
+
+      await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .collection('filters')
+          .doc(filterId)
+          .delete();
+
+      await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .update({'updatedAt': FieldValue.serverTimestamp()});
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> updateKioskFiltersOrder(
+      String categoryId, List<KioskFilter> filters) async {
+    final batch = FirebaseFirestore.instance.batch();
+    for (int i = 0; i < filters.length; i++) {
+      final docRef = FirebaseFirestore.instance
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .collection('filters')
+          .doc(filters[i].id);
+      batch.update(docRef, {'position': i});
+    }
+    await batch.commit();
+  }
 
   Stream<List<ProductFilter>> getFiltersStream(String franchisorId) {
     return _firestore
@@ -661,6 +791,8 @@ class FranchiseRepository {
         'createdBy': _currentUserId,
         'color': color,
       });
+
+  // --- GESTION SECTIONS ---
 
   Stream<List<ProductSection>> getSectionsStream(String franchisorId,
       {List<String> filterIds = const []}) {
@@ -692,7 +824,6 @@ class FranchiseRepository {
         };
 
         List<SectionItem> sectionItems = [];
-
         if (productIds.isNotEmpty) {
           final productDocs = await _performChunkedQuery(
               _firestore.collection('master_products'),
@@ -719,7 +850,6 @@ class FranchiseRepository {
     if (sectionIds.isEmpty) return [];
 
     List<ProductSection> fetchedSections = [];
-
     final sectionDocs = await _performChunkedQuery(
         _firestore
             .collection('product_sections')
@@ -840,6 +970,8 @@ class FranchiseRepository {
     await batch.commit();
   }
 
+  // --- GESTION GROUPES DE SECTIONS ---
+
   Stream<List<SectionGroup>> getSectionGroupsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
@@ -885,6 +1017,8 @@ class FranchiseRepository {
     }, SetOptions(merge: true));
   }
 
+  // --- GESTION PRODUITS MAITRES ---
+
   Stream<List<MasterProduct>> getMasterProductsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
@@ -901,6 +1035,7 @@ class FranchiseRepository {
         .toList());
   }
 
+  // --- SAVE PRODUCT AVEC LOGIQUE SUPPRESSION IMAGE ---
   Future<void> saveProduct({
     MasterProduct? product,
     required String name,
@@ -923,32 +1058,69 @@ class FranchiseRepository {
 
     final productId = product?.productId ?? const Uuid().v4();
 
-    String? finalPhotoUrl = existingPhotoUrl;
+    // 1. URL par défaut (celle venant de la vue)
+    String? finalPhotoUrl = photoUrl;
+
+    // 2. Logique Image
     if (imageFile != null) {
+      // CAS : Nouvelle image -> On supprime l'ancienne avant d'upload
+      if (existingPhotoUrl != null && existingPhotoUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingPhotoUrl);
+      }
       final path = 'product_images/$productId/${imageFile.name}';
       finalPhotoUrl = await uploadUniversalFile(imageFile, path);
+    } else {
+      // CAS : Pas de nouvelle image
+      // Si la vue a envoyé "" (vide) et qu'on avait une image avant => SUPPRESSION
+      if (finalPhotoUrl.isEmpty &&
+          existingPhotoUrl != null &&
+          existingPhotoUrl.isNotEmpty) {
+        await _deleteFileFromUrl(existingPhotoUrl);
+        finalPhotoUrl = ""; // Confirmation que c'est vide
+      }
     }
 
     await docRef.set({
       'productId': productId,
       'name': name,
       'description': description,
-      'photoUrl': finalPhotoUrl,
-      'createdBy': _currentUserId,
       'isComposite': isComposite,
       'isIngredient': isIngredient,
       'filterIds': filterIds,
-      'sectionIds': isComposite ? sectionIds : [],
-      'options': isComposite ? options.map((o) => o.toMap()).toList() : [],
-      'ingredientProductIds': ingredientProductIds,
+      'sectionIds': sectionIds,
       'kioskFilterIds': kioskFilterIds,
+      'photoUrl': finalPhotoUrl,
       'color': color,
+      'createdBy': _currentUserId,
+      'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
+
+    final optionsRef = docRef.collection('options');
+    final existingOptions = await optionsRef.get();
+    for (var doc in existingOptions.docs) {
+      await doc.reference.delete();
+    }
+    for (var option in options) {
+      await optionsRef.add(option.toMap());
+    }
+
+    final ingredientsRef = docRef.collection('ingredients');
+    final existingIngredients = await ingredientsRef.get();
+    for (var doc in existingIngredients.docs) {
+      await doc.reference.delete();
+    }
+    for (var id in ingredientProductIds) {
+      await ingredientsRef.add({'productId': id});
+    }
   }
 
   Future<void> deleteMasterProduct(MasterProduct product) async {
-    final batch = _firestore.batch();
+    // Suppression de l'image
+    if (product.photoUrl != null && product.photoUrl!.isNotEmpty) {
+      await _deleteFileFromUrl(product.photoUrl);
+    }
 
+    final batch = _firestore.batch();
     final masterProductRef =
     _firestore.collection('master_products').doc(product.id);
     batch.delete(masterProductRef);
@@ -978,6 +1150,8 @@ class FranchiseRepository {
 
     await batch.commit();
   }
+
+  // --- GESTION COMMANDES EN ATTENTE ---
 
   Future<void> savePendingOrder(String franchiseeId, String identifier,
       List<CartItem> items, double total,
@@ -1033,6 +1207,8 @@ class FranchiseRepository {
   Future<void> deletePendingOrder(String orderId) async {
     await _firestore.collection('pending_orders').doc(orderId).delete();
   }
+
+  // --- GESTION CAISSE ET SESSIONS ---
 
   Stream<List<TillSession>> getFranchiseeSessions(String franchiseeId,
       {DateTime? startDate, DateTime? endDate}) {
@@ -1133,7 +1309,6 @@ class FranchiseRepository {
       final sessionDoc =
       await _firestore.collection('sessions').doc(sessionId).get();
       final franchiseeId = sessionDoc.data()?['franchiseeId'];
-
       if (franchiseeId != null) {
         await _firestore
             .collection('users')
@@ -1194,17 +1369,6 @@ class FranchiseRepository {
     }
   }
 
-  Future<void> deleteGlobalButtonImage(
-      String franchisorId, String typeKey) async {
-    final String fieldName =
-    (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
-
-    await _firestore.collection('users').doc(franchisorId).update({
-      fieldName: FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
   Future<void> reprintKitchenTicket(String transactionId) async {
     try {
       final callable =
@@ -1217,6 +1381,8 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
+  // --- CONFIG IMPRESSION ---
 
   Future<void> savePrinterConfig(
       String franchiseeId, PrinterConfig config) async {
@@ -1279,5 +1445,33 @@ class FranchiseRepository {
         .map((snapshot) => snapshot.docs
         .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
         .toList());
+  }
+
+  // --- MÉTHODE DE SUPPRESSION ---
+  Future<void> _deleteFileFromUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    try {
+      // refFromURL permet de cibler le fichier directement depuis son lien https
+      await _storage.refFromURL(url).delete();
+      if (kDebugMode) {
+        print("Fichier supprimé du stockage : $url");
+      }
+    } catch (e) {
+      // On log l'erreur mais on ne bloque pas l'appli
+      if (kDebugMode) {
+        print("Erreur suppression fichier (ou fichier introuvable) : $e");
+      }
+    }
+  }
+  Future<void> updateMasterProductsOrder(List<MasterProduct> sortedProducts) async {
+    final batch = _firestore.batch();
+
+    for (int i = 0; i < sortedProducts.length; i++) {
+      final docRef = _firestore.collection('master_products').doc(sortedProducts[i].id);
+      // On met à jour le champ 'position'
+      batch.update(docRef, {'position': i});
+    }
+
+    await batch.commit();
   }
 }
