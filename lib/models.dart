@@ -100,16 +100,6 @@ class ProductOption {
     this.priceOverride = 0.0,
   });
 
-  factory ProductOption.fromMap(Map<String, dynamic> map) {
-    return ProductOption(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      sectionIds: List<String>.from(map['sectionIds'] ?? []),
-      imageUrl: map['imageUrl'],
-      priceOverride: (map['priceOverride'] as num?)?.toDouble() ?? 0.0,
-    );
-  }
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -119,23 +109,45 @@ class ProductOption {
       'priceOverride': priceOverride,
     };
   }
+
+  factory ProductOption.fromMap(Map<String, dynamic> map) {
+    return ProductOption(
+      id: map['id'] ?? '',
+      name: map['name'] ?? '',
+      sectionIds: List<String>.from(map['sectionIds'] ?? []),
+      imageUrl: map['imageUrl'],
+      priceOverride: (map['priceOverride'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
 }
 
 class MasterProduct {
-  final String id;
-  final String productId;
+  final String id;          // ID du document Firebase
+  final String productId;   // ID logique du produit
   final String name;
   final String? description;
   final String? photoUrl;
-  final List<String> sectionIds;
-  final List<ProductOption> options;
+  final String? color;
+
+  // AJOUT : Prix conseillé par le franchiseur
+  final double? price;
+
+  // Indicateurs
   final bool isComposite;
   final bool isIngredient;
-  final List<String> ingredientProductIds;
+  final bool isContainer;
+
+  // Listes d'IDs
+  final List<String> containerProductIds; // Les enfants du dossier
   final List<String> filterIds;
+  final List<String> sectionIds;
   final List<String> kioskFilterIds;
-  final int position;
-  final String? color;
+  final List<String> ingredientProductIds;
+
+  // Options
+  final List<ProductOption> options;
+  final int? position;
+  final String createdBy;
 
   MasterProduct({
     required this.id,
@@ -143,55 +155,58 @@ class MasterProduct {
     required this.name,
     this.description,
     this.photoUrl,
-    this.sectionIds = const [],
-    this.options = const [],
-    required this.isComposite,
-    this.isIngredient = false,
-    this.ingredientProductIds = const [],
-    this.filterIds = const [],
-    this.kioskFilterIds = const [],
-    this.position = 9999,
     this.color,
+    this.price, // AJOUT
+    this.isComposite = false,
+    this.isIngredient = false,
+    this.isContainer = false,
+    this.containerProductIds = const [],
+    this.options = const [],
+    this.filterIds = const [],
+    this.sectionIds = const [],
+    this.kioskFilterIds = const [],
+    this.ingredientProductIds = const [],
+    this.position,
+    this.createdBy = '',
   });
 
-  factory MasterProduct.fromFirestore(Map<String, dynamic> data, String id) =>
-      MasterProduct(
-        id: id,
-        productId: data['productId'] ?? '',
-        name: data['name'] ?? '',
-        description: data['description'],
-        photoUrl: data['photoUrl'],
-        sectionIds: List<String>.from(data['sectionIds'] ?? []),
-        options: (data['options'] as List<dynamic>?)
-            ?.map((e) => ProductOption.fromMap(e as Map<String, dynamic>))
-            .toList() ??
-            [],
-        isComposite: data['isComposite'] ?? false,
-        isIngredient: data['isIngredient'] ?? false,
-        ingredientProductIds: List<String>.from(data['ingredientProductIds'] ?? []),
-        filterIds: List<String>.from(data['filterIds'] ?? []),
-        kioskFilterIds: List<String>.from(data['kioskFilterIds'] ?? []),
-        position: (data['position'] is num)
-            ? (data['position'] as num).toInt()
-            : int.tryParse(data['position']?.toString() ?? '9999') ?? 9999,
-        color: data['color'],
-      );
+  factory MasterProduct.fromFirestore(Map<String, dynamic> data, String id) {
+    return MasterProduct(
+      id: id,
+      productId: data['productId'] ?? id,
+      name: data['name'] ?? '',
+      description: data['description'],
+      photoUrl: data['photoUrl'] ?? data['imageUrl'],
+      color: data['color'],
 
-  Map<String, dynamic> toMap() => {
-    'productId': productId,
-    'name': name,
-    'description': description,
-    'photoUrl': photoUrl,
-    'sectionIds': sectionIds,
-    'options': options.map((e) => e.toMap()).toList(),
-    'isComposite': isComposite,
-    'isIngredient': isIngredient,
-    'ingredientProductIds': ingredientProductIds,
-    'filterIds': filterIds,
-    'kioskFilterIds': kioskFilterIds,
-    'position': position,
-    'color': color,
-  };
+      // AJOUT : Récupération du prix conseillé
+      price: (data['price'] as num?)?.toDouble(),
+
+      // Booléens
+      isComposite: data['isComposite'] ?? false,
+      isIngredient: data['isIngredient'] ?? false,
+      isContainer: data['isContainer'] ?? false,
+
+      // Listes
+      containerProductIds: List<String>.from(data['containerProductIds'] ?? []),
+      filterIds: List<String>.from(data['filterIds'] ?? []),
+      sectionIds: List<String>.from(data['sectionIds'] ?? []),
+      kioskFilterIds: List<String>.from(data['kioskFilterIds'] ?? []),
+      ingredientProductIds: List<String>.from(data['ingredientProductIds'] ?? []),
+
+      // Options
+      options: (data['options'] as List<dynamic>?)
+          ?.map((e) => ProductOption.fromMap(e as Map<String, dynamic>))
+          .toList() ?? [],
+
+      position: data['position'],
+      createdBy: data['createdBy'] ?? '',
+    );
+  }
+
+  factory MasterProduct.empty() {
+    return MasterProduct(id: '', productId: '', name: '');
+  }
 }
 
 // ===========================================================================
@@ -300,7 +315,7 @@ class KioskMedia {
   final String id;
   final String franchisorId;
   final String name;
-  final String type; // 'image' ou 'video'
+  final String type;
   final String url;
   final String? thumbnailUrl;
 
@@ -497,7 +512,7 @@ class Transaction {
   final Map<String, dynamic> paymentMethods;
   final String status;
   final String orderType;
-  final String identifier; // "Table 12" ou "A-001"
+  final String identifier;
   final String source;
   final String? customerName;
   final String? kioskName;
@@ -634,13 +649,14 @@ class FranchiseeMenuItem {
 }
 
 class CartItem {
-  final String id = const Uuid().v4();
+  final String id;
   final MasterProduct product;
   final int priceCents;
   double vatRate;
   final Map<String, List<SectionItem>> selectedOptions;
   final List<String> removedIngredientProductIds;
   final List<String> removedIngredientNames;
+
   bool isSentToKitchen;
   final List<ProductSection> baseSections;
   int quantity;
@@ -655,7 +671,9 @@ class CartItem {
     this.isSentToKitchen = false,
     this.baseSections = const [],
     this.quantity = 1,
-  }) : priceCents = (price * 100).round();
+    String? id,
+  }) : id = id ?? const Uuid().v4(),
+        priceCents = (price * 100).round();
 
   double get price => priceCents / 100.0;
 
@@ -672,6 +690,32 @@ class CartItem {
   double get total => totalCents / 100.0;
 
   double get totalArticlePrice => (priceCents * quantity) / 100.0;
+
+  CartItem copyWith({
+    String? id,
+    MasterProduct? product,
+    double? price,
+    double? vatRate,
+    Map<String, List<SectionItem>>? selectedOptions,
+    List<String>? removedIngredientProductIds,
+    List<String>? removedIngredientNames,
+    bool? isSentToKitchen,
+    List<ProductSection>? baseSections,
+    int? quantity,
+  }) {
+    return CartItem(
+      id: id ?? this.id,
+      product: product ?? this.product,
+      price: price ?? this.price,
+      vatRate: vatRate ?? this.vatRate,
+      selectedOptions: selectedOptions ?? this.selectedOptions,
+      removedIngredientProductIds: removedIngredientProductIds ?? this.removedIngredientProductIds,
+      removedIngredientNames: removedIngredientNames ?? this.removedIngredientNames,
+      isSentToKitchen: isSentToKitchen ?? this.isSentToKitchen,
+      baseSections: baseSections ?? this.baseSections,
+      quantity: quantity ?? this.quantity,
+    );
+  }
 }
 
 class PendingOrder {
@@ -709,10 +753,6 @@ class PendingOrder {
     );
   }
 }
-
-// ===========================================================================
-// 6. IMPRESSION ET CONFIGURATION
-// ===========================================================================
 
 enum PrinterType { escpos }
 enum PaperWidth { mm58, mm80 }
@@ -792,5 +832,109 @@ class ReceiptConfig {
       'showVatDetails': showVatDetails,
       'printReceiptOnPayment': printReceiptOnPayment,
     };
+  }
+}
+
+class AvailabilitySchedule {
+  final List<int> daysOfWeek;
+  final String startTime;
+  final String endTime;
+
+  AvailabilitySchedule({
+    required this.daysOfWeek,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  factory AvailabilitySchedule.fromMap(Map<String, dynamic> map) {
+    return AvailabilitySchedule(
+      daysOfWeek: List<int>.from(map['daysOfWeek'] ?? []),
+      startTime: map['startTime'] ?? "00:00",
+      endTime: map['endTime'] ?? "23:59",
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'daysOfWeek': daysOfWeek,
+      'startTime': startTime,
+      'endTime': endTime,
+    };
+  }
+
+  bool isAvailableNow() {
+    final now = DateTime.now();
+    if (!daysOfWeek.contains(now.weekday)) {
+      return false;
+    }
+    try {
+      final int currentMinutes = now.hour * 60 + now.minute;
+      final startParts = startTime.split(':');
+      final int startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final endParts = endTime.split(':');
+      final int endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
+    } catch (e) {
+      return true;
+    }
+  }
+}
+
+// Legacy class (préservée si utilisée ailleurs)
+class Product {
+  final String id;
+  final String name;
+  final double price;
+  final String? imageUrl;
+  final String? description;
+  final String? categoryId;
+  final bool isActive;
+  final bool isMaster;
+  final bool isContainer;
+  final List<String> containerProductIds;
+
+  Product({
+    required this.id,
+    required this.name,
+    this.price = 0.0,
+    this.imageUrl,
+    this.description,
+    this.categoryId,
+    this.isActive = true,
+    this.isMaster = false,
+    this.isContainer = false,
+    this.containerProductIds = const [],
+  });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'price': price,
+      'imageUrl': imageUrl,
+      'description': description,
+      'categoryId': categoryId,
+      'isActive': isActive,
+      'isMaster': isMaster,
+      'isContainer': isContainer,
+      'containerProductIds': containerProductIds,
+    };
+  }
+
+  factory Product.fromMap(Map<String, dynamic> map, String id) {
+    return Product(
+      id: id,
+      name: map['name'] ?? '',
+      price: (map['price'] ?? 0.0).toDouble(),
+      imageUrl: map['imageUrl'],
+      description: map['description'],
+      categoryId: map['categoryId'],
+      isActive: map['isActive'] ?? true,
+      isMaster: map['isMaster'] ?? false,
+      isContainer: map['isContainer'] ?? false,
+      containerProductIds: map['containerProductIds'] != null
+          ? List<String>.from(map['containerProductIds'])
+          : [],
+    );
   }
 }

@@ -1,422 +1,140 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-import 'franchisor_catalogue_view.dart';
 
-class SectionsView extends StatefulWidget {
+class SectionsView extends StatelessWidget {
   const SectionsView({super.key});
-
-  @override
-  State<SectionsView> createState() => _SectionsViewState();
-}
-
-class _SectionsViewState extends State<SectionsView> {
-  final _searchController = TextEditingController();
-
-  // -- CACHE DONNÉES (Listes en mémoire) --
-  List<ProductSection> _allSections = [];
-  List<ProductFilter> _allFilters = [];
-
-  // Abonnements aux flux de données
-  final List<StreamSubscription> _subscriptions = [];
-  bool _isLoading = true;
-
-  // -- ETAT FILTRES --
-  String _searchQuery = '';
-  final Set<String> _selectedFilterIds = {};
-
-  @override
-  void initState() {
-    super.initState();
-    final repository = FranchiseRepository();
-    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
-    // 1. Abonnement aux Sections
-    _subscriptions.add(repository.getSectionsStream(uid).listen((sections) {
-      if (mounted) {
-        setState(() {
-          _allSections = sections;
-          _isLoading = false;
-        });
-      }
-    }));
-
-    // 2. Abonnement aux Filtres
-    _subscriptions.add(repository.getFiltersStream(uid).listen((filters) {
-      if (mounted) {
-        setState(() {
-          _allFilters = filters;
-        });
-      }
-    }));
-
-    _searchController.addListener(() {
-      setState(() => _searchQuery = _searchController.text);
-    });
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    for (var sub in _subscriptions) {
-      sub.cancel();
-    }
-    super.dispose();
-  }
-
-  /// Logique de filtrage instantané (sur RAM)
-  Map<String, dynamic> _getFilteredData() {
-    List<ProductSection> filteredSections = List.from(_allSections);
-
-    if (_searchQuery.isNotEmpty) {
-      filteredSections = filteredSections
-          .where((s) => s.title.toLowerCase().contains(_searchQuery.toLowerCase()))
-          .toList();
-    }
-
-    if (_selectedFilterIds.isNotEmpty) {
-      filteredSections = filteredSections
-          .where((s) => s.filterIds.any((id) => _selectedFilterIds.contains(id)))
-          .toList();
-    }
-
-    // Calcul des filtres pertinents
-    Set<String> activeFilterIds = {};
-    for (var section in _allSections) {
-      activeFilterIds.addAll(section.filterIds);
-    }
-
-    List<ProductFilter> visibleFilters = _allFilters
-        .where((f) => activeFilterIds.contains(f.id))
-        .toList();
-
-    // Tris
-    visibleFilters.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    filteredSections.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
-
-    return {
-      'sections': filteredSections,
-      'filters': visibleFilters,
-    };
-  }
-
-  // --- NAVIGATION AVEC MISE À JOUR INSTANTANÉE ---
-  void _openSectionForm(ProductSection? section, {bool isDuplicating = false}) async {
-    // On attend le retour immédiat du formulaire
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => SectionFormView(
-          sectionToEdit: section,
-          isDuplicating: isDuplicating,
-        ),
-      ),
-    );
-
-    // Si on a reçu une section (créée ou modifiée), on l'injecte direct dans la liste locale
-    if (result != null && result is ProductSection) {
-      setState(() {
-        final index = _allSections.indexWhere((s) => s.sectionId == result.sectionId);
-        if (index != -1) {
-          _allSections[index] = result; // Mise à jour locale
-        } else {
-          _allSections.add(result); // Ajout local
-        }
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
-
-    final processed = _getFilteredData();
-    final List<ProductSection> sectionsToShow = processed['sections'];
-    final List<ProductFilter> relevantFilters = processed['filters'];
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-        children: [
-          _buildHeader(relevantFilters),
-          Expanded(
-            child: sectionsToShow.isEmpty
-                ? _buildEmptyState()
-                : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-              itemCount: sectionsToShow.length,
-              separatorBuilder: (c, i) => const SizedBox(height: 12),
-              itemBuilder: (context, index) => _buildSectionCard(
-                  context, sectionsToShow[index], repository),
-            ),
-          ),
-        ],
+      body: StreamBuilder<List<ProductSection>>(
+        stream: repository.getSectionsStream(uid),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final sections = snapshot.data ?? [];
+          if (sections.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.list_alt_rounded, size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text("Aucune section créée", style: TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                ],
+              ),
+            );
+          }
+          return ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+            itemCount: sections.length,
+            separatorBuilder: (c, i) => const SizedBox(height: 12),
+            itemBuilder: (context, index) {
+              final section = sections[index];
+              return Container(
+                decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          offset: const Offset(0, 2),
+                          blurRadius: 8
+                      )
+                    ]
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (context) => SectionFormView(sectionToEdit: section))),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 50,
+                            height: 50,
+                            decoration: BoxDecoration(
+                              color: Colors.green.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(Icons.list_rounded, color: Colors.green.shade700),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  section.title,
+                                  style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.black87),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "${section.items.length} produit(s) • Min: ${section.selectionMin} / Max: ${section.selectionMax}",
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey.shade500),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              _buildActionButton(
+                                icon: Icons.edit_rounded,
+                                color: Colors.blue.shade400,
+                                onTap: () => Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (context) => SectionFormView(sectionToEdit: section))),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildActionButton(
+                                icon: Icons.delete_outline_rounded,
+                                color: Colors.red.shade300,
+                                onTap: () => _deleteSection(context, repository, section),
+                              ),
+                            ],
+                          )
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         elevation: 4,
-        icon: const Icon(Icons.add_rounded),
-        label: const Text("Nouvelle Section",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => _openSectionForm(null),
+        icon: const Icon(Icons.add),
+        label: const Text("Nouvelle Section", style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => Navigator.push(
+            context, MaterialPageRoute(builder: (context) => const SectionFormView())),
       ),
     );
   }
 
-  Widget _buildHeader(List<ProductFilter> filters) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            offset: const Offset(0, 4),
-            blurRadius: 10,
-          )
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            height: 45,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade100,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TextField(
-              controller: _searchController,
-              decoration: InputDecoration(
-                hintText: 'Rechercher une section...',
-                hintStyle: TextStyle(color: Colors.grey.shade500),
-                prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
-                suffixIcon: _searchQuery.isNotEmpty
-                    ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
-                    onPressed: () => _searchController.clear())
-                    : null,
-                border: InputBorder.none,
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              ),
-            ),
-          ),
-          if (filters.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: filters.map((filter) {
-                  final isSelected = _selectedFilterIds.contains(filter.id);
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8.0),
-                    child: FilterChip(
-                      label: Text(filter.name),
-                      selected: isSelected,
-                      showCheckmark: false,
-                      selectedColor: Colors.black,
-                      labelStyle: TextStyle(
-                        color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 12,
-                      ),
-                      backgroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
-                        side: BorderSide(
-                          color: isSelected ? Colors.black : Colors.grey.shade300,
-                        ),
-                      ),
-                      onSelected: (selected) {
-                        setState(() {
-                          if (selected) {
-                            _selectedFilterIds.add(filter.id);
-                          } else {
-                            _selectedFilterIds.remove(filter.id);
-                          }
-                        });
-                      },
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.view_stream_outlined,
-              size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(
-            "Aucune section trouvée",
-            style: TextStyle(color: Colors.grey.shade500, fontSize: 16),
-          ),
-          if (_selectedFilterIds.isNotEmpty)
-            TextButton(
-              onPressed: () => setState(() => _selectedFilterIds.clear()),
-              child: const Text("Effacer les filtres"),
-            )
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSectionCard(BuildContext context, ProductSection section,
-      FranchiseRepository repository) {
-
-    IconData typeIcon;
-    Color typeColor;
-    String typeLabel;
-
-    switch (section.type) {
-      case 'radio':
-        typeIcon = Icons.radio_button_checked;
-        typeColor = Colors.teal;
-        typeLabel = "Choix Unique";
-        break;
-      case 'checkbox':
-        typeIcon = Icons.check_box;
-        typeColor = Colors.indigo;
-        typeLabel = "Choix Multiple";
-        break;
-      case 'increment':
-        typeIcon = Icons.exposure_plus_1;
-        typeColor = Colors.orange;
-        typeLabel = "Quantité";
-        break;
-      default:
-        typeIcon = Icons.list;
-        typeColor = Colors.grey;
-        typeLabel = "Standard";
-    }
-
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            offset: const Offset(0, 2),
-            blurRadius: 8,
-          )
-        ],
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () => _openSectionForm(section),
-          child: Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Row(
-              children: [
-                Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(
-                    color: typeColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(typeIcon, color: typeColor),
-                ),
-                const SizedBox(width: 16),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        section.title,
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                borderRadius: BorderRadius.circular(4),
-                                border: Border.all(color: Colors.grey.shade300)
-                            ),
-                            child: Text(
-                              typeLabel.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.grey.shade700,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            "${section.items.length} produit(s)",
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.grey.shade500),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-
-                Row(
-                  children: [
-                    _buildActionButton(
-                      icon: Icons.copy_all_rounded,
-                      color: Colors.grey.shade400,
-                      onTap: () => _openSectionForm(section, isDuplicating: true),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActionButton(
-                      icon: Icons.edit_rounded,
-                      color: Colors.blue.shade400,
-                      onTap: () => _openSectionForm(section),
-                    ),
-                    const SizedBox(width: 8),
-                    _buildActionButton(
-                      icon: Icons.delete_outline_rounded,
-                      color: Colors.red.shade300,
-                      onTap: () =>
-                          _deleteSection(context, repository, section),
-                    ),
-                  ],
-                )
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButton(
-      {required IconData icon,
-        required Color color,
-        required VoidCallback onTap}) {
+  Widget _buildActionButton({required IconData icon, required Color color, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(50),
@@ -431,49 +149,34 @@ class _SectionsViewState extends State<SectionsView> {
     );
   }
 
-  void _deleteSection(BuildContext context, FranchiseRepository repository,
-      ProductSection section) async {
+  void _deleteSection(BuildContext context, FranchiseRepository repository, ProductSection section) async {
     final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text("Supprimer ?"),
-          content: Text("Supprimer la section '${section.title}' ?"),
+          content: Text("Voulez-vous vraiment supprimer la section '${section.title}' ?"),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           actions: [
             TextButton(
-                child: const Text("Annuler", style: TextStyle(color: Colors.grey)),
-                onPressed: () => Navigator.pop(ctx, false)),
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
             ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    elevation: 0
-                ),
-                child: const Text("Supprimer"),
-                onPressed: () => Navigator.pop(ctx, true))
+                    backgroundColor: Colors.red, foregroundColor: Colors.white, elevation: 0),
+                child: const Text("Supprimer"))
           ],
         ));
+
     if (confirm == true) {
-      // 1. SUPPRESSION INSTANTANÉE (Local)
-      setState(() {
-        _allSections.removeWhere((s) => s.sectionId == section.sectionId);
-      });
-      // 2. SUPPRESSION ARRIÈRE-PLAN
       await repository.deleteSection(section.sectionId);
     }
   }
 }
 
-// -----------------------------------------------------------------------------
-// --- FORMULAIRE D'ÉDITION (Enregistrement Instantané) ---
-// -----------------------------------------------------------------------------
-
 class SectionFormView extends StatefulWidget {
   final ProductSection? sectionToEdit;
-  final bool isDuplicating;
-
-  const SectionFormView(
-      {super.key, this.sectionToEdit, this.isDuplicating = false});
+  const SectionFormView({super.key, this.sectionToEdit});
 
   @override
   State<SectionFormView> createState() => _SectionFormViewState();
@@ -482,126 +185,98 @@ class SectionFormView extends StatefulWidget {
 class _SectionFormViewState extends State<SectionFormView> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
-  String _type = 'radio';
-  int _min = 1;
+  int _min = 0;
   int _max = 1;
+  String _type = 'checkbox';
   List<SectionItem> _items = [];
-  List<String> _selectedFilterIds = [];
-
-  // Note: On ne met pas de variable _isLoading ici car on quitte instantanément
-
-  List<ProductFilter> _availableFilters = [];
-  StreamSubscription? _filtersSub;
+  bool _isLoading = false;
+  final Set<String> _selectedFilterIds = {};
 
   @override
   void initState() {
     super.initState();
-
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final repo = FranchiseRepository();
-    // Chargement anticipé
-    _filtersSub = repo.getFiltersStream(authProvider.firebaseUser!.uid).listen((data) {
-      if(mounted) {
-        data.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-        setState(() => _availableFilters = data);
-      }
-    });
-
     if (widget.sectionToEdit != null) {
-      _titleController.text = widget.sectionToEdit!.title +
-          (widget.isDuplicating ? ' (Copie)' : '');
-      _type = widget.sectionToEdit!.type;
-      _min = widget.sectionToEdit!.selectionMin;
-      _max = widget.sectionToEdit!.selectionMax;
-      _items = widget.sectionToEdit!.items
-          .map((item) => SectionItem(
-          product: item.product, supplementPrice: item.supplementPrice))
-          .toList();
-      _selectedFilterIds = List.from(widget.sectionToEdit!.filterIds);
+      final s = widget.sectionToEdit!;
+      _titleController.text = s.title;
+      _min = s.selectionMin;
+      _max = s.selectionMax;
+      _type = s.type;
+      _items = List.from(s.items);
+      _selectedFilterIds.addAll(s.filterIds);
     }
   }
 
   @override
   void dispose() {
-    _filtersSub?.cancel();
     _titleController.dispose();
     super.dispose();
   }
 
-  void _reorderProducts(int oldIndex, int newIndex) => setState(() {
-    if (newIndex > oldIndex) newIndex -= 1;
-    _items.insert(newIndex, _items.removeAt(oldIndex));
-  });
-
-  Future<void> _saveSection() async {
+  void _save() async {
     if (!_formKey.currentState!.validate()) return;
-
-    // Pas de spinner, on veut du réactif !
+    setState(() => _isLoading = true);
 
     final repository = FranchiseRepository();
-    final sectionId = widget.sectionToEdit == null || widget.isDuplicating
-        ? const Uuid().v4()
-        : widget.sectionToEdit!.sectionId;
-    final id = widget.sectionToEdit == null || widget.isDuplicating
-        ? const Uuid().v4()
-        : widget.sectionToEdit!.id;
+    final sectionId = widget.sectionToEdit?.sectionId ?? const Uuid().v4();
 
-    final newSection = ProductSection(
-      id: id,
+    final section = ProductSection(
+      id: widget.sectionToEdit?.id ?? '',
       sectionId: sectionId,
       title: _titleController.text,
-      type: _type,
       selectionMin: _min,
       selectionMax: _max,
+      type: _type,
       items: _items,
-      filterIds: _selectedFilterIds,
+      filterIds: _selectedFilterIds.toList(),
     );
 
-    // 1. RETOUR IMMÉDIAT avec la donnée
-    Navigator.pop(context, newSection);
-
-    // 2. SAUVEGARDE EN ARRIÈRE-PLAN
-    try {
-      await repository.saveSection(newSection);
-    } catch (e) {
-      print("Erreur de sauvegarde (background): $e");
-    }
+    await repository.saveSection(section);
+    if (mounted) Navigator.pop(context);
   }
 
   Widget _buildFilterSelector(BuildContext context) {
+    final repository = FranchiseRepository();
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("Filtres de Rangement",
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text("Filtres de Rangement", style: Theme.of(context).textTheme.titleSmall),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 8,
-          children: _availableFilters.map((filter) {
-            final isSelected = _selectedFilterIds.contains(filter.id);
-            return FilterChip(
-                label: Text(filter.name),
-                selected: isSelected,
-                showCheckmark: false,
-                selectedColor: Colors.black,
-                labelStyle: TextStyle(
-                    color: isSelected ? Colors.white : Colors.black87),
-                backgroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                  side: BorderSide(
-                      color: isSelected ? Colors.black : Colors.grey.shade300),
-                ),
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      _selectedFilterIds.add(filter.id);
-                    } else {
-                      _selectedFilterIds.remove(filter.id);
-                    }
-                  });
-                });
-          }).toList(),
+        StreamBuilder<List<ProductFilter>>(
+          stream: repository.getFiltersStream(authProvider.firebaseUser!.uid),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) return const SizedBox.shrink();
+            return Wrap(
+              spacing: 8,
+              children: snapshot.data!.map((filter) {
+                final isSelected = _selectedFilterIds.contains(filter.id);
+                return FilterChip(
+                    label: Text(filter.name),
+                    selected: isSelected,
+                    showCheckmark: false,
+                    selectedColor: Colors.black,
+                    labelStyle: TextStyle(
+                      color: isSelected ? Colors.white : Colors.black87,
+                    ),
+                    backgroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                      side: BorderSide(
+                        color: isSelected ? Colors.black : Colors.grey.shade300,
+                      ),
+                    ),
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _selectedFilterIds.add(filter.id);
+                        } else {
+                          _selectedFilterIds.remove(filter.id);
+                        }
+                      });
+                    });
+              }).toList(),
+            );
+          },
         ),
       ],
     );
@@ -612,96 +287,72 @@ class _SectionFormViewState extends State<SectionFormView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
-          title: Text(widget.sectionToEdit != null
-              ? "Modifier la Section"
-              : "Créer une Section"),
-          backgroundColor: Colors.white,
-          elevation: 0,
-          foregroundColor: Colors.black,
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: ElevatedButton.icon(
-                  icon: const Icon(Icons.check),
-                  label: const Text("Enregistrer"),
-                  style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.black,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      elevation: 0
-                  ),
-                  onPressed: _saveSection
-              ),
-            )
-          ]),
+        title: Text(widget.sectionToEdit == null ? "Créer une Section" : "Modifier la Section"),
+        actions: [
+          IconButton(
+            icon: _isLoading ? const CircularProgressIndicator(color: Colors.white) : const Icon(Icons.check),
+            onPressed: _isLoading ? null : _save,
+          )
+        ],
+      ),
       body: Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
             Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4))
-                ],
-              ),
               padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))
+                  ]
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Configuration Générale", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 20),
                   TextFormField(
-                      controller: _titleController,
-                      decoration: const InputDecoration(
-                          labelText: "Titre de la section (ex: Choix Sauce)",
-                          border: OutlineInputBorder()),
-                      validator: (v) => v!.isEmpty ? "Requis" : null),
+                    controller: _titleController,
+                    decoration: const InputDecoration(
+                      labelText: "Titre de la section (ex: Sauces, Cuisson)",
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => v!.isEmpty ? "Requis" : null,
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<String>(
+                          value: _type,
+                          decoration: const InputDecoration(labelText: "Type de choix", border: OutlineInputBorder()),
+                          items: const [
+                            DropdownMenuItem(value: 'checkbox', child: Text("Choix Multiple (Checkbox)")),
+                            DropdownMenuItem(value: 'radio', child: Text("Choix Unique (Radio)")),
+                            DropdownMenuItem(value: 'quantity', child: Text("Quantité (Compteur)")),
+                          ],
+                          onChanged: (val) {
+                            setState(() {
+                              _type = val!;
+                              if (_type == 'radio') {
+                                _min = 1;
+                                _max = 1;
+                              }
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        flex: 2,
-                        child: DropdownButtonFormField<String>(
-                          initialValue: _type,
-                          decoration: const InputDecoration(
-                              labelText: "Type de sélection",
-                              border: OutlineInputBorder()),
-                          items: const [
-                            DropdownMenuItem(
-                                value: 'radio', child: Text("Choix Unique (Radio)")),
-                            DropdownMenuItem(
-                                value: 'checkbox', child: Text("Choix Multiple (Checkbox)")),
-                            DropdownMenuItem(
-                                value: 'increment',
-                                child: Text("Quantité (Incrémentation)"))
-                          ],
-                          onChanged: (val) => setState(() {
-                            _type = val!;
-                            if (_type == 'radio') {
-                              _min = 1;
-                              _max = 1;
-                            } else {
-                              if (_min == 1 && _max == 1) {
-                                _min = 0;
-                                _max = 5;
-                              }
-                            }
-                          }),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
                           child: TextFormField(
                             key: ValueKey('min_$_type'),
                             initialValue: _min.toString(),
-                            decoration: const InputDecoration(
-                                labelText: "Min", border: OutlineInputBorder()),
+                            decoration: const InputDecoration(labelText: "Min", border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
                             onChanged: (val) => _min = int.tryParse(val) ?? 0,
                             readOnly: _type == 'radio',
@@ -712,8 +363,7 @@ class _SectionFormViewState extends State<SectionFormView> {
                           child: TextFormField(
                             key: ValueKey('max_$_type'),
                             initialValue: _max.toString(),
-                            decoration: const InputDecoration(
-                                labelText: "Max", border: OutlineInputBorder()),
+                            decoration: const InputDecoration(labelText: "Max", border: OutlineInputBorder()),
                             keyboardType: TextInputType.number,
                             onChanged: (val) => _max = int.tryParse(val) ?? 1,
                             readOnly: _type == 'radio',
@@ -728,9 +378,7 @@ class _SectionFormViewState extends State<SectionFormView> {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -741,19 +389,20 @@ class _SectionFormViewState extends State<SectionFormView> {
                   label: const Text("Ajouter des produits"),
                   style: TextButton.styleFrom(foregroundColor: Colors.black),
                   onPressed: () async {
-                    final selectedProducts =
-                    await showDialog<List<MasterProduct>>(
+                    // --- UTILISATION DE ProductPickerDialog (Maintenant défini plus bas) ---
+                    final selectedProducts = await showDialog<List<MasterProduct>>(
                         context: context,
                         builder: (context) => ProductPickerDialog(
-                            ingredientsOnly: false,
-                            initialSelection:
-                            _items.map((e) => e.product).toList()));
+                          ingredientsOnly: false,
+                          initialSelection: _items.map((e) => e.product).toList(),
+                          products: [], // Le dialogue chargera les produits si la liste est vide
+                        ));
+
                     if (selectedProducts != null) {
                       setState(() {
                         final updatedItems = <SectionItem>[];
                         for (var p in selectedProducts) {
-                          final existing =
-                          _items.where((item) => item.product.id == p.id);
+                          final existing = _items.where((item) => item.product.id == p.id);
                           updatedItems.add(existing.isNotEmpty
                               ? existing.first
                               : SectionItem(product: p));
@@ -762,79 +411,214 @@ class _SectionFormViewState extends State<SectionFormView> {
                       });
                     }
                   },
-                )
+                ),
               ],
             ),
-
-            const SizedBox(height: 8),
-
+            const SizedBox(height: 12),
             if (_items.isEmpty)
-              Container(
-                height: 120,
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid)
-                ),
-                child: Center(child: Text("Aucun produit ajouté", style: TextStyle(color: Colors.grey.shade500))),
-              )
+              const Center(child: Padding(
+                padding: EdgeInsets.all(20.0),
+                child: Text("Aucun produit ajouté."),
+              ))
             else
               ReorderableListView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: _items.length,
-                onReorder: _reorderProducts,
-                proxyDecorator: (child, index, animation) => Material(
-                    elevation: 5, color: Colors.transparent, child: child
-                ),
+                onReorder: (oldIndex, newIndex) {
+                  setState(() {
+                    if (newIndex > oldIndex) newIndex -= 1;
+                    final item = _items.removeAt(oldIndex);
+                    _items.insert(newIndex, item);
+                  });
+                },
                 itemBuilder: (context, index) {
                   final item = _items[index];
-                  return Container(
+                  return Card(
                     key: ValueKey(item.product.id),
                     margin: const EdgeInsets.only(bottom: 8),
-                    decoration: BoxDecoration(
-                        color: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 1))
-                        ]
+                        side: BorderSide(color: Colors.grey.shade300)
                     ),
                     child: ListTile(
-                      leading: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                              color: Colors.grey.shade50,
-                              borderRadius: BorderRadius.circular(8)
+                      leading: const Icon(Icons.drag_handle, color: Colors.grey),
+                      title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text("Prix Supplément: ${item.supplementPrice.toStringAsFixed(2)} €"),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.euro, color: Colors.green),
+                            onPressed: () async {
+                              final priceStr = await _showPriceDialog(context, item.supplementPrice);
+                              if (priceStr != null) {
+                                setState(() {
+                                  // Grâce à la modification dans models.dart, on peut setter supplementPrice
+                                  item.supplementPrice = double.tryParse(priceStr) ?? 0.0;
+                                });
+                              }
+                            },
                           ),
-                          child: const Icon(Icons.drag_indicator, color: Colors.grey, size: 20)
-                      ),
-                      title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      trailing: SizedBox(
-                        width: 120,
-                        child: TextFormField(
-                          initialValue:
-                          item.supplementPrice == 0 ? "" : item.supplementPrice.toStringAsFixed(2),
-                          decoration: const InputDecoration(
-                              labelText: "+ Supplément",
-                              suffixText: "€",
-                              isDense: true,
-                              border: OutlineInputBorder()),
-                          keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
-                          onChanged: (value) {
-                            item.supplementPrice = double.tryParse(value.replaceAll(',', '.')) ?? 0.0;
-                          },
-                        ),
+                          IconButton(
+                            icon: const Icon(Icons.delete, color: Colors.red),
+                            onPressed: () {
+                              setState(() {
+                                _items.removeAt(index);
+                              });
+                            },
+                          ),
+                        ],
                       ),
                     ),
                   );
                 },
               ),
-
-            const SizedBox(height: 50),
           ],
         ),
       ),
+    );
+  }
+
+  Future<String?> _showPriceDialog(BuildContext context, double currentPrice) {
+    final controller = TextEditingController(text: currentPrice.toString());
+    return showDialog<String>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text("Prix du supplément"),
+          content: TextField(
+            controller: controller,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(suffixText: "€"),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+            ElevatedButton(onPressed: () => Navigator.pop(ctx, controller.text), child: const Text("Valider")),
+          ],
+        ));
+  }
+}
+
+// --- AJOUT DE LA CLASSE ProductPickerDialog ICI ---
+class ProductPickerDialog extends StatefulWidget {
+  final bool ingredientsOnly;
+  final List<MasterProduct> initialSelection;
+  final List<MasterProduct> products; // Si vide, on charge depuis Firebase
+
+  const ProductPickerDialog({
+    super.key,
+    this.ingredientsOnly = false,
+    required this.initialSelection,
+    required this.products,
+  });
+
+  @override
+  State<ProductPickerDialog> createState() => _ProductPickerDialogState();
+}
+
+class _ProductPickerDialogState extends State<ProductPickerDialog> {
+  List<MasterProduct> _availableProducts = [];
+  List<MasterProduct> _selectedProducts = [];
+  List<MasterProduct> _filteredProducts = [];
+  String _searchQuery = "";
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedProducts = List.from(widget.initialSelection);
+    if (widget.products.isEmpty) {
+      _loadProducts();
+    } else {
+      _availableProducts = widget.products;
+      _filteredProducts = widget.products;
+      _isLoading = false;
+    }
+  }
+
+  Future<void> _loadProducts() async {
+    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+    final repo = FranchiseRepository();
+    // On charge tous les produits pour simplifier la sélection
+    final all = await repo.getMasterProductsStream(uid).first;
+    if (mounted) {
+      setState(() {
+        _availableProducts = widget.ingredientsOnly
+            ? all.where((p) => p.isIngredient).toList()
+            : all.where((p) => !p.isIngredient).toList(); // Par défaut on affiche les vendables
+
+        // Tri alphabétique
+        _availableProducts.sort((a, b) => a.name.compareTo(b.name));
+        _filteredProducts = _availableProducts;
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _filter(String query) {
+    setState(() {
+      _searchQuery = query;
+      _filteredProducts = _availableProducts
+          .where((p) => p.name.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.ingredientsOnly ? "Sélectionner Ingrédients" : "Sélectionner Produits"),
+      content: SizedBox(
+        width: 500,
+        height: 500,
+        child: Column(
+          children: [
+            TextField(
+              decoration: const InputDecoration(
+                hintText: "Rechercher...",
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+              onChanged: _filter,
+            ),
+            const SizedBox(height: 10),
+            Expanded(
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : ListView.builder(
+                itemCount: _filteredProducts.length,
+                itemBuilder: (context, index) {
+                  final p = _filteredProducts[index];
+                  final isSelected = _selectedProducts.any((x) => x.id == p.id);
+                  return CheckboxListTile(
+                    title: Text(p.name),
+                    value: isSelected,
+                    onChanged: (val) {
+                      setState(() {
+                        if (val == true) {
+                          _selectedProducts.add(p);
+                        } else {
+                          _selectedProducts.removeWhere((x) => x.id == p.id);
+                        }
+                      });
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler")),
+        ElevatedButton(
+            onPressed: () => Navigator.pop(context, _selectedProducts),
+            child: const Text("Valider")),
+      ],
     );
   }
 }

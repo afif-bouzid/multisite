@@ -45,27 +45,25 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
   void _navigateToFranchisees(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.2)),
-          child: Scaffold(
-            appBar: AppBar(
-              title: const Text("GESTION DU RÉSEAU"),
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [_bgGradientStart, _bgGradientEnd],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
+        // J'ai retiré le textScaler 1.2 pour garder de l'espace
+        builder: (context) => Scaffold(
+          appBar: AppBar(
+            title: const Text("GESTION DU RÉSEAU"),
+            flexibleSpace: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [_bgGradientStart, _bgGradientEnd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
               ),
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              centerTitle: true,
-              toolbarHeight: 70,
             ),
-            body: const FranchiseesView(),
+            backgroundColor: Colors.transparent,
+            foregroundColor: Colors.white,
+            centerTitle: true,
+            toolbarHeight: 60, // Réduit légèrement
           ),
+          body: const FranchiseesView(),
         ),
       ),
     );
@@ -76,157 +74,157 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     final authProvider = Provider.of<AuthProvider>(context);
     final userEmail = authProvider.firebaseUser?.email ?? "Non connecté";
 
-    return MediaQuery(
-      data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.2)),
-      child: PopScope(
-        canPop: false,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFF5F7FA),
-          appBar: PreferredSize(
-            preferredSize: const Size.fromHeight(170),
-            child: Container(
-              decoration: BoxDecoration(
+    // SUPPRESSION du MediaQuery textScaler 1.2 ici pour gagner beaucoup d'espace
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: PreferredSize(
+          // MODIFICATION : Hauteur réduite de 170 à 110 pour voir plus de produits en bas
+          preferredSize: const Size.fromHeight(110),
+          child: Container(
+            decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [_bgGradientStart, _bgGradientEnd],
                 ),
-              ),
-              child: SafeArea(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 15.0),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(2),
+                boxShadow: [
+                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
+                ]
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Ligne du haut (Profil + Boutons) plus compacte
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(1),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white24, width: 1),
+                          ),
+                          child: const CircleAvatar(
+                            backgroundColor: Colors.white10,
+                            radius: 16, // Réduit
+                            child: Icon(Icons.admin_panel_settings_rounded, color: Colors.amber, size: 18),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              "PORTAIL FRANCHISEUR",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: 0.5,
+                                fontSize: 13, // Police légèrement réduite
+                              ),
+                            ),
+                            Text(
+                                userEmail,
+                                style: TextStyle(color: Colors.grey[400], fontSize: 10)
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        InkWell(
+                          onTap: () => _navigateToFranchisees(context),
+                          borderRadius: BorderRadius.circular(30),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                             decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              border: Border.all(color: Colors.white24, width: 1),
-                            ),
-                            child: const CircleAvatar(
-                              backgroundColor: Colors.white10,
-                              radius: 22,
-                              child: Icon(Icons.admin_panel_settings_rounded, color: Colors.amber, size: 24),
-                            ),
-                          ),
-                          const SizedBox(width: 15),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "PORTAIL FRANCHISEUR",
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w900,
-                                  letterSpacing: 1.0,
-                                ),
+                              gradient: LinearGradient(
+                                colors: [Colors.orange.shade800, Colors.orange.shade500],
+                                begin: Alignment.bottomLeft,
+                                end: Alignment.topRight,
                               ),
-                              Text(
-                                  userEmail,
-                                  style: TextStyle(color: Colors.grey[400], fontSize: 11)
-                              ),
-                            ],
-                          ),
-                          const Spacer(),
-                          InkWell(
-                            onTap: () => _navigateToFranchisees(context),
-                            borderRadius: BorderRadius.circular(30),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 10),
-                              decoration: BoxDecoration(
-                                gradient: LinearGradient(
-                                  colors: [Colors.orange.shade800, Colors.orange.shade500],
-                                  begin: Alignment.bottomLeft,
-                                  end: Alignment.topRight,
-                                ),
-                                borderRadius: BorderRadius.circular(30),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 1,
-                                    offset: const Offset(0, 2),
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.store_mall_directory_rounded, color: Colors.white, size: 16),
+                                SizedBox(width: 6),
+                                Text(
+                                  "Réseau",
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
                                   ),
-                                ],
-                              ),
-                              child: Row(
-                                children: const [
-                                  Icon(Icons.store_mall_directory_rounded, color: Colors.white, size: 20),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Réseau",
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                              ],
                             ),
                           ),
-                          const SizedBox(width: 15),
-                          IconButton(
-                            icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white54, size: 28),
-                            onPressed: () async => await authProvider.signOut(),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white54, size: 24),
+                          onPressed: () async => await authProvider.signOut(),
+                        ),
+                      ],
                     ),
-                    const Spacer(),
-                    Container(
-                      height: 80,
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: TabBar(
-                        controller: _tabController,
-                        isScrollable: true,
-                        indicator: const UnderlineTabIndicator(borderSide: BorderSide.none),
-                        labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-                        onTap: (index) => setState((){}),
-                        tabs: [
-                          _buildSharpTab(0, "Produits", Icons.fastfood_rounded, const Color(0xFFFF416C), const Color(0xFFFF4B2B)),
-                          _buildSharpTab(1, "Catégories", Icons.category_rounded, const Color(0xFF00B4DB), const Color(0xFF0083B0)),
-                          _buildSharpTab(2, "Gr. Sections", Icons.list, const Color(0xFF56ab2f), const Color(0xFFa8e063)),
-                          _buildSharpTab(3, "Groupes", Icons.list_alt, const Color(0xFF8E2DE2), const Color(0xFF4A00E0)),
-                          _buildSharpTab(4, "Filtres", Icons.tune_rounded, const Color(0xFFF7971E), const Color(0xFFFFD200)),
-                          _buildSharpTab(5, "Borne", Icons.phonelink_setup_rounded, const Color(0xFF232526), const Color(0xFF414345)),
-                        ],
-                      ),
+                  ),
+
+                  // Zone des onglets (TabBar) compactée
+                  Container(
+                    height: 45, // Réduit de 80 à 45
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: TabBar(
+                      controller: _tabController,
+                      isScrollable: true,
+                      indicator: const UnderlineTabIndicator(borderSide: BorderSide.none),
+                      labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                      onTap: (index) => setState((){}),
+                      tabs: [
+                        _buildSharpTab(0, "Produits", Icons.fastfood_rounded, const Color(0xFFFF416C), const Color(0xFFFF4B2B)),
+                        _buildSharpTab(1, "Catégories", Icons.category_rounded, const Color(0xFF00B4DB), const Color(0xFF0083B0)),
+                        _buildSharpTab(2, "Sections", Icons.list, const Color(0xFF56ab2f), const Color(0xFFa8e063)),
+                        _buildSharpTab(3, "Groupes", Icons.list_alt, const Color(0xFF8E2DE2), const Color(0xFF4A00E0)),
+                        _buildSharpTab(4, "Filtres", Icons.tune_rounded, const Color(0xFFF7971E), const Color(0xFFFFD200)),
+                        _buildSharpTab(5, "Borne", Icons.phonelink_setup_rounded, const Color(0xFF232526), const Color(0xFF414345)),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ),
-          body: TabBarView(
-            controller: _tabController,
-            physics: const NeverScrollableScrollPhysics(),
-            children: const [
-              _KeepAlivePage(child: CatalogueView()),
-              _KeepAlivePage(child: KioskView()),
-              _KeepAlivePage(child: SectionsView()),
-              _KeepAlivePage(child: SectionGroupsView()),
-              _KeepAlivePage(child: FiltersView()),
-              _KeepAlivePage(child: FranchisorGlobalConfigView()),
-            ],
-          ),
-          floatingActionButton: _tabController.index == 5
-              ? SizedBox(
-            height: 70,
-            width: 190,
-            child: FloatingActionButton.extended(
-              elevation: 0,
-              highlightElevation: 0,
-              icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 28),
-              label: const Text("Ajouter Fond", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-              backgroundColor: const Color(0xFF232526),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(35)),
-              onPressed: () => _showAddWallpaperDialog(context),
-            ),
-          )
-              : null,
         ),
+        body: TabBarView(
+          controller: _tabController,
+          physics: const NeverScrollableScrollPhysics(),
+          children: const [
+            _KeepAlivePage(child: CatalogueView()),
+            _KeepAlivePage(child: KioskView()),
+            _KeepAlivePage(child: SectionsView()),
+            _KeepAlivePage(child: SectionGroupsView()),
+            _KeepAlivePage(child: FiltersView()),
+            _KeepAlivePage(child: FranchisorGlobalConfigView()),
+          ],
+        ),
+        floatingActionButton: _tabController.index == 5
+            ? SizedBox(
+          height: 60, // Réduit un peu
+          width: 170,
+          child: FloatingActionButton.extended(
+            elevation: 2,
+            icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 22),
+            label: const Text("Ajouter Fond", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+            backgroundColor: const Color(0xFF232526),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            onPressed: () => _showAddWallpaperDialog(context),
+          ),
+        )
+            : null,
       ),
     );
   }
@@ -235,16 +233,16 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     final bool isSelected = _tabController.index == index;
 
     return Tab(
-      height: 60,
+      height: 40, // Hauteur réduite pour l'onglet individuel
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Padding réduit
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(colors: [cStart, cEnd], begin: Alignment.topLeft, end: Alignment.bottomRight)
               : null,
           color: isSelected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(30),
+          borderRadius: BorderRadius.circular(20), // Rayon ajusté
           border: isSelected
               ? null
               : Border.all(color: Colors.white12, width: 1),
@@ -255,14 +253,15 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
             Icon(
                 icon,
                 color: isSelected ? Colors.white : Colors.white60,
-                size: 24
+                size: 18 // Icône réduite
             ),
-            const SizedBox(width: 10),
+            const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.white60,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                fontSize: 13, // Police ajustée
               ),
             ),
           ],
@@ -281,109 +280,106 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
-          return MediaQuery(
-            data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.2)),
-            child: AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              title: Row(
-                children: [
-                  Icon(Icons.wallpaper, color: Colors.blueGrey[800], size: 30),
-                  const SizedBox(width: 15),
-                  const Text("Nouveau Thème"),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: "Nom du thème",
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
-                    ),
-                  ),
-                  const SizedBox(height: 25),
-                  InkWell(
-                    onTap: () async {
-                      final XFile? image = await picker.pickImage(
-                          source: ImageSource.gallery, imageQuality: 85);
-                      if (image != null) {
-                        setStateDialog(() => pickedFile = image);
-                      }
-                    },
-                    child: Container(
-                      height: 180,
-                      width: double.infinity,
-                      decoration: BoxDecoration(
-                          color: pickedFile == null ? Colors.grey[200] : null,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
-                          image: pickedFile != null
-                              ? DecorationImage(image: FileImage(File(pickedFile!.path)), fit: BoxFit.cover)
-                              : null
-                      ),
-                      child: pickedFile == null
-                          ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 50),
-                          SizedBox(height: 10),
-                          Text("Choisir image", style: TextStyle(color: Colors.grey)),
-                        ],
-                      )
-                          : null,
-                    ),
-                  ),
-                  if (isLoading)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 20.0),
-                      child: LinearProgressIndicator(),
-                    )
-                ],
-              ),
-              actions: [
-                TextButton(
-                    onPressed: () => Navigator.pop(ctx),
-                    child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.black87,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 25, vertical: 15),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  ),
-                  onPressed: (pickedFile == null || isLoading) ? null : () async {
-                    setStateDialog(() => isLoading = true);
-                    try {
-                      final repo = FranchiseRepository();
-                      final auth = Provider.of<AuthProvider>(context, listen: false);
-
-                      String path = 'wallpapers/${DateTime.now().millisecondsSinceEpoch}.jpg';
-                      String url = await repo.uploadUniversalFile(pickedFile!, path);
-
-                      await FirebaseFirestore.instance.collection('kiosk_medias').add({
-                        'franchisorId': auth.firebaseUser!.uid,
-                        'name': nameController.text.isEmpty ? 'Sans nom' : nameController.text,
-                        'type': 'image',
-                        'url': url,
-                        'createdAt': FieldValue.serverTimestamp(),
-                      });
-
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Succès !")));
-                      }
-                    } catch (e) {
-                      setStateDialog(() => isLoading = false);
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
-                    }
-                  },
-                  child: const Text("Enregistrer"),
-                ),
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            title: Row(
+              children: [
+                Icon(Icons.wallpaper, color: Colors.blueGrey[800], size: 26),
+                const SizedBox(width: 10),
+                const Text("Nouveau Thème"),
               ],
             ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameController,
+                  decoration: InputDecoration(
+                    labelText: "Nom du thème",
+                    filled: true,
+                    fillColor: Colors.grey[100],
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                InkWell(
+                  onTap: () async {
+                    final XFile? image = await picker.pickImage(
+                        source: ImageSource.gallery, imageQuality: 85);
+                    if (image != null) {
+                      setStateDialog(() => pickedFile = image);
+                    }
+                  },
+                  child: Container(
+                    height: 150, // Un peu moins haut
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                        color: pickedFile == null ? Colors.grey[200] : null,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                        image: pickedFile != null
+                            ? DecorationImage(image: FileImage(File(pickedFile!.path)), fit: BoxFit.cover)
+                            : null
+                    ),
+                    child: pickedFile == null
+                        ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 40),
+                        SizedBox(height: 8),
+                        Text("Choisir image", style: TextStyle(color: Colors.grey)),
+                      ],
+                    )
+                        : null,
+                  ),
+                ),
+                if (isLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 20.0),
+                    child: LinearProgressIndicator(),
+                  )
+              ],
+            ),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black87,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                ),
+                onPressed: (pickedFile == null || isLoading) ? null : () async {
+                  setStateDialog(() => isLoading = true);
+                  try {
+                    final repo = FranchiseRepository();
+                    final auth = Provider.of<AuthProvider>(context, listen: false);
+
+                    String path = 'wallpapers/${DateTime.now().millisecondsSinceEpoch}.jpg';
+                    String url = await repo.uploadUniversalFile(pickedFile!, path);
+
+                    await FirebaseFirestore.instance.collection('kiosk_medias').add({
+                      'franchisorId': auth.firebaseUser!.uid,
+                      'name': nameController.text.isEmpty ? 'Sans nom' : nameController.text,
+                      'type': 'image',
+                      'url': url,
+                      'createdAt': FieldValue.serverTimestamp(),
+                    });
+
+                    if (mounted) {
+                      Navigator.pop(ctx);
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Succès !")));
+                    }
+                  } catch (e) {
+                    setStateDialog(() => isLoading = false);
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+                  }
+                },
+                child: const Text("Enregistrer"),
+              ),
+            ],
           );
         },
       ),
@@ -439,15 +435,12 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
   Future<void> _deleteMedia(String docId) async {
     bool? confirm = await showDialog(
         context: context,
-        builder: (ctx) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(textScaler: const TextScaler.linear(1.2)),
-          child: AlertDialog(
-              title: const Text("Supprimer l'image ?"),
-              actions: [
-                TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Annuler")),
-                TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
-              ]
-          ),
+        builder: (ctx) => AlertDialog(
+            title: const Text("Supprimer l'image ?"),
+            actions: [
+              TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Annuler")),
+              TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
+            ]
         )
     );
     if(confirm == true) {
@@ -473,32 +466,32 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
           }
 
           return ListView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.all(16),
             children: [
               Card(
                 elevation: 0,
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: BorderRadius.circular(20),
                     side: BorderSide(color: Colors.grey.shade200)
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.all(30),
+                  padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Container(
-                              padding: const EdgeInsets.all(10),
+                              padding: const EdgeInsets.all(8),
                               decoration: BoxDecoration(color: Colors.blueGrey.shade50, shape: BoxShape.circle),
-                              child: const Icon(Icons.touch_app_rounded, color: Colors.blueGrey, size: 28)
+                              child: const Icon(Icons.touch_app_rounded, color: Colors.blueGrey, size: 24)
                           ),
-                          const SizedBox(width: 15),
+                          const SizedBox(width: 10),
                           const Text("ACCUEIL BORNE", style: TextStyle(fontWeight: FontWeight.w800, color: Colors.blueGrey)),
                         ],
                       ),
-                      const SizedBox(height: 35),
+                      const SizedBox(height: 20),
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
@@ -527,17 +520,17 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 30),
               Row(
                 children: const [
-                  Icon(Icons.photo_library_rounded, color: Colors.black87, size: 28),
-                  SizedBox(width: 12),
+                  Icon(Icons.photo_library_rounded, color: Colors.black87, size: 24),
+                  SizedBox(width: 10),
                   Text("Fonds d'écran actifs", style: TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 15),
               SizedBox(
-                height: 600,
+                height: 500,
                 child: StreamBuilder<QuerySnapshot>(
                   stream: FirebaseFirestore.instance
                       .collection('kiosk_medias')
@@ -552,7 +545,7 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                     return GridView.builder(
                       physics: const BouncingScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3, crossAxisSpacing: 20, mainAxisSpacing: 20, childAspectRatio: 1.5),
+                          crossAxisCount: 3, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 1.5),
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
                         final data = docs[index].data() as Map<String, dynamic>;
@@ -561,11 +554,11 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                             Positioned.fill(
                               child: Container(
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(15),
                                   border: Border.all(color: Colors.grey.shade300),
                                 ),
                                 child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(15),
                                   child: CachedNetworkImage(
                                     imageUrl: data['url'], fit: BoxFit.cover,
                                     placeholder: (c, u) => Container(color: Colors.grey[200]),
@@ -574,13 +567,13 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                               ),
                             ),
                             Positioned(
-                              top: 10, right: 10,
+                              top: 5, right: 5,
                               child: InkWell(
                                 onTap: () => _deleteMedia(docs[index].id),
                                 child: CircleAvatar(
                                   backgroundColor: Colors.white,
-                                  radius: 18,
-                                  child: const Icon(Icons.delete_rounded, color: Colors.red, size: 20),
+                                  radius: 14,
+                                  child: const Icon(Icons.delete_rounded, color: Colors.red, size: 16),
                                 ),
                               ),
                             )
@@ -610,29 +603,29 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
         GestureDetector(
           onTap: onTap,
           child: Container(
-            height: 140,
-            width: 140,
+            height: 120, // Taille réduite
+            width: 120,
             decoration: BoxDecoration(
               color: color,
-              borderRadius: BorderRadius.circular(25),
+              borderRadius: BorderRadius.circular(20),
               border: Border.all(color: url != null ? Colors.transparent : accentColor.withOpacity(0.3), width: 2),
               image: url != null
                   ? DecorationImage(image: CachedNetworkImageProvider(url), fit: BoxFit.cover)
                   : null,
             ),
             child: url == null
-                ? Icon(icon, size: 50, color: accentColor.withOpacity(0.5))
+                ? Icon(icon, size: 40, color: accentColor.withOpacity(0.5))
                 : null,
           ),
         ),
-        const SizedBox(height: 12),
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: accentColor)),
+        const SizedBox(height: 8),
+        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: accentColor)),
         if(url != null)
           Padding(
-            padding: const EdgeInsets.only(top: 8),
+            padding: const EdgeInsets.only(top: 4),
             child: InkWell(
               onTap: onDelete,
-              child: Text("Supprimer", style: TextStyle(color: Colors.red[300], fontSize: 13, decoration: TextDecoration.underline)),
+              child: Text("Supprimer", style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.underline)),
             ),
           )
       ],

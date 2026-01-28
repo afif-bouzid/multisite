@@ -24,6 +24,18 @@ import 'core/theme/app_colors.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ============================================================
+  // OPTIMISATION PERFORMANCE : AUGMENTATION DU CACHE MÉMOIRE
+  // ============================================================
+  // Augmente la limite de mémoire cache pour les images à 600 MB (défaut: 100 MB)
+  // Cela empêche les images de se recharger et de clignoter.
+  PaintingBinding.instance.imageCache.maximumSizeBytes = 1024 * 1024 * 600;
+
+  // Augmente le nombre maximum d'images gardées en cache à 5000 (défaut: 1000)
+  PaintingBinding.instance.imageCache.maximumSize = 5000;
+  // ============================================================
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -105,10 +117,10 @@ class MyApp extends StatelessWidget {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide:
-                      const BorderSide(color: AppColors.bkYellow, width: 2),
+                  const BorderSide(color: AppColors.bkYellow, width: 2),
                 ),
                 contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               ),
               elevatedButtonTheme: ElevatedButtonThemeData(
                 style: ElevatedButton.styleFrom(
@@ -116,7 +128,7 @@ class MyApp extends StatelessWidget {
                   foregroundColor: AppColors.bkBlack,
                   elevation: 0,
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
+                  const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -227,7 +239,7 @@ class _LoginViewState extends State<LoginView> {
                 children: [
                   const Text('Connexion Back-Office',
                       style:
-                          TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 32),
                   TextField(
                       controller: _emailController,
@@ -253,7 +265,7 @@ class _LoginViewState extends State<LoginView> {
                     child: ElevatedButton(
                       onPressed: () async {
                         final authProvider =
-                            Provider.of<AuthProvider>(context, listen: false);
+                        Provider.of<AuthProvider>(context, listen: false);
                         final error = await authProvider.signIn(
                             _emailController.text.trim(),
                             _passwordController.text.trim());

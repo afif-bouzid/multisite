@@ -1,66 +1,150 @@
 import 'dart:io';
 
 void main() async {
-  final outputFile = File('tout_le_code_de_la_caisse.txt');
-  final buffer = StringBuffer();
+  // --- CONFIGURATION ---
+  final Directory projectRoot = Directory.current; // Dossier actuel
+  final File outputFile = File('project_context.txt');
 
-  // -----------------------------------------------------------
-  // CONFIGURATION
-  // -----------------------------------------------------------
-  // Mets à true SI ET SEULEMENT SI tu as beaucoup de "code mort"
-  // Sinon, laisse à false, Gemini comprendra mieux ton projet.
-  const bool removeComments = true;
-  // -----------------------------------------------------------
+  // Dossiers et fichiers à ignorer absolument
+  final List<String> ignoredPatterns = [
+    '.git', '.dart_tool', '.idea', 'build', 'ios', 'android', 'web',
+    'linux', 'macos', 'windows', 'test',
+    '.fvm', '.github'
+  ];
 
-  print('Génération en cours...');
+  // Extensions de fichiers à lire (Code uniquement)
+  final List<String> allowedExtensions = ['.dart', '.yaml', '.xml', '.gradle'];
 
-  buffer.writeln('<project_root>');
+  final StringBuffer buffer = StringBuffer();
 
-  // 1. Pubspec (Toujours garder intact)
-  await _addFileToBuffer(File('pubspec.yaml'), buffer, false);
+  print('🚀 Démarrage de la génération du contexte...');
 
-  // 2. Dossier lib
-  final libDir = Directory('lib');
-  if (await libDir.exists()) {
-    await for (final entity in libDir.list(recursive: true, followLinks: false)) {
-      if (entity is File && entity.path.endsWith('.dart')) {
-        await _addFileToBuffer(entity, buffer, removeComments);
-      }
-    }
+  // 1. GÉNÉRATION DE L'ARBORESCENCE (VUE D'ENSEMBLE)
+  buffer.writeln('##################################################');
+  buffer.writeln('# 📂 STRUCTURE DU PROJET (ARBORESCENCE)');
+  buffer.writeln('##################################################');
+  buffer.writeln('.');
+  await _generateTree(projectRoot, '', buffer, ignoredPatterns);
+  buffer.writeln('\n'); // Espace
+
+  // 2. LECTURE DES FICHIERS (CONTENU)
+  print('📝 Lecture des fichiers...');
+
+  // On inclut d'abord pubspec.yaml car c'est le plus important pour le contexte
+  final File pubspec = File('${projectRoot.path}/pubspec.yaml');
+  if (await pubspec.exists()) {
+    await _appendFileContent(pubspec, buffer);
   }
 
-  buffer.writeln('</project_root>');
+  // Parcours récursif pour le dossier lib/
+  final Directory libDir = Directory('${projectRoot.path}/lib');
+  if (await libDir.exists()) {
+    await _processDirectoryContents(libDir, buffer, ignoredPatterns, allowedExtensions);
+  } else {
+    print('⚠️ Attention: Dossier "lib" introuvable.');
+  }
 
+  // Écriture finale
   await outputFile.writeAsString(buffer.toString());
-  print('✅ Fichier "tout_le_code.txt" généré avec succès !');
+
+  print('--------------------------------------------------');
+  print('✅ Succès ! Fichier généré : \"${outputFile.path}\"');
+  print('Taille totale : ${(await outputFile.length() / 1024).toStringAsFixed(2)} KB');
 }
 
-Future<void> _addFileToBuffer(File file, StringBuffer buffer, bool cleanComments) async {
-  if (!await file.exists()) return;
-
+/// Génère l'arborescence visuelle récursivement
+Future<void> _generateTree(
+    Directory dir,
+    String prefix,
+    StringBuffer buffer,
+    List<String> ignored
+    ) async {
   try {
-    final relativePath = file.path.replaceAll('\\', '/');
-    buffer.writeln('  <file path="$relativePath">');
+    // Lister et trier : Dossiers d'abord, puis fichiers
+    List<FileSystemEntity> entities = await dir.list().toList();
 
-    List<String> lines = await file.readAsLines();
+    // Filtrage
+    entities = entities.where((e) {
+      final name = e.uri.pathSegments.where((s) => s.isNotEmpty).last;
+      return !ignored.contains(name) && !name.startsWith('.');
+    }).toList();
 
-    for (var line in lines) {
-      // Si on veut nettoyer, on ignore les lignes qui ne sont QUE des commentaires
-      // On garde quand même les commentaires en fin de ligne de code (ex: int a = 1; // info)
-      if (cleanComments) {
-        String trimmed = line.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*')) {
-          continue;
-        }
-        // On supprime aussi les lignes vides inutiles en mode nettoyage
-        if (trimmed.isEmpty) continue;
+    // Tri alphabétique (Dossiers en premier pour la propreté)
+    entities.sort((a, b) {
+      final aName = a.uri.pathSegments.last;
+      final bName = b.uri.pathSegments.last;
+      if (a is Directory && b is File) return -1;
+      if (a is File && b is Directory) return 1;
+      return aName.compareTo(bName);
+    });
+
+    for (var i = 0; i < entities.length; i++) {
+      final entity = entities[i];
+      final isLast = i == entities.length - 1;
+      final name = entity.uri.pathSegments.where((s) => s.isNotEmpty).last;
+
+      buffer.writeln('$prefix${isLast ? '└── ' : '├── '}$name');
+
+      if (entity is Directory) {
+        await _generateTree(
+            entity,
+            '$prefix${isLast ? '    ' : '│   '}',
+            buffer,
+            ignored
+        );
       }
-      buffer.writeln(line);
     }
-
-    buffer.writeln('  </file>');
-    buffer.writeln('');
   } catch (e) {
-    print('Erreur sur ${file.path}: $e');
+    // Ignorer les erreurs d'accès
   }
+}
+
+/// Parcourt les dossiers pour lire le contenu
+Future<void> _processDirectoryContents(
+    Directory dir,
+    StringBuffer buffer,
+    List<String> ignored,
+    List<String> extensions
+    ) async {
+  await for (final FileSystemEntity entity in dir.list(recursive: true)) {
+    if (entity is File) {
+      final path = entity.path;
+      final name = entity.uri.pathSegments.last;
+
+      // Filtres
+      if (ignored.any((pattern) => path.contains(pattern))) continue;
+      if (!extensions.any((ext) => path.endsWith(ext))) continue;
+
+      // Ignorer les fichiers générés
+      if (name.endsWith('.g.dart') || name.endsWith('.freezed.dart')) continue;
+
+      await _appendFileContent(entity, buffer);
+      print('  -> Ajouté : ${entity.path.split('/').last}');
+    }
+  }
+}
+
+/// Ajoute le contenu d'un fichier au buffer
+Future<void> _appendFileContent(File file, StringBuffer buffer) async {
+  try {
+    String content = await file.readAsString();
+
+    // Nettoyage (Commentaires & Lignes vides)
+    String cleanContent = _removeComments(content);
+    cleanContent = cleanContent.replaceAll(RegExp(r'\n\s*\n'), '\n');
+
+    buffer.writeln('==================================================');
+    buffer.writeln('FILE PATH: ${file.path.substring(Directory.current.path.length + 1)}'); // Chemin relatif
+    buffer.writeln('==================================================');
+    buffer.writeln(cleanContent);
+    buffer.writeln('\n');
+  } catch (e) {
+    print('⚠️ Erreur lecture ${file.path}');
+  }
+}
+
+/// Retire les commentaires Dart (// et /* */)
+String _removeComments(String source) {
+  final RegExp commentRegex = RegExp(r'(\/\*[\s\S]*?\*\/)|(\/\/.*)');
+  return source.replaceAll(commentRegex, '');
 }

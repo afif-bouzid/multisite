@@ -1,8 +1,6 @@
 ﻿import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/material.dart';
-
+import 'package:flutter/foundation.dart';
 import '../models.dart';
 
 class AuthProvider extends ChangeNotifier {
@@ -13,11 +11,14 @@ class AuthProvider extends ChangeNotifier {
   FranchiseUser? _franchiseUser;
   bool _isLoading = true;
 
+  // --- C'EST ICI QUE TOUT SE JOUE ---
+  // Vérifiez bien que ces lignes existent dans votre fichier
   User? get firebaseUser => _firebaseUser;
-
   FranchiseUser? get franchiseUser => _franchiseUser;
-
   bool get isLoading => _isLoading;
+  // ----------------------------------
+
+  bool get isAuthenticated => _firebaseUser != null;
 
   AuthProvider() {
     _auth.authStateChanges().listen(_onAuthStateChanged);
@@ -26,12 +27,17 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _onAuthStateChanged(User? user) async {
     _firebaseUser = user;
     _franchiseUser = null;
+    _isLoading = true;
+    notifyListeners();
+
     if (user != null) {
-      DocumentSnapshot doc =
-          await _firestore.collection('users').doc(user.uid).get();
-      if (doc.exists) {
-        _franchiseUser = FranchiseUser.fromFirestore(
-            doc.data() as Map<String, dynamic>, user.uid);
+      try {
+        DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
+        if (doc.exists && doc.data() != null) {
+          _franchiseUser = FranchiseUser.fromFirestore(doc.data() as Map<String, dynamic>, user.uid);
+        }
+      } catch (e) {
+        if (kDebugMode) print("Erreur AuthProvider: $e");
       }
     }
     _isLoading = false;
@@ -40,15 +46,18 @@ class AuthProvider extends ChangeNotifier {
 
   Future<String?> signIn(String email, String password) async {
     try {
+      _isLoading = true;
+      notifyListeners();
       await _auth.signInWithEmailAndPassword(email: email, password: password);
       return null;
     } on FirebaseAuthException catch (e) {
-      if (e.code == 'user-not-found' ||
-          e.code == 'wrong-password' ||
-          e.code == 'invalid-credential') {
-        return 'Email ou mot de passe incorrect.';
-      }
-      return 'Une erreur est survenue. Veuillez réessayer.';
+      _isLoading = false;
+      notifyListeners();
+      return e.message;
+    } catch (e) {
+      _isLoading = false;
+      notifyListeners();
+      return e.toString();
     }
   }
 

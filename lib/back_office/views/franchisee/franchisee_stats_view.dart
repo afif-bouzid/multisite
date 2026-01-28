@@ -1274,6 +1274,7 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
     final quantity = itemMap['quantity'] ?? 1;
     final basePrice = (itemMap['basePrice'] as num?)?.toDouble() ?? 0.0;
     final optionsGroups = itemMap['selectedOptions'] as List<dynamic>? ?? [];
+    final removedIngredients = List<String>.from(itemMap['removedIngredientNames'] ?? []);
 
     double unitPrice = basePrice;
     if (optionsGroups.isNotEmpty) {
@@ -1286,11 +1287,9 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
       }
     }
     final totalItem = unitPrice * quantity;
-    final removedIngredients =
-        List<String>.from(itemMap['removedIngredientNames'] ?? []);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -1299,80 +1298,80 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // --- LIGNE PRINCIPALE (Comme dans CartPanel) ---
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                    color: Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(6)),
-                child: Text("${quantity}x",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w900, fontSize: 16)),
+                  border: Border.all(color: Colors.black12),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text("${quantity}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text(name,
-                    style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.w600)),
+                child: Text(name, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16)),
               ),
-              Text("${totalItem.toStringAsFixed(2)} €",
-                  style: const TextStyle(
-                      fontSize: 17, fontWeight: FontWeight.bold)),
+              Text("${totalItem.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
             ],
           ),
-          if (removedIngredients.isNotEmpty || optionsGroups.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            const Divider(height: 1),
+
+          // --- OPTIONS REGROUPÉES (Style POS Wrap) ---
+          if (optionsGroups.isNotEmpty) ...[
             const SizedBox(height: 8),
-            if (removedIngredients.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Row(
-                  children: [
-                    const Icon(Icons.block, size: 14, color: Colors.red),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text("Sans: ${removedIngredients.join(', ')}",
-                          style: TextStyle(
-                              color: Colors.red.shade700,
-                              fontStyle: FontStyle.italic)),
-                    ),
-                  ],
+            ...optionsGroups.map((group) {
+              final items = (group['items'] as List<dynamic>? ?? []);
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(top: 4, left: 8),
+                decoration: const BoxDecoration(
+                    border: Border(top: BorderSide(color: Colors.black12, width: 0.5))
+                ),
+                child: Wrap(
+                  spacing: 8.0,
+                  runSpacing: 2.0,
+                  children: items.map((opt) {
+                    final optName = opt['name'] ?? 'Option';
+                    final optPrice = (opt['supplementPrice'] as num?)?.toDouble() ?? 0.0;
+
+                    // Construction du texte identique au CartPanel
+                    String displayText = "+ $optName";
+                    if (optPrice > 0) {
+                      displayText += " (${optPrice.toStringAsFixed(2)}€)";
+                    }
+
+                    return Text(
+                        displayText,
+                        style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500
+                        )
+                    );
+                  }).toList(),
+                ),
+              );
+            }).toList(),
+          ],
+
+          // --- SANS (Style POS) ---
+          if (removedIngredients.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6.0, left: 8),
+              child: Text(
+                removedIngredients.map((n) => "🚫 Sans $n").join(", "),
+                style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.red.shade700,
+                    fontWeight: FontWeight.bold
                 ),
               ),
-            if (optionsGroups.isNotEmpty) ...[
-              ...optionsGroups.expand((group) {
-                final items = (group['items'] as List<dynamic>? ?? []);
-                return items.map((opt) {
-                  final optName = opt['name'] ?? 'Option';
-                  final optPrice =
-                      (opt['supplementPrice'] as num?)?.toDouble() ?? 0.0;
-                  final priceStr =
-                      optPrice > 0 ? " (+${optPrice.toStringAsFixed(2)}€)" : "";
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 2.0),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.add, size: 14, color: Colors.green),
-                        const SizedBox(width: 6),
-                        Text("$optName$priceStr",
-                            style: TextStyle(color: Colors.grey.shade800)),
-                      ],
-                    ),
-                  );
-                });
-              }),
-            ]
-          ]
+            ),
         ],
       ),
     );
   }
-
   Widget _buildDetailPanel(PendingOrder order, Color activeColor) {
     return Column(
       children: [

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../auth_provider.dart';
+import '../../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/accounting_export_service.dart';

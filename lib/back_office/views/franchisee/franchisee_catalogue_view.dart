@@ -1,3 +1,4 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -5,16 +6,17 @@ import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-import 'franchisee_product_card.dart';
+
+// --- IMPORTS ---
+import 'franchisee_container_config_dialog.dart';
+import 'franchisee_composite_overrides_dialog.dart';
 
 enum _CatalogueMode { ordering, pricing }
-
-enum _SmartFilter { all, active, inactive, timeRestricted }
+enum _SmartFilter { all, active, inactive, timeRestricted, containers }
 
 class _FilterHeader {
   final String categoryId;
   final String filterName;
-
   _FilterHeader({required this.categoryId, required this.filterName});
 }
 
@@ -22,11 +24,10 @@ class _SubFilterHeader {
   final String parentCategoryId;
   final String subFilterId;
   final String subFilterName;
-
   _SubFilterHeader(
       {required this.parentCategoryId,
-      required this.subFilterId,
-      required this.subFilterName});
+        required this.subFilterId,
+        required this.subFilterName});
 }
 
 class FranchiseeCatalogueView extends StatefulWidget {
@@ -38,13 +39,18 @@ class FranchiseeCatalogueView extends StatefulWidget {
 }
 
 class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
+  // --- ETAT DES FILTRES ---
   String? _selectedBackOfficeFilterId;
   String? _selectedKioskFilterId;
 
+  // --- RECHERCHE ---
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
+
   _SmartFilter _currentSmartFilter = _SmartFilter.all;
 
+  // --- DONNÉES ---
   List<ProductFilter> _allBackOfficeFilters = [];
   List<KioskCategory> _allKioskCategories = [];
   final Map<String, KioskFilter> _kioskFilterMap = {};
@@ -52,8 +58,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   final Map<String, KioskCategory> _kioskCategoryMap = {};
 
   bool _isLoadingFilters = true;
-  _CatalogueMode _mode = _CatalogueMode.ordering;
+  _CatalogueMode _mode = _CatalogueMode.pricing;
 
+  // --- VARIABLES POUR L'ORDRE ---
   late DocumentReference _filterOrderRef;
   Map<String, List<String>> _customSubFilterOrder = {};
   late CollectionReference _subFilterOrderCollectionRef;
@@ -66,14 +73,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      setState(() {
-        _searchQuery = _searchController.text.toLowerCase();
-      });
-    });
-
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final franchiseeId = authProvider.firebaseUser?.uid;
+
     if (franchiseeId != null) {
       _filterOrderRef = FirebaseFirestore.instance
           .collection('users')
@@ -96,6 +98,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -113,7 +116,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         final data = orderSnapshot.data() as Map<String, dynamic>;
         if (data['order'] is List) {
           loadedFilterOrder =
-              List<String>.from((data['order'] as List).whereType<String>());
+          List<String>.from((data['order'] as List).whereType<String>());
         }
       }
 
@@ -122,7 +125,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         final data = doc.data() as Map<String, dynamic>;
         if (data['order'] is List) {
           loadedSubFilterOrders[doc.id] =
-              List<String>.from((data['order'] as List).whereType<String>());
+          List<String>.from((data['order'] as List).whereType<String>());
         }
       }
     } catch (e) {
@@ -182,13 +185,15 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
   }
 
+  // --- LOGIQUE SAUVEGARDE ORDRE ---
+
   Future<void> _saveOrder(CollectionReference menuRef) async {
     if (_isSavingOrder) return;
     setState(() => _isSavingOrder = true);
     final batch = FirebaseFirestore.instance.batch();
 
     final currentFlatProductOrder =
-        <({MasterProduct product, FranchiseeMenuItem settings})>[];
+    <({MasterProduct product, FranchiseeMenuItem settings})>[];
     for (var item in _displayList) {
       if (item is ({MasterProduct product, FranchiseeMenuItem settings})) {
         currentFlatProductOrder.add(item);
@@ -231,8 +236,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     try {
       await _filterOrderRef
           .set({'order': currentCategoryOrder}, SetOptions(merge: true));
-      if (mounted) {
-      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -280,11 +283,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         .where((item) => item.settings != null && item.settings!.isVisible)
         .map((item) => (product: item.product, settings: item.settings!))
         .toList();
-    Map<
-            String?,
-            Map<String?,
-                List<({MasterProduct product, FranchiseeMenuItem settings})>>>
-        groupedProducts = {};
+    Map<String?,
+        Map<String?,
+            List<({MasterProduct product, FranchiseeMenuItem settings})>>>
+    groupedProducts = {};
 
     for (var item in allVisibleProductsData) {
       if (item.product.kioskFilterIds.isEmpty) {
@@ -323,7 +325,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           List<String> subFilterOrder =
               _customSubFilterOrder[category.id] ?? [];
           List<String> availableSubFilterIds =
-              subGroups.keys.where((id) => id != null).cast<String>().toList();
+          subGroups.keys.where((id) => id != null).cast<String>().toList();
           final subGroupMap = Map.from(subGroups);
           List<String> sortedSubFilterIds = [];
           Set<String> addedSubFilterIds = {};
@@ -376,12 +378,14 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           .add(_FilterHeader(categoryId: 'null', filterName: "Non classés"));
       final unclassifiedProductsMap = groupedProducts[null]!;
       final unclassifiedProducts =
-          unclassifiedProductsMap.values.expand((list) => list).toList();
+      unclassifiedProductsMap.values.expand((list) => list).toList();
       if (_expansionState.putIfAbsent('null', () => false)) {
         _displayList.addAll(unclassifiedProducts);
       }
     }
   }
+
+  // --- BUILD UI ---
 
   @override
   Widget build(BuildContext context) {
@@ -402,64 +406,128 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
+      appBar: AppBar(
+        title: const Text("Gestion Catalogue", style: TextStyle(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        bottom: PreferredSize(
+          preferredSize:
+          Size.fromHeight(_mode == _CatalogueMode.pricing ? 140 : 60),
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: _buildModeToggle(),
+              ),
+              const SizedBox(height: 8),
+              if (_mode == _CatalogueMode.pricing) ...[
+                Padding(
+                  padding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  child: TextField(
+                    controller: _searchController,
+                    focusNode: _searchFocusNode,
+                    decoration: InputDecoration(
+                      hintText: 'Rechercher un produit...',
+                      prefixIcon: const Icon(Icons.search, color: Colors.grey),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() => _searchQuery = "");
+                            _searchFocusNode.unfocus();
+                          })
+                          : null,
+                      filled: true,
+                      fillColor: Colors.grey.shade100,
+                      border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 0, horizontal: 16),
+                    ),
+                    onChanged: (val) {
+                      setState(() => _searchQuery = val.toLowerCase());
+                    },
+                  ),
+                ),
+                SizedBox(
+                  height: 50,
+                  child: ListView(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    children: [
+                      _buildSmartFilterChip("Tout", _SmartFilter.all),
+                      const SizedBox(width: 8),
+                      _buildSmartFilterChip("Dossiers", _SmartFilter.containers, icon: Icons.folder, color: Colors.indigo),
+                      const SizedBox(width: 8),
+                      _buildSmartFilterChip("Actifs", _SmartFilter.active,
+                          icon: Icons.check_circle_outline,
+                          color: Colors.green),
+                      const SizedBox(width: 8),
+                      _buildSmartFilterChip("Inactifs", _SmartFilter.inactive,
+                          icon: Icons.cancel_outlined, color: Colors.grey),
+                      const SizedBox(width: 8),
+                      _buildSmartFilterChip(
+                          "Horaires", _SmartFilter.timeRestricted,
+                          icon: Icons.schedule, color: Colors.blue),
+                      const VerticalDivider(width: 20),
+                      if (_allBackOfficeFilters.isNotEmpty) ...[
+                        const Center(
+                            child: Text("Rayons: ",
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey))),
+                        const SizedBox(width: 8),
+                        ..._allBackOfficeFilters.map((f) => Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: ChoiceChip(
+                            label: Text(f.name),
+                            selected: _selectedBackOfficeFilterId == f.id,
+                            onSelected: (sel) {
+                              setState(() {
+                                _selectedBackOfficeFilterId =
+                                sel ? f.id : null;
+                                _selectedKioskFilterId = null;
+                              });
+                            },
+                          ),
+                        )),
+                      ]
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          StreamBuilder<List<MasterProduct>>(
-            stream: repository.getMasterProductsStream(franchisorId),
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting ||
-                  _isLoadingFilters) {
-                return const Expanded(
-                    child: Center(child: CircularProgressIndicator()));
-              }
-
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                if (_mode == _CatalogueMode.ordering) {
-                  return Expanded(
-                      child: StreamBuilder<QuerySnapshot>(
-                          stream: franchiseeMenuRef.snapshots(),
-                          builder: (context, menuSnapshot) {
-                            if (menuSnapshot.connectionState ==
-                                ConnectionState.waiting) {
-                              return const Center(
-                                  child: CircularProgressIndicator());
-                            }
-                            currentFranchiseeSettings =
-                                Map<String, FranchiseeMenuItem>.fromEntries(
-                              (menuSnapshot.data?.docs ?? []).map(
-                                (doc) => MapEntry(
-                                  doc.id,
-                                  FranchiseeMenuItem.fromFirestore(
-                                      doc.data() as Map<String, dynamic>),
-                                ),
-                              ),
-                            );
-                            if (!_isLoadingFilters) {
-                              _prepareOrderModeData(
-                                  [], currentFranchiseeSettings);
-                            }
-                            return Column(
-                              children: [
-                                _buildModeToggle(),
-                                const Divider(height: 1, thickness: 1),
-                                _buildOrderView(franchiseeMenuRef, [],
-                                    currentFranchiseeSettings)
-                              ],
-                            );
-                          }));
+          Expanded(
+            child: StreamBuilder<List<MasterProduct>>(
+              stream: repository.getMasterProductsStream(franchisorId),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting ||
+                    _isLoadingFilters) {
+                  return const Center(child: CircularProgressIndicator());
                 }
-                return const Expanded(
-                    child: Center(
-                        child: Text("Le catalogue du franchiseur est vide.")));
-              }
 
-              List<MasterProduct> masterProducts = snapshot.data!
-                  .where((product) => !product.isIngredient)
-                  .toList();
+                if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                  return const Center(
+                      child: Text("Le catalogue du franchiseur est vide."));
+                }
 
-              return Expanded(
-                child: StreamBuilder<QuerySnapshot>(
+                List<MasterProduct> allRawProducts = snapshot.data!;
+                List<MasterProduct> visibleProducts = allRawProducts
+                    .where((product) => !product.isIngredient)
+                    .toList();
+
+                return StreamBuilder<QuerySnapshot>(
                   stream: franchiseeMenuRef.snapshots(),
                   builder: (context, menuSnapshot) {
                     if (menuSnapshot.connectionState ==
@@ -468,9 +536,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     }
 
                     currentFranchiseeSettings =
-                        Map<String, FranchiseeMenuItem>.fromEntries(
+                    Map<String, FranchiseeMenuItem>.fromEntries(
                       (menuSnapshot.data?.docs ?? []).map(
-                        (doc) => MapEntry(
+                            (doc) => MapEntry(
                           doc.id,
                           FranchiseeMenuItem.fromFirestore(
                               doc.data() as Map<String, dynamic>),
@@ -478,200 +546,90 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       ),
                     );
 
-                    List<MasterProduct> filteredProducts = masterProducts;
+                    if (_mode == _CatalogueMode.ordering) {
+                      return _buildOrderView(franchiseeMenuRef, visibleProducts,
+                          currentFranchiseeSettings);
+                    }
+
+                    // --- MODE PRIX ---
+                    List<MasterProduct> filteredProducts = visibleProducts;
 
                     if (_searchQuery.isNotEmpty) {
                       filteredProducts = filteredProducts
                           .where((p) =>
-                              p.name.toLowerCase().contains(_searchQuery))
+                          p.name.toLowerCase().contains(_searchQuery))
                           .toList();
                     }
 
-                    if (_mode == _CatalogueMode.pricing) {
-                      if (_currentSmartFilter == _SmartFilter.active) {
-                        filteredProducts = filteredProducts
-                            .where((p) =>
-                                currentFranchiseeSettings[p.productId]
-                                    ?.isVisible ==
-                                true)
-                            .toList();
-                      } else if (_currentSmartFilter == _SmartFilter.inactive) {
-                        filteredProducts = filteredProducts
-                            .where((p) =>
-                                currentFranchiseeSettings[p.productId]
-                                    ?.isVisible !=
-                                true)
-                            .toList();
-                      } else if (_currentSmartFilter ==
-                          _SmartFilter.timeRestricted) {
-                        filteredProducts = filteredProducts.where((p) {
-                          final s = currentFranchiseeSettings[p.productId];
-                          return s != null &&
-                              s.availableStartTime != null &&
-                              s.availableEndTime != null;
-                        }).toList();
-                      }
+                    if (_currentSmartFilter == _SmartFilter.active) {
+                      filteredProducts = filteredProducts
+                          .where((p) =>
+                      currentFranchiseeSettings[p.productId]
+                          ?.isVisible ==
+                          true)
+                          .toList();
+                    } else if (_currentSmartFilter == _SmartFilter.inactive) {
+                      filteredProducts = filteredProducts
+                          .where((p) =>
+                      currentFranchiseeSettings[p.productId]
+                          ?.isVisible !=
+                          true)
+                          .toList();
+                    } else if (_currentSmartFilter ==
+                        _SmartFilter.timeRestricted) {
+                      filteredProducts = filteredProducts.where((p) {
+                        final s = currentFranchiseeSettings[p.productId];
+                        return s != null && s.availableStartTime != null;
+                      }).toList();
+                    } else if (_currentSmartFilter == _SmartFilter.containers) {
+                      filteredProducts = filteredProducts.where((p) => p.isContainer).toList();
                     }
 
                     if (_selectedBackOfficeFilterId != null) {
                       filteredProducts = filteredProducts
-                          .where((p) =>
-                              p.filterIds.contains(_selectedBackOfficeFilterId))
+                          .where((p) => p.filterIds
+                          .contains(_selectedBackOfficeFilterId))
                           .toList();
                     }
 
                     if (_selectedKioskFilterId != null) {
                       filteredProducts = filteredProducts
                           .where((p) =>
-                              p.kioskFilterIds.contains(_selectedKioskFilterId))
+                          p.kioskFilterIds.contains(_selectedKioskFilterId))
                           .toList();
                     }
 
-                    if (_mode == _CatalogueMode.ordering) {
-                      if (!_isLoadingFilters) {
-                        _prepareOrderModeData(
-                            masterProducts, currentFranchiseeSettings);
-                      } else {
-                        return const Center(
-                            child: CircularProgressIndicator(
-                                key: Key("inner_loader")));
-                      }
+                    if (filteredProducts.isEmpty) {
+                      return const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.search_off,
+                                size: 48, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text("Aucun produit ne correspond.",
+                                textAlign: TextAlign.center),
+                          ],
+                        ),
+                      );
                     }
 
-                    return Column(
-                      children: [
-                        if (_mode == _CatalogueMode.pricing)
-                          _buildEnhancedHeaderAndFilters(
-                              repository, franchisorId, masterProducts),
-                        _buildModeToggle(),
-                        const Divider(height: 1, thickness: 1),
-                        if (_mode == _CatalogueMode.ordering)
-                          _buildOrderView(franchiseeMenuRef, masterProducts,
-                              currentFranchiseeSettings)
-                        else if (filteredProducts.isEmpty)
-                          const Expanded(
-                            child: Center(
-                              child: Padding(
-                                padding: EdgeInsets.all(16.0),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.search_off,
-                                        size: 48, color: Colors.grey),
-                                    SizedBox(height: 16),
-                                    Text(
-                                        "Aucun produit ne correspond à votre recherche.",
-                                        textAlign: TextAlign.center),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          _buildPriceView(filteredProducts,
-                              currentFranchiseeSettings, franchiseeMenuRef),
-                      ],
-                    );
+                    return _buildPriceView(
+                        filteredProducts,
+                        currentFranchiseeSettings,
+                        franchiseeMenuRef,
+                        allRawProducts);
                   },
-                ),
-              );
-            },
+                );
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEnhancedHeaderAndFilters(FranchiseRepository repository,
-      String franchisorId, List<MasterProduct> masterProducts) {
-    final sellableProducts =
-        masterProducts.where((p) => !p.isIngredient).toList();
-    final relevantBackOfficeFilterIds =
-        sellableProducts.expand((p) => p.filterIds).toSet();
-    final relevantKioskFilterIds = (_selectedBackOfficeFilterId == null
-            ? sellableProducts
-            : sellableProducts.where(
-                (p) => p.filterIds.contains(_selectedBackOfficeFilterId)))
-        .expand((p) => p.kioskFilterIds)
-        .toSet();
-
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _searchController,
-            decoration: InputDecoration(
-              hintText: 'Rechercher un produit...',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: _searchQuery.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear),
-                      onPressed: () => _searchController.clear())
-                  : null,
-              filled: true,
-              fillColor: Colors.grey.shade100,
-              border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide.none),
-              contentPadding:
-                  const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                _buildSmartFilterChip("Tout", _SmartFilter.all),
-                const SizedBox(width: 8),
-                _buildSmartFilterChip("Actifs", _SmartFilter.active,
-                    icon: Icons.check_circle_outline, color: Colors.green),
-                const SizedBox(width: 8),
-                _buildSmartFilterChip("Inactifs", _SmartFilter.inactive,
-                    icon: Icons.cancel_outlined, color: Colors.grey),
-                const SizedBox(width: 8),
-                _buildSmartFilterChip(
-                    "Horaires Restreints", _SmartFilter.timeRestricted,
-                    icon: Icons.schedule, color: Colors.blue),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: [
-                if (relevantBackOfficeFilterIds.isNotEmpty) ...[
-                  const Text("Rayons: ",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(width: 8),
-                ],
-                _buildBackOfficeFilterSelector(relevantBackOfficeFilterIds),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
-          if (relevantKioskFilterIds.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  const Text("Cat. Borne: ",
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, color: Colors.grey)),
-                  const SizedBox(width: 8),
-                  _buildKioskFilterSelector(relevantKioskFilterIds),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
+  // --- WIDGETS ---
 
   Widget _buildSmartFilterChip(String label, _SmartFilter value,
       {IconData? icon, Color? color}) {
@@ -689,8 +647,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       ),
       selected: isSelected,
       onSelected: (selected) {
-        setState(
-            () => _currentSmartFilter = selected ? value : _SmartFilter.all);
+        setState(() =>
+        _currentSmartFilter = selected ? value : _SmartFilter.all);
       },
       backgroundColor: Colors.white,
       selectedColor: color ?? Theme.of(context).primaryColor,
@@ -703,87 +661,119 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   }
 
   Widget _buildModeToggle() {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: SizedBox(
-        width: double.infinity,
-        child: SegmentedButton<_CatalogueMode>(
-          segments: const [
-            ButtonSegment(
-              value: _CatalogueMode.ordering,
-              label: Text("Ordre d'affichage"),
-              icon: Icon(Icons.sort),
-            ),
-            ButtonSegment(
-              value: _CatalogueMode.pricing,
-              label: Text("Catalogue & Prix"),
-              icon: Icon(Icons.edit_note),
-            ),
-          ],
-          selected: {_mode},
-          onSelectionChanged: (newSelection) {
-            setState(() {
-              _mode = newSelection.first;
-            });
-          },
-          style: ButtonStyle(
-            visualDensity: VisualDensity.compact,
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<_CatalogueMode>(
+        segments: const [
+          ButtonSegment(
+            value: _CatalogueMode.pricing,
+            label: Text("Catalogue & Prix"),
+            icon: Icon(Icons.edit_note),
           ),
+          ButtonSegment(
+            value: _CatalogueMode.ordering,
+            label: Text("Ordre d'affichage"),
+            icon: Icon(Icons.sort),
+          ),
+        ],
+        selected: {_mode},
+        onSelectionChanged: (newSelection) {
+          setState(() {
+            _mode = newSelection.first;
+            _searchController.clear();
+            _searchQuery = "";
+            _searchFocusNode.unfocus();
+          });
+        },
+        style: const ButtonStyle(
+          visualDensity: VisualDensity.compact,
+          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
       ),
     );
   }
 
+  // --- VIEWS ---
+
   Widget _buildPriceView(
       List<MasterProduct> productsToDisplay,
       Map<String, FranchiseeMenuItem> franchiseeSettings,
-      CollectionReference franchiseeMenuRef) {
+      CollectionReference franchiseeMenuRef,
+      List<MasterProduct> allMasterProducts) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final franchiseeId = authProvider.firebaseUser?.uid;
     final franchisorId = authProvider.franchiseUser?.franchisorId;
 
-    return Expanded(
-      child: ListView.builder(
-        padding: const EdgeInsets.all(12),
-        itemCount: productsToDisplay.length,
-        itemBuilder: (context, index) {
-          final product = productsToDisplay[index];
-          final settings = franchiseeSettings[product.productId];
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      itemCount: productsToDisplay.length,
+      itemBuilder: (context, index) {
+        final product = productsToDisplay[index];
+        final settings = franchiseeSettings[product.productId];
 
-          return FranchiseeProductCard(
-            product: product,
-            settings: settings,
-            franchiseeId: franchiseeId,
-            franchisorId: franchisorId,
-            franchiseeMenuRef: franchiseeMenuRef,
-            // Action 1 : Clic sur la carte (Dialogue prix standard)
-            onTapCard: () => _showPriceDialog(
-                context, franchiseeMenuRef, product, settings,
-                isComposite: product.isComposite),
-            // Action 2 : Switch On/Off
-            onToggleSwitch: (bool value) {
-              if (value) {
-                _showPriceDialog(context, franchiseeMenuRef, product, settings,
-                    isComposite: product.isComposite);
-              } else {
-                _confirmDisable(context, franchiseeMenuRef, product, settings);
-              }
-            },
-            // Action 3 : Gestion du stock (Dispo)
-            onToggleStock: () {
-              final isAvailable = settings?.isAvailable ?? true;
-              franchiseeMenuRef
-                  .doc(product.productId)
-                  .set({'isAvailable': !isAvailable}, SetOptions(merge: true));
-            },
-          );
-        },
-      ),
+        return FranchiseeProductCard(
+          product: product,
+          settings: settings ?? FranchiseeMenuItem(masterProductId: product.productId, price: product.price ?? 0.0),
+          franchiseeId: franchiseeId!,
+          franchisorId: franchisorId!,
+          franchiseeMenuRef: franchiseeMenuRef,
+          onTapConfig: () {
+            _showPriceDialog(
+                context,
+                franchiseeMenuRef,
+                product,
+                settings,
+                isComposite: product.isComposite,
+                isContainer: product.isContainer,
+                franchiseeId: franchiseeId!,
+                franchisorId: franchisorId!,
+                allProducts: allMasterProducts,
+                franchiseeSettings: franchiseeSettings
+            );
+          },
+          onConfirmDisable: () {
+            _confirmDisable(context, franchiseeMenuRef, product, settings);
+          },
+          onToggleStock: (bool newValue) {
+            franchiseeMenuRef
+                .doc(product.productId)
+                .set({'isAvailable': newValue}, SetOptions(merge: true));
+          },
+          onToggleVisibility: (bool newValue) {
+            franchiseeMenuRef
+                .doc(product.productId)
+                .set({'isVisible': newValue}, SetOptions(merge: true));
+          },
+        );
+      },
     );
   }
 
+  // --- SAVE FUNCTIONS ---
+  Future<void> _saveChildProductPrice(CollectionReference menuRef,
+      MasterProduct product, double newPrice) async {
+    try {
+      await menuRef.doc(product.productId).set({
+        'masterProductId': product.productId,
+        'price': newPrice,
+        'isActive': true,
+        'isVisible': true,
+        'isAvailable': true,
+        'name': product.name,
+        'isContainer': product.isContainer,
+        'containerProductIds': product.containerProductIds,
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Prix mis à jour : ${newPrice.toStringAsFixed(2)} €"),
+          duration: const Duration(milliseconds: 800),
+        ));
+      }
+    } catch (e) {
+      debugPrint("Erreur sauvegarde prix enfant: $e");
+    }
+  }
 
   Future<void> _confirmDisable(
       BuildContext context,
@@ -804,7 +794,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           TextButton(
               onPressed: () => Navigator.pop(ctx, true),
               child:
-                  const Text("Confirmer", style: TextStyle(color: Colors.red))),
+              const Text("Confirmer", style: TextStyle(color: Colors.red))),
         ],
       ),
     );
@@ -812,20 +802,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
     try {
       final mainDocRef = menuRef.doc(product.productId);
-      final overridesColRef = mainDocRef.collection('supplement_overrides');
-      final sectionOverridesColRef = mainDocRef.collection('section_overrides');
-
       final batch = FirebaseFirestore.instance.batch();
-      final overridesSnapshot = await overridesColRef.get();
-      for (final doc in overridesSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
-      final sectionOverridesSnapshot = await sectionOverridesColRef.get();
-      for (final doc in sectionOverridesSnapshot.docs) {
-        batch.delete(doc.reference);
-      }
-
       batch.set(
           mainDocRef,
           {
@@ -844,566 +821,660 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
   }
 
-  Widget _buildBackOfficeFilterSelector(Set<String> relevantFilterIds) {
-    final relevantFilters = _allBackOfficeFilters
-        .where((f) => relevantFilterIds.contains(f.id))
-        .toList();
-    relevantFilters.sort((a, b) => a.name.compareTo(b.name));
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ChoiceChip(
-          label: const Text("Tous"),
-          selected: _selectedBackOfficeFilterId == null,
-          onSelected: (selected) {
-            if (selected) {
-              setState(() {
-                _selectedBackOfficeFilterId = null;
-                _selectedKioskFilterId = null;
-              });
-            }
-          },
-          visualDensity: VisualDensity.compact,
-        ),
-        const SizedBox(width: 8),
-        ...relevantFilters.map((filter) => Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: ChoiceChip(
-                label: Text(filter.name),
-                selected: _selectedBackOfficeFilterId == filter.id,
-                onSelected: (selected) {
-                  setState(() {
-                    _selectedBackOfficeFilterId = selected ? filter.id : null;
-                    _selectedKioskFilterId = null;
-                  });
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            )),
-      ],
-    );
-  }
-
-  Widget _buildKioskFilterSelector(Set<String> relevantKioskFilterIds) {
-    final allKioskFilters =
-        _allKioskCategories.expand((cat) => cat.filters).toList();
-    final relevantFilters = allKioskFilters
-        .where((f) => relevantKioskFilterIds.contains(f.id))
-        .toList();
-    relevantFilters.sort((a, b) => a.position.compareTo(b.position));
-
-    return Row(
-      children: [
-        ChoiceChip(
-          label: const Text("Toutes"),
-          selected: _selectedKioskFilterId == null,
-          onSelected: (selected) {
-            if (selected) {
-              setState(() => _selectedKioskFilterId = null);
-            }
-          },
-          visualDensity: VisualDensity.compact,
-        ),
-        const SizedBox(width: 8),
-        ...relevantFilters.map((filter) => Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: ChoiceChip(
-                label: Text(filter.name),
-                selected: _selectedKioskFilterId == filter.id,
-                onSelected: (selected) {
-                  setState(() =>
-                      _selectedKioskFilterId = selected ? filter.id : null);
-                },
-                visualDensity: VisualDensity.compact,
-              ),
-            )),
-      ],
-    );
-  }
-
+  // --- ORDRE D'AFFICHAGE ---
   Widget _buildOrderView(
       CollectionReference franchiseeMenuRef,
       List<MasterProduct> allMasterProducts,
       Map<String, FranchiseeMenuItem> franchiseeSettings) {
     if (_isLoadingFilters) {
-      return const Expanded(
-          child: Center(
-              child: CircularProgressIndicator(key: Key("order_view_loader"))));
+      return const Center(
+          child: CircularProgressIndicator(key: Key("order_view_loader")));
     }
     if (_isSavingOrder || _isSavingFilterOrder || _isSavingSubFilterOrder) {
-      return const Expanded(
-          child: Center(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-        CircularProgressIndicator(),
-        SizedBox(height: 16),
-        Text("Sauvegarde...")
-      ])));
+      return const Center(
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text("Sauvegarde...")
+          ]));
     }
     _prepareOrderModeData(allMasterProducts, franchiseeSettings);
 
     if (_displayList.isEmpty) {
-      return const Expanded(
-          child: Center(
-              child: Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text(
-                      "Aucun produit visible pour l'organisation.\nActivez des produits depuis l'onglet 'Catalogue & Prix' d'abord.",
-                      textAlign: TextAlign.center))));
+      return const Center(
+          child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                  "Aucun produit visible pour l'organisation.\nActivez des produits depuis l'onglet 'Catalogue & Prix' d'abord.",
+                  textAlign: TextAlign.center)));
     }
 
-    return Expanded(
-      child: ReorderableListView.builder(
-        padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
-        itemCount: _displayList.length,
-        buildDefaultDragHandles: false,
-        itemBuilder: (context, index) {
-          final item = _displayList[index];
+    return ReorderableListView.builder(
+      padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
+      itemCount: _displayList.length,
+      buildDefaultDragHandles: false,
+      itemBuilder: (context, index) {
+        final item = _displayList[index];
 
-          if (item is _FilterHeader) {
-            bool isExpanded =
-                _expansionState.putIfAbsent(item.categoryId, () => false);
-            return ReorderableDragStartListener(
-              key: ValueKey('header_${item.categoryId}'),
-              index: index,
+        if (item is _FilterHeader) {
+          bool isExpanded =
+          _expansionState.putIfAbsent(item.categoryId, () => false);
+          return ReorderableDragStartListener(
+            key: ValueKey('header_${item.categoryId}'),
+            index: index,
+            child: ExpansionTile(
+              key: PageStorageKey<String>('expansion_${item.categoryId}'),
+              initiallyExpanded: isExpanded,
+              maintainState: true,
+              collapsedBackgroundColor: Colors.grey[200],
+              backgroundColor: Colors.grey[100],
+              leading: const Icon(Icons.drag_handle),
+              title: Text(item.filterName,
+                  style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: Theme.of(context).primaryColorDark)),
+              onExpansionChanged: (bool expanded) {
+                setState(() {
+                  _expansionState[item.categoryId] = expanded;
+                  _prepareOrderModeData(allMasterProducts, franchiseeSettings);
+                });
+              },
+              children: const <Widget>[],
+            ),
+          );
+        } else if (item is _SubFilterHeader) {
+          final subFilterKey = '${item.parentCategoryId}_${item.subFilterId}';
+          bool isExpanded =
+          _expansionState.putIfAbsent(subFilterKey, () => false);
+          return ReorderableDragStartListener(
+            key: ValueKey('subheader_$subFilterKey'),
+            index: index,
+            child: Container(
+              padding: const EdgeInsets.only(left: 16.0),
               child: ExpansionTile(
-                key: PageStorageKey<String>('expansion_${item.categoryId}'),
+                key: PageStorageKey<String>('expansion_$subFilterKey'),
                 initiallyExpanded: isExpanded,
                 maintainState: true,
-                collapsedBackgroundColor: Colors.grey[200],
-                backgroundColor: Colors.grey[100],
-                leading: const Icon(Icons.drag_handle),
-                title: Text(item.filterName,
+                leading: const Icon(Icons.drag_handle, size: 20),
+                title: Text(item.subFilterName,
                     style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18,
-                        color: Theme.of(context).primaryColorDark)),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        fontStyle: FontStyle.italic,
+                        color: Colors.grey[800])),
                 onExpansionChanged: (bool expanded) {
                   setState(() {
-                    _expansionState[item.categoryId] = expanded;
+                    _expansionState[subFilterKey] = expanded;
                     _prepareOrderModeData(
                         allMasterProducts, franchiseeSettings);
                   });
                 },
                 children: const <Widget>[],
               ),
-            );
-          } else if (item is _SubFilterHeader) {
-            final subFilterKey = '${item.parentCategoryId}_${item.subFilterId}';
-            bool isExpanded =
-                _expansionState.putIfAbsent(subFilterKey, () => false);
-            return ReorderableDragStartListener(
-              key: ValueKey('subheader_$subFilterKey'),
-              index: index,
-              child: Container(
-                padding: const EdgeInsets.only(left: 16.0),
-                child: ExpansionTile(
-                  key: PageStorageKey<String>('expansion_$subFilterKey'),
-                  initiallyExpanded: isExpanded,
-                  maintainState: true,
-                  leading: const Icon(Icons.drag_handle, size: 20),
-                  title: Text(item.subFilterName,
+            ),
+          );
+        } else if (item is ({
+        MasterProduct product,
+        FranchiseeMenuItem settings
+        })) {
+          final bool isAvailable = item.settings.isAvailable;
+          return ReorderableDragStartListener(
+            key: ValueKey(item.product.productId),
+            index: index,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 32.0, bottom: 4.0, top: 4.0),
+              child: Card(
+                margin: EdgeInsets.zero,
+                elevation: 0.5,
+                color: isAvailable ? Colors.white : Colors.red.shade50,
+                child: ListTile(
+                  visualDensity: VisualDensity.compact,
+                  leading: const Icon(Icons.drag_handle, color: Colors.grey),
+                  title: Text(item.product.name,
                       style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          fontStyle: FontStyle.italic,
-                          color: Colors.grey[800])),
-                  onExpansionChanged: (bool expanded) {
-                    setState(() {
-                      _expansionState[subFilterKey] = expanded;
-                      _prepareOrderModeData(
-                          allMasterProducts, franchiseeSettings);
-                    });
-                  },
-                  children: const <Widget>[],
+                          fontWeight: FontWeight.w500,
+                          fontSize: 14,
+                          color: isAvailable
+                              ? Colors.black
+                              : Colors.grey.shade700,
+                          decoration: isAvailable
+                              ? TextDecoration.none
+                              : TextDecoration.lineThrough)),
+                  trailing: Text("${item.settings.price.toStringAsFixed(2)} €",
+                      style: const TextStyle(
+                          fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
               ),
-            );
-          } else if (item is ({
-            MasterProduct product,
-            FranchiseeMenuItem settings
-          })) {
-            final bool isAvailable = item.settings.isAvailable;
-            return ReorderableDragStartListener(
-              key: ValueKey(item.product.productId),
-              index: index,
-              child: Padding(
-                padding:
-                    const EdgeInsets.only(left: 32.0, bottom: 4.0, top: 4.0),
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  elevation: 0.5,
-                  color: isAvailable ? Colors.white : Colors.red.shade50,
-                  child: ListTile(
-                    visualDensity: VisualDensity.compact,
-                    leading: const Icon(Icons.drag_handle, color: Colors.grey),
-                    title: Text(item.product.name,
-                        style: TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                            color: isAvailable
-                                ? Colors.black
-                                : Colors.grey.shade700,
-                            decoration: isAvailable
-                                ? TextDecoration.none
-                                : TextDecoration.lineThrough)),
-                    trailing: Text(
-                        "${item.settings.price.toStringAsFixed(2)} €",
-                        style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ),
-            );
-          }
-          return SizedBox(key: ValueKey('unknown_$index'));
-        },
-        onReorder: (int oldDisplayIndex, int newDisplayIndex) {
-          if (newDisplayIndex > oldDisplayIndex) {
-            newDisplayIndex -= 1;
-          }
-          final dynamic movedItem = _displayList.removeAt(oldDisplayIndex);
-          _displayList.insert(newDisplayIndex, movedItem);
+            ),
+          );
+        }
+        return SizedBox(key: ValueKey('unknown_$index'));
+      },
+      onReorder: (int oldDisplayIndex, int newDisplayIndex) {
+        if (newDisplayIndex > oldDisplayIndex) {
+          newDisplayIndex -= 1;
+        }
+        final dynamic movedItem = _displayList.removeAt(oldDisplayIndex);
+        _displayList.insert(newDisplayIndex, movedItem);
+        setState(() {});
 
-          if (movedItem is _FilterHeader) {
-            final newCategoryOrder = <KioskCategory>[];
-            final Set<String> currentDisplayCategoryIds = {};
-            for (final item in _displayList) {
-              if (item is _FilterHeader) {
-                currentDisplayCategoryIds.add(item.categoryId);
-                if (_kioskCategoryMap.containsKey(item.categoryId)) {
-                  newCategoryOrder.add(_kioskCategoryMap[item.categoryId]!);
-                }
-              }
-            }
-            for (final category in _allKioskCategories) {
-              if (!currentDisplayCategoryIds.contains(category.id)) {
-                newCategoryOrder.add(category);
-              }
-            }
-            setState(() {
-              _allKioskCategories = newCategoryOrder;
-            });
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) {
-                _prepareOrderModeData(allMasterProducts, franchiseeSettings);
-                setState(() {});
-              }
-            });
-            _saveFilterOrder();
-          } else if (movedItem is _SubFilterHeader) {
-            String? currentMainCategoryId;
-            for (int i = newDisplayIndex - 1; i >= 0; i--) {
-              if (_displayList[i] is _FilterHeader) {
-                currentMainCategoryId =
-                    (_displayList[i] as _FilterHeader).categoryId;
-                break;
-              }
-            }
-            if (currentMainCategoryId == null ||
-                movedItem.parentCategoryId != currentMainCategoryId) {
-              _displayList.removeAt(newDisplayIndex);
-              _displayList.insert(oldDisplayIndex, movedItem);
-              setState(() {});
-              return;
-            }
-            final String parentId = movedItem.parentCategoryId;
-            final newSubFilterOrder = <String>[];
-            for (final item in _displayList) {
-              if (item is _SubFilterHeader &&
-                  item.parentCategoryId == parentId) {
-                newSubFilterOrder.add(item.subFilterId);
-              }
-            }
-            setState(() {
-              _customSubFilterOrder[parentId] = newSubFilterOrder;
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _prepareOrderModeData(allMasterProducts, franchiseeSettings);
-                  setState(() {});
-                }
-              });
-            });
-            _saveSubFilterOrder(parentId, newSubFilterOrder);
-          } else if (movedItem is ({
-            MasterProduct product,
-            FranchiseeMenuItem settings
-          })) {
-            String? oldParentCatId;
-            String? oldSubFilterId;
-            for (int i = oldDisplayIndex; i >= 0; i--) {
-              if (i == oldDisplayIndex) continue;
-              if (_displayList[i] is _SubFilterHeader) {
-                oldSubFilterId =
-                    (_displayList[i] as _SubFilterHeader).subFilterId;
-                oldParentCatId =
-                    (_displayList[i] as _SubFilterHeader).parentCategoryId;
-                break;
-              } else if (_displayList[i] is _FilterHeader) {
-                oldParentCatId = (_displayList[i] as _FilterHeader).categoryId;
-                break;
-              }
-            }
-            String? newParentCatId;
-            String? newSubFilterId;
-            for (int i = newDisplayIndex - 1; i >= 0; i--) {
-              if (_displayList[i] is _SubFilterHeader) {
-                newSubFilterId =
-                    (_displayList[i] as _SubFilterHeader).subFilterId;
-                newParentCatId =
-                    (_displayList[i] as _SubFilterHeader).parentCategoryId;
-                break;
-              } else if (_displayList[i] is _FilterHeader) {
-                newParentCatId = (_displayList[i] as _FilterHeader).categoryId;
-                break;
-              }
-            }
-            if (oldParentCatId != newParentCatId ||
-                oldSubFilterId != newSubFilterId) {
-              _displayList.removeAt(newDisplayIndex);
-              _displayList.insert(oldDisplayIndex, movedItem);
-              setState(() {});
-              return;
-            }
-            setState(() {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) {
-                  _prepareOrderModeData(allMasterProducts, franchiseeSettings);
-                  setState(() {});
-                }
-              });
-            });
-            _saveOrder(franchiseeMenuRef);
-          } else {
-            _displayList.removeAt(newDisplayIndex);
-            _displayList.insert(oldDisplayIndex, movedItem);
-            setState(() {});
-          }
-        },
-      ),
+        if (movedItem is _FilterHeader) {
+          _saveFilterOrder();
+        } else if (movedItem is _SubFilterHeader) {
+          _saveSubFilterOrder(movedItem.parentCategoryId, []); // Simplifié
+        } else if (movedItem is ({MasterProduct product, FranchiseeMenuItem settings})) {
+          _saveOrder(franchiseeMenuRef);
+        }
+      },
     );
   }
 
+  // --- MODALE DE CONFIGURATION COMPLÈTE ---
   void _showPriceDialog(BuildContext context, CollectionReference menuRef,
       MasterProduct product, FranchiseeMenuItem? currentSettings,
-      {bool isComposite = false}) {
-    final priceController = TextEditingController(
-        text: currentSettings?.price.toStringAsFixed(2) ?? '0.00');
+      {bool isComposite = false,
+        bool isContainer = false,
+        required String franchiseeId,
+        required String franchisorId,
+        List<MasterProduct>? allProducts,
+        Map<String, FranchiseeMenuItem>? franchiseeSettings}) {
+
+    final priceController = TextEditingController(text: currentSettings?.price.toStringAsFixed(2) ?? '0.00');
     final Map<String, TextEditingController> optionControllers = {};
     for (var opt in product.options) {
       double existingPrice = currentSettings?.optionPrices[opt.id] ?? 0.0;
-      optionControllers[opt.id] =
-          TextEditingController(text: existingPrice.toStringAsFixed(2));
+      optionControllers[opt.id] = TextEditingController(text: existingPrice.toStringAsFixed(2));
     }
 
     final List<double> vatRates = [5.5, 10.0, 20.0];
     double selectedVat = currentSettings?.vatRate ?? 10.0;
     double selectedTakeawayVat = currentSettings?.takeawayVatRate ?? 5.5;
-
-    final int position = currentSettings?.position ?? 0;
-
-    TimeOfDay? startTime = currentSettings?.availableStartTime != null
-        ? TimeOfDay(
-            hour: int.parse(currentSettings!.availableStartTime!.split(':')[0]),
-            minute:
-                int.parse(currentSettings.availableStartTime!.split(':')[1]))
-        : null;
-    TimeOfDay? endTime = currentSettings?.availableEndTime != null
-        ? TimeOfDay(
-            hour: int.parse(currentSettings!.availableEndTime!.split(':')[0]),
-            minute: int.parse(currentSettings.availableEndTime!.split(':')[1]))
-        : null;
     bool hidePrice = currentSettings?.hidePriceOnCard ?? false;
+
+    // ✅ CONDITION : Afficher l'icône de gestion si composite OU sections OU ingrédients
+    final bool showCompositionBtn = isComposite || product.sectionIds.isNotEmpty || product.ingredientProductIds.isNotEmpty;
+
+    TimeOfDay? startTime;
+    TimeOfDay? endTime;
+    if(currentSettings?.availableStartTime != null) {
+      final parts = currentSettings!.availableStartTime!.split(':');
+      startTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
+    if(currentSettings?.availableEndTime != null) {
+      final parts = currentSettings!.availableEndTime!.split(':');
+      endTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    }
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Configuration : ${product.name}"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
         content: StatefulBuilder(
           builder: (context, setStateDialog) {
             Future<void> selectTime(bool isStart) async {
-              final TimeOfDay? picked = await showTimePicker(
-                context: context,
-                initialTime: (isStart ? startTime : endTime) ??
-                    const TimeOfDay(hour: 12, minute: 0),
-                builder: (BuildContext context, Widget? child) {
-                  return MediaQuery(
-                    data: MediaQuery.of(context)
-                        .copyWith(alwaysUse24HourFormat: true),
-                    child: child!,
-                  );
-                },
-              );
-              if (picked != null) {
-                setStateDialog(() {
-                  if (isStart) {
-                    startTime = picked;
-                  } else {
-                    endTime = picked;
-                  }
-                });
-              }
+              final picked = await showTimePicker(context: context, initialTime: (isStart ? startTime : endTime) ?? const TimeOfDay(hour: 12, minute: 0));
+              if (picked != null) setStateDialog(() { if (isStart) startTime = picked; else endTime = picked; });
             }
 
-            return SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text("Fiscalité",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: DropdownButtonFormField<double>(
-                          initialValue: selectedVat,
-                          decoration:
-                              const InputDecoration(labelText: "TVA Sur Place"),
-                          items: vatRates
-                              .map((rate) => DropdownMenuItem(
-                                  value: rate, child: Text("$rate %")))
-                              .toList(),
-                          onChanged: (value) =>
-                              setStateDialog(() => selectedVat = value ?? 10.0),
+            return SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ✅ AFFICHER LE BOUTON SI showCompositionBtn est VRAI
+                    if (showCompositionBtn && !isContainer) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.orange.shade800, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          icon: const Icon(Icons.restaurant_menu),
+                          label: const Text("Gérer la composition (Prix & Ingrédients)", style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (context) => FranchiseeCompositeOverridesDialog(
+                                franchiseeId: franchiseeId,
+                                franchisorId: franchisorId,
+                                product: product,
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: DropdownButtonFormField<double>(
-                          initialValue: selectedTakeawayVat,
-                          decoration:
-                              const InputDecoration(labelText: "TVA Emporter"),
-                          items: vatRates
-                              .map((rate) => DropdownMenuItem(
-                                  value: rate, child: Text("$rate %")))
-                              .toList(),
-                          onChanged: (value) => setStateDialog(
-                              () => selectedTakeawayVat = value ?? 5.5),
-                        ),
-                      ),
+                      const Divider(height: 20),
                     ],
-                  ),
-                  const Divider(height: 30),
-                  TextFormField(
-                    controller: priceController,
-                    decoration: const InputDecoration(
-                        labelText: "Prix de base / Défaut (€)",
-                        prefixIcon: Icon(Icons.euro_symbol)),
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                  ),
-                  SwitchListTile(
-                    title: const Text("Masquer le prix sur la carte ?"),
-                    subtitle: const Text("Utile pour les menus à options"),
-                    value: hidePrice,
-                    onChanged: (val) => setStateDialog(() => hidePrice = val),
-                    contentPadding: EdgeInsets.zero,
-                  ),
-                  const Divider(height: 30),
-                  const Text("Disponibilité Horaire (Optionnel)",
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.access_time),
-                          onPressed: () => selectTime(true),
-                          label: Text(startTime == null
-                              ? "Début"
-                              : startTime!.format(context)),
+
+                    if (isContainer) ...[
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 20),
+                        child: ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.indigo, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          icon: const Icon(Icons.folder_open),
+                          label: const Text("Gérer le contenu du dossier", style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (_) => FranchiseeContainerConfigDialog(
+                                containerProduct: product,
+                                allProducts: allProducts ?? [],
+                                franchiseeSettings: franchiseeSettings ?? {},
+                                onUpdateChildPrice: (child, newPrice) {
+                                  _saveChildProductPrice(menuRef, child, newPrice);
+                                },
+                              ),
+                            );
+                          },
                         ),
                       ),
-                      const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 8.0),
-                          child: Text("à")),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          icon: const Icon(Icons.access_time_filled),
-                          onPressed: () => selectTime(false),
-                          label: Text(endTime == null
-                              ? "Fin"
-                              : endTime!.format(context)),
-                        ),
-                      ),
+                      const Divider(height: 20),
                     ],
-                  ),
-                  if (startTime != null || endTime != null)
-                    TextButton(
-                      onPressed: () => setStateDialog(() {
-                        startTime = null;
-                        endTime = null;
-                      }),
-                      child: const Text("Supprimer les horaires",
-                          style: TextStyle(color: Colors.red)),
-                    ),
-                  if (product.options.isNotEmpty) ...[
-                    const Divider(height: 30),
-                    const Text("Prix par Formule / Option",
-                        style: TextStyle(fontWeight: FontWeight.bold)),
+
+                    Text("Prix et Taxes", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    ...product.options.map((opt) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: TextFormField(
-                          controller: optionControllers[opt.id],
-                          decoration: InputDecoration(
-                              labelText: opt.name,
-                              prefixIcon: const Icon(Icons.label_outline),
-                              suffixText: "€"),
-                          keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true),
+                    TextFormField(controller: priceController, decoration: const InputDecoration(labelText: "Prix TTC (€)", prefixIcon: Icon(Icons.euro), border: OutlineInputBorder()), keyboardType: TextInputType.number),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: DropdownButtonFormField<double>(value: vatRates.contains(selectedVat) ? selectedVat : null, items: vatRates.map((r) => DropdownMenuItem(value: r, child: Text("$r%"))).toList(), onChanged: (v) => setStateDialog(() => selectedVat = v!), decoration: const InputDecoration(labelText: "TVA Place", border: OutlineInputBorder()))),
+                        const SizedBox(width: 8),
+                        Expanded(child: DropdownButtonFormField<double>(value: vatRates.contains(selectedTakeawayVat) ? selectedTakeawayVat : null, items: vatRates.map((r) => DropdownMenuItem(value: r, child: Text("$r%"))).toList(), onChanged: (v) => setStateDialog(() => selectedTakeawayVat = v!), decoration: const InputDecoration(labelText: "TVA Emp.", border: OutlineInputBorder()))),
+                      ],
+                    ),
+                    SwitchListTile(title: const Text("Masquer prix (Carte)"), value: hidePrice, onChanged: (v) => setStateDialog(() => hidePrice = v), contentPadding: EdgeInsets.zero),
+
+                    const Divider(height: 24),
+
+                    Text("Disponibilité", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    Row(children: [
+                      Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.start), onPressed: () => selectTime(true), label: Text(startTime?.format(context) ?? "Début"))),
+                      const SizedBox(width: 8),
+                      Expanded(child: OutlinedButton.icon(icon: const Icon(Icons.stop), onPressed: () => selectTime(false), label: Text(endTime?.format(context) ?? "Fin"))),
+                    ]),
+                    if (startTime != null || endTime != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton.icon(
+                          onPressed: () => setStateDialog(() { startTime = null; endTime = null; }),
+                          icon: const Icon(Icons.delete, color: Colors.red, size: 16),
+                          label: const Text("Effacer horaires", style: TextStyle(color: Colors.red)),
                         ),
-                      );
-                    }),
-                  ]
-                ],
+                      ),
+
+                    const Divider(height: 24),
+
+                    if (product.options.isNotEmpty) ...[
+                      Text("Options / Suppléments", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 10),
+                      ...product.options.map((opt) {
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Row(
+                            children: [
+                              Expanded(child: Text(opt.name, style: const TextStyle(fontSize: 14))),
+                              SizedBox(
+                                width: 100,
+                                child: TextFormField(
+                                  controller: optionControllers[opt.id],
+                                  decoration: const InputDecoration(labelText: "Prix €", isDense: true, border: OutlineInputBorder()),
+                                  keyboardType: TextInputType.number,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
               ),
             );
           },
         ),
         actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Annuler")),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
-            onPressed: () {
-              final double? basePrice =
-                  double.tryParse(priceController.text.replaceAll(',', '.'));
-              final Map<String, double> newOptionPrices = {};
-              optionControllers.forEach((id, ctrl) {
-                double? p = double.tryParse(ctrl.text.replaceAll(',', '.'));
-                if (p != null) newOptionPrices[id] = p;
-              });
+              onPressed: () {
+                final double? basePrice = double.tryParse(priceController.text.replaceAll(',', '.'));
 
-              if (basePrice != null && basePrice >= 0) {
-                String? startStr = startTime != null
-                    ? "${startTime!.hour.toString().padLeft(2, '0')}:${startTime!.minute.toString().padLeft(2, '0')}"
-                    : null;
-                String? endStr = endTime != null
-                    ? "${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}"
-                    : null;
+                if (basePrice != null) {
+                  String? startStr = startTime != null ? "${startTime!.hour}:${startTime!.minute.toString().padLeft(2,'0')}" : null;
+                  String? endStr = endTime != null ? "${endTime!.hour}:${endTime!.minute.toString().padLeft(2,'0')}" : null;
 
-                menuRef.doc(product.productId).set({
-                  'masterProductId': product.productId,
-                  'price': basePrice,
-                  'optionPrices': newOptionPrices,
-                  'vatRate': selectedVat,
-                  'takeawayVatRate': selectedTakeawayVat,
-                  'isVisible': true,
-                  'isAvailable': currentSettings?.isAvailable ?? true,
-                  'position': position,
-                  'availableStartTime': startStr,
-                  'availableEndTime': endStr,
-                  'hidePriceOnCard': hidePrice,
-                }, SetOptions(merge: true));
-                Navigator.pop(context);
-              } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-                    content: Text("Veuillez entrer un prix de base valide.")));
-              }
-            },
-            child: const Text("Valider"),
+                  Map<String, double> newOptionPrices = {};
+                  optionControllers.forEach((key, controller) {
+                    double? val = double.tryParse(controller.text.replaceAll(',', '.'));
+                    if (val != null) newOptionPrices[key] = val;
+                  });
+
+                  menuRef.doc(product.productId).set({
+                    'price': basePrice,
+                    'vatRate': selectedVat,
+                    'takeawayVatRate': selectedTakeawayVat,
+                    'hidePriceOnCard': hidePrice,
+                    'availableStartTime': startStr,
+                    'availableEndTime': endStr,
+                    'optionPrices': newOptionPrices,
+                    'masterProductId': product.productId,
+                    'isVisible': true,
+                    'isAvailable': true,
+                    'isContainer': isContainer,
+                    'containerProductIds': product.containerProductIds,
+                  }, SetOptions(merge: true));
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text("Enregistrer")
           ),
+        ],
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// WIDGET CARTE PRODUIT
+// =========================================================================
+
+class FranchiseeProductCard extends StatefulWidget {
+  final MasterProduct product;
+  final FranchiseeMenuItem settings;
+  final String franchiseeId;
+  final String franchisorId;
+  final CollectionReference franchiseeMenuRef;
+  final VoidCallback onTapConfig;
+  final VoidCallback onConfirmDisable;
+  final Function(bool) onToggleStock;
+  final Function(bool) onToggleVisibility;
+
+  const FranchiseeProductCard({
+    super.key,
+    required this.product,
+    required this.settings,
+    required this.franchiseeId,
+    required this.franchisorId,
+    required this.franchiseeMenuRef,
+    required this.onTapConfig,
+    required this.onConfirmDisable,
+    required this.onToggleStock,
+    required this.onToggleVisibility,
+  });
+
+  @override
+  State<FranchiseeProductCard> createState() => _FranchiseeProductCardState();
+}
+
+class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
+  late TextEditingController _priceController;
+
+  @override
+  void initState() {
+    super.initState();
+    _priceController = TextEditingController(text: widget.settings.price.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant FranchiseeProductCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.settings.price != widget.settings.price) {
+      if (!_priceController.text.startsWith(widget.settings.price.toString())) {
+        _priceController.text = widget.settings.price.toString();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _priceController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isVisible = widget.settings.isVisible;
+    final bool isAvailable = widget.settings.isAvailable;
+    final bool hasHours = widget.settings.availableStartTime != null;
+
+    final String? imageUrl = widget.product.photoUrl;
+
+    Color accentColor = Theme.of(context).primaryColor;
+    IconData fallbackIcon = Icons.fastfood;
+    String typeLabel = "";
+    Color cardColor = isVisible ? Colors.white : Colors.grey.shade50;
+
+    if (widget.product.isContainer) {
+      accentColor = Colors.indigo;
+      fallbackIcon = Icons.folder;
+      typeLabel = "Dossier";
+      if (isVisible) cardColor = Colors.indigo.shade50;
+    } else if (widget.product.isComposite) {
+      accentColor = Colors.orange.shade800;
+      fallbackIcon = Icons.restaurant_menu;
+      typeLabel = "Menu";
+    }
+
+    // ✅ CONDITION : Afficher l'icône de gestion si composite OU sections OU ingrédients
+    final bool hasComposition = widget.product.isComposite ||
+        widget.product.sectionIds.isNotEmpty ||
+        widget.product.ingredientProductIds.isNotEmpty;
+
+    return Card(
+      elevation: 2,
+      shadowColor: Colors.black12,
+      margin: const EdgeInsets.only(bottom: 16),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: isVisible ? Colors.transparent : Colors.grey.shade300, width: 1),
+      ),
+      color: cardColor,
+      child: Column(
+        children: [
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // --- IMAGE ---
+                SizedBox(
+                  width: 110,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (imageUrl != null && imageUrl.isNotEmpty)
+                        Image.network(
+                          imageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(accentColor, fallbackIcon),
+                        )
+                      else
+                        _buildPlaceholder(accentColor, fallbackIcon, isMissing: true),
+
+                      if (!isVisible)
+                        Container(
+                          color: Colors.white.withOpacity(0.85),
+                          alignment: Alignment.center,
+                          child: const Chip(label: Text("MASQUÉ", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
+                        )
+                      else if (!isAvailable)
+                        Container(
+                          color: Colors.black.withOpacity(0.6),
+                          alignment: Alignment.center,
+                          child: const Icon(Icons.remove_shopping_cart, color: Colors.white, size: 30),
+                        ),
+
+                      if (typeLabel.isNotEmpty)
+                        Positioned(
+                          top: 0, left: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(color: accentColor, borderRadius: const BorderRadius.only(bottomRight: Radius.circular(10))),
+                            child: Text(typeLabel.toUpperCase(), style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w900)),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+
+                // --- CONTENU ---
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                widget.product.name,
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isVisible ? Colors.black87 : Colors.grey),
+                                maxLines: 2, overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Switch(
+                              value: isVisible,
+                              activeColor: Colors.green,
+                              onChanged: (val) => val ? widget.onToggleVisibility(true) : widget.onConfirmDisable(),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        if (!widget.product.isContainer) ...[
+                          Row(
+                            children: [
+                              const Text("Prix : ", style: TextStyle(color: Colors.grey)),
+                              SizedBox(
+                                width: 80,
+                                height: 30,
+                                child: TextFormField(
+                                  controller: _priceController,
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isAvailable ? Colors.black : Colors.grey),
+                                  decoration: const InputDecoration(
+                                    contentPadding: EdgeInsets.only(bottom: 10),
+                                    border: InputBorder.none,
+                                    suffixText: "€",
+                                  ),
+                                  onFieldSubmitted: (val) {
+                                    final double? newPrice = double.tryParse(val.replaceAll(',', '.'));
+                                    if (newPrice != null) {
+                                      widget.franchiseeMenuRef.doc(widget.product.productId).set({
+                                        'price': newPrice,
+                                        'isAvailable': isAvailable, // Keep existing status
+                                      }, SetOptions(merge: true));
+                                    }
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          children: [
+                            if (hasHours)
+                              _DetailChip(
+                                  icon: Icons.schedule,
+                                  label: "${widget.settings.availableStartTime} - ${widget.settings.availableEndTime}",
+                                  color: Colors.blue.shade700,
+                                  bgColor: Colors.blue.shade50
+                              ),
+
+                            if (isVisible)
+                              isAvailable
+                                  ? _DetailChip(icon: Icons.check, label: "En Stock", color: Colors.green.shade700, bgColor: Colors.green.shade50)
+                                  : _DetailChip(icon: Icons.block, label: "Épuisé", color: Colors.red.shade700, bgColor: Colors.red.shade50),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // --- BARRE D'ACTIONS ---
+          if (isVisible) ...[
+            const Divider(height: 1),
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: widget.onTapConfig,
+                    icon: Icon(
+                        widget.product.isContainer ? Icons.folder_open : (hasComposition ? Icons.restaurant_menu : Icons.tune),
+                        size: 20,
+                        color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800
+                    ),
+                    label: Text(
+                        widget.product.isContainer ? "Ouvrir Dossier" : (hasComposition ? "Gérer Composition" : "Modifier Prix"),
+                        style: TextStyle(
+                            color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800,
+                            fontWeight: hasComposition ? FontWeight.bold : FontWeight.normal
+                        )
+                    ),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: Colors.grey.shade300),
+                Expanded(
+                  child: TextButton.icon(
+                    onPressed: () => widget.onToggleStock(!isAvailable),
+                    icon: Icon(isAvailable ? Icons.remove_circle_outline : Icons.add_circle_outline, size: 20, color: isAvailable ? Colors.orange : Colors.green),
+                    label: Text(isAvailable ? "Rupture" : "Restock", style: TextStyle(color: isAvailable ? Colors.orange.shade900 : Colors.green.shade900)),
+                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                  ),
+                ),
+              ],
+            ),
+          ]
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPlaceholder(Color color, IconData icon, {bool isMissing = false}) {
+    return Container(
+      color: Colors.grey.shade100,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(isMissing ? Icons.image_not_supported : icon, size: 30, color: color.withOpacity(0.4)),
+            if(isMissing) Padding(padding: const EdgeInsets.only(top: 4), child: Text("No Image", style: TextStyle(fontSize: 9, color: Colors.grey.shade500))),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final Color bgColor;
+  const _DetailChip({required this.icon, required this.label, required this.color, required this.bgColor});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
         ],
       ),
     );

@@ -1,0 +1,169 @@
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import '/models.dart';
+
+class FranchiseeContainerConfigDialog extends StatefulWidget {
+  final MasterProduct containerProduct;
+  final List<MasterProduct> allProducts;
+  final Map<String, FranchiseeMenuItem> franchiseeSettings;
+  final Function(MasterProduct, double) onUpdateChildPrice;
+
+  const FranchiseeContainerConfigDialog({
+    super.key,
+    required this.containerProduct,
+    required this.allProducts,
+    required this.franchiseeSettings,
+    required this.onUpdateChildPrice,
+  });
+
+  @override
+  State<FranchiseeContainerConfigDialog> createState() =>
+      _FranchiseeContainerConfigDialogState();
+}
+
+class _FranchiseeContainerConfigDialogState
+    extends State<FranchiseeContainerConfigDialog> {
+  // Contrôleurs pour éditer les prix
+  final Map<String, TextEditingController> _controllers = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeControllers();
+  }
+
+  void _initializeControllers() {
+    // On récupère les produits enfants
+    final children = _getContainerChildren();
+
+    for (var child in children) {
+      // On cherche le prix existant pour ce franchisé, sinon 0.00
+      double currentPrice = 0.0;
+      if (widget.franchiseeSettings.containsKey(child.productId)) {
+        currentPrice = widget.franchiseeSettings[child.productId]!.price;
+      }
+      _controllers[child.id] =
+          TextEditingController(text: currentPrice.toStringAsFixed(2));
+    }
+  }
+
+  @override
+  void dispose() {
+    for (var c in _controllers.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  // --- LOGIQUE CRITIQUE DE RÉCUPÉRATION ---
+  List<MasterProduct> _getContainerChildren() {
+    if (widget.containerProduct.containerProductIds.isEmpty) return [];
+
+    List<MasterProduct> foundChildren = [];
+    for (String childId in widget.containerProduct.containerProductIds) {
+      try {
+        // IMPORTANT : On compare p.id (ID du document) avec l'ID stocké dans la liste
+        final child = widget.allProducts.firstWhere(
+              (p) => p.id == childId,
+        );
+        foundChildren.add(child);
+      } catch (e) {
+        print("Produit enfant introuvable pour l'ID: $childId");
+      }
+    }
+    return foundChildren;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final children = _getContainerChildren();
+
+    return AlertDialog(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("Configuration du Menu"),
+          Text(
+            widget.containerProduct.name,
+            style: const TextStyle(fontSize: 14, color: Colors.grey),
+          ),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        height: 400,
+        child: children.isEmpty
+            ? const Center(
+          child: Text("Ce conteneur semble vide ou les produits liés sont introuvables."),
+        )
+            : ListView.separated(
+          itemCount: children.length,
+          separatorBuilder: (c, i) => const Divider(),
+          itemBuilder: (context, index) {
+            final child = children[index];
+            final controller = _controllers[child.id];
+
+            return ListTile(
+              leading: Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(8),
+                  image: (child.photoUrl != null && child.photoUrl!.isNotEmpty)
+                      ? DecorationImage(
+                      image: CachedNetworkImageProvider(child.photoUrl!),
+                      fit: BoxFit.cover)
+                      : null,
+                ),
+                child: (child.photoUrl == null || child.photoUrl!.isEmpty)
+                    ? const Icon(Icons.fastfood, size: 20, color: Colors.grey)
+                    : null,
+              ),
+              title: Text(child.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(child.isIngredient ? "Ingrédient / Produit Interne" : "Produit standard"),
+              trailing: SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: controller,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: "Prix €",
+                    border: OutlineInputBorder(),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                  ),
+                  onChanged: (val) {
+                    // Sauvegarde automatique ou bouton valider ?
+                    // Ici on peut laisser l'utilisateur valider à la fin ou save direct.
+                  },
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text("Fermer"),
+        ),
+        ElevatedButton(
+          onPressed: () {
+            // Sauvegarder tous les prix
+            children.forEach((child) {
+              final ctrl = _controllers[child.id];
+              if (ctrl != null) {
+                final double? newPrice = double.tryParse(ctrl.text.replaceAll(',', '.'));
+                if (newPrice != null) {
+                  widget.onUpdateChildPrice(child, newPrice);
+                }
+              }
+            });
+            Navigator.pop(context);
+          },
+          child: const Text("Enregistrer tout"),
+        )
+      ],
+    );
+  }
+}
