@@ -16,8 +16,6 @@ class PosContainerDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 1. Récupérer les produits enfants via leurs IDs
-    // On utilise _getContainerChildren pour transformer les IDs (String) en objets (MasterProduct)
     final List<MasterProduct> children = _getContainerChildren();
 
     return Dialog(
@@ -28,7 +26,6 @@ class PosContainerDialog extends StatelessWidget {
         height: 500,
         child: Column(
           children: [
-            // En-tête avec le nom du dossier et bouton fermer
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -80,7 +77,6 @@ class PosContainerDialog extends StatelessWidget {
   Widget _buildProductCard(BuildContext context, MasterProduct product) {
     return InkWell(
       onTap: () {
-        // Au clic, on ferme le modal et on renvoie le produit sélectionné
         Navigator.pop(context);
         onProductSelected(product);
       },
@@ -130,19 +126,15 @@ class PosContainerDialog extends StatelessWidget {
     );
   }
 
-  /// Récupère la liste des objets MasterProduct à partir des IDs stockés dans le conteneur.
-  /// Cette méthode est robuste : elle ignore les IDs qui ne correspondent à aucun produit
-  /// (cas où un produit a été supprimé mais l'ID est resté dans le conteneur).
   List<MasterProduct> _getContainerChildren() {
     if (container.containerProductIds.isEmpty) return [];
 
     return container.containerProductIds.map((childId) {
       try {
-        // Recherche par ID de document (id) et non par productId
         return allProducts.firstWhere((p) => p.id == childId);
       } catch (e) {
         return null;
       }
-    }).whereType<MasterProduct>().toList(); // Filtre les nulls
+    }).whereType<MasterProduct>().toList();
   }
 }

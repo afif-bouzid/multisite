@@ -55,23 +55,26 @@ class _FranchiseeContainerConfigDialogState
     super.dispose();
   }
 
-  // --- LOGIQUE CRITIQUE DE RÉCUPÉRATION ---
+  // --- LOGIQUE CRITIQUE DE RÉCUPÉRATION (MISE À JOUR) ---
+  // Cette méthode garantit que l'ordre d'affichage respecte strictement
+  // l'ordre des IDs présents dans widget.containerProduct.containerProductIds
   List<MasterProduct> _getContainerChildren() {
     if (widget.containerProduct.containerProductIds.isEmpty) return [];
 
-    List<MasterProduct> foundChildren = [];
-    for (String childId in widget.containerProduct.containerProductIds) {
+    return widget.containerProduct.containerProductIds
+        .map((childId) {
       try {
-        // IMPORTANT : On compare p.id (ID du document) avec l'ID stocké dans la liste
-        final child = widget.allProducts.firstWhere(
+        // On cherche l'objet complet correspondant à l'ID
+        return widget.allProducts.firstWhere(
               (p) => p.id == childId,
         );
-        foundChildren.add(child);
       } catch (e) {
         print("Produit enfant introuvable pour l'ID: $childId");
+        return null;
       }
-    }
-    return foundChildren;
+    })
+        .whereType<MasterProduct>() // On retire les nulls (produits non trouvés)
+        .toList();
   }
 
   @override
@@ -94,7 +97,8 @@ class _FranchiseeContainerConfigDialogState
         height: 400,
         child: children.isEmpty
             ? const Center(
-          child: Text("Ce conteneur semble vide ou les produits liés sont introuvables."),
+          child: Text(
+              "Ce conteneur semble vide ou les produits liés sont introuvables."),
         )
             : ListView.separated(
           itemCount: children.length,
@@ -110,31 +114,40 @@ class _FranchiseeContainerConfigDialogState
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
-                  image: (child.photoUrl != null && child.photoUrl!.isNotEmpty)
+                  image: (child.photoUrl != null &&
+                      child.photoUrl!.isNotEmpty)
                       ? DecorationImage(
-                      image: CachedNetworkImageProvider(child.photoUrl!),
+                      image:
+                      CachedNetworkImageProvider(child.photoUrl!),
                       fit: BoxFit.cover)
                       : null,
                 ),
-                child: (child.photoUrl == null || child.photoUrl!.isEmpty)
-                    ? const Icon(Icons.fastfood, size: 20, color: Colors.grey)
+                child: (child.photoUrl == null ||
+                    child.photoUrl!.isEmpty)
+                    ? const Icon(Icons.fastfood,
+                    size: 20, color: Colors.grey)
                     : null,
               ),
-              title: Text(child.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(child.isIngredient ? "Ingrédient / Produit Interne" : "Produit standard"),
+              title: Text(child.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(child.isIngredient
+                  ? "Ingrédient / Produit Interne"
+                  : "Produit standard"),
               trailing: SizedBox(
                 width: 100,
                 child: TextField(
                   controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
                   decoration: const InputDecoration(
                     labelText: "Prix €",
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                   ),
                   onChanged: (val) {
                     // Sauvegarde automatique ou bouton valider ?
-                    // Ici on peut laisser l'utilisateur valider à la fin ou save direct.
+                    // Ici on laisse l'utilisateur valider à la fin via le bouton "Enregistrer tout".
                   },
                 ),
               ),
@@ -150,15 +163,16 @@ class _FranchiseeContainerConfigDialogState
         ElevatedButton(
           onPressed: () {
             // Sauvegarder tous les prix
-            children.forEach((child) {
+            for (var child in children) {
               final ctrl = _controllers[child.id];
               if (ctrl != null) {
-                final double? newPrice = double.tryParse(ctrl.text.replaceAll(',', '.'));
+                final double? newPrice =
+                double.tryParse(ctrl.text.replaceAll(',', '.'));
                 if (newPrice != null) {
                   widget.onUpdateChildPrice(child, newPrice);
                 }
               }
-            });
+            }
             Navigator.pop(context);
           },
           child: const Text("Enregistrer tout"),

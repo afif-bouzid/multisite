@@ -168,6 +168,16 @@ class _ProductViewContentState extends State<ProductViewContent> {
           .where((s) => product.sectionIds.contains(s.sectionId))
           .toList();
 
+      // --- CORRECTION : TRI DES SECTIONS SELON L'ORDRE DÉFINI DANS LE PRODUIT ---
+      sections.sort((a, b) {
+        int indexA = product.sectionIds.indexOf(a.sectionId);
+        int indexB = product.sectionIds.indexOf(b.sectionId);
+        if (indexA == -1) indexA = 999;
+        if (indexB == -1) indexB = 999;
+        return indexA.compareTo(indexB);
+      });
+      // --------------------------------------------------------------------------
+
       final CartItem? configuredItem = await Navigator.of(context).push(
         MaterialPageRoute(
           fullscreenDialog: true,

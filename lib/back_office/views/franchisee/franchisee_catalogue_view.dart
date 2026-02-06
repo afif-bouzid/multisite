@@ -1077,7 +1077,13 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
                     Text("Prix et Taxes", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    TextFormField(controller: priceController, decoration: const InputDecoration(labelText: "Prix TTC (€)", prefixIcon: Icon(Icons.euro), border: OutlineInputBorder()), keyboardType: TextInputType.number),
+                    // ✨ OPTIMISATION : Autofocus activé pour saisie directe
+                    TextFormField(
+                      controller: priceController,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: "Prix TTC (€)", prefixIcon: Icon(Icons.euro), border: OutlineInputBorder()),
+                      keyboardType: TextInputType.number,
+                    ),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -1179,10 +1185,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 }
 
 // =========================================================================
-// WIDGET CARTE PRODUIT
+// WIDGET CARTE PRODUIT - OPTIMISÉ (Stateless)
 // =========================================================================
 
-class FranchiseeProductCard extends StatefulWidget {
+class FranchiseeProductCard extends StatelessWidget {
   final MasterProduct product;
   final FranchiseeMenuItem settings;
   final String franchiseeId;
@@ -1207,62 +1213,33 @@ class FranchiseeProductCard extends StatefulWidget {
   });
 
   @override
-  State<FranchiseeProductCard> createState() => _FranchiseeProductCardState();
-}
-
-class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
-  late TextEditingController _priceController;
-
-  @override
-  void initState() {
-    super.initState();
-    _priceController = TextEditingController(text: widget.settings.price.toString());
-  }
-
-  @override
-  void didUpdateWidget(covariant FranchiseeProductCard oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.settings.price != widget.settings.price) {
-      if (!_priceController.text.startsWith(widget.settings.price.toString())) {
-        _priceController.text = widget.settings.price.toString();
-      }
-    }
-  }
-
-  @override
-  void dispose() {
-    _priceController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final bool isVisible = widget.settings.isVisible;
-    final bool isAvailable = widget.settings.isAvailable;
-    final bool hasHours = widget.settings.availableStartTime != null;
+    final bool isVisible = settings.isVisible;
+    final bool isAvailable = settings.isAvailable;
+    final bool hasHours = settings.availableStartTime != null;
 
-    final String? imageUrl = widget.product.photoUrl;
+    final String? imageUrl = product.photoUrl;
 
+    // --- COULEURS ET STYLE ---
     Color accentColor = Theme.of(context).primaryColor;
     IconData fallbackIcon = Icons.fastfood;
     String typeLabel = "";
     Color cardColor = isVisible ? Colors.white : Colors.grey.shade50;
 
-    if (widget.product.isContainer) {
+    if (product.isContainer) {
       accentColor = Colors.indigo;
       fallbackIcon = Icons.folder;
       typeLabel = "Dossier";
       if (isVisible) cardColor = Colors.indigo.shade50;
-    } else if (widget.product.isComposite) {
+    } else if (product.isComposite) {
       accentColor = Colors.orange.shade800;
       fallbackIcon = Icons.restaurant_menu;
       typeLabel = "Menu";
     }
 
-    // ✅ CONDITION : Afficher l'icône de gestion si composite OU sections OU ingrédients
-    final bool hasComposition = widget.product.isComposite ||
-        widget.product.sectionIds.isNotEmpty ||
-        widget.product.ingredientProductIds.isNotEmpty;
+    final bool hasComposition = product.isComposite ||
+        product.sectionIds.isNotEmpty ||
+        product.ingredientProductIds.isNotEmpty;
 
     return Card(
       elevation: 2,
@@ -1287,10 +1264,11 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
                     fit: StackFit.expand,
                     children: [
                       if (imageUrl != null && imageUrl.isNotEmpty)
-                        Image.network(
-                          imageUrl,
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => _buildPlaceholder(accentColor, fallbackIcon),
+                          placeholder: (context, url) => _buildPlaceholder(accentColor, fallbackIcon),
+                          errorWidget: (context, url, error) => _buildPlaceholder(accentColor, fallbackIcon, isMissing: true),
                         )
                       else
                         _buildPlaceholder(accentColor, fallbackIcon, isMissing: true),
@@ -1321,7 +1299,7 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
                   ),
                 ),
 
-                // --- CONTENU ---
+                // --- CONTENU OPTIMISÉ ---
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -1333,7 +1311,7 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                widget.product.name,
+                                product.name,
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isVisible ? Colors.black87 : Colors.grey),
                                 maxLines: 2, overflow: TextOverflow.ellipsis,
                               ),
@@ -1341,41 +1319,28 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
                             Switch(
                               value: isVisible,
                               activeColor: Colors.green,
-                              onChanged: (val) => val ? widget.onToggleVisibility(true) : widget.onConfirmDisable(),
+                              onChanged: (val) => val ? onToggleVisibility(true) : onConfirmDisable(),
                             ),
                           ],
                         ),
                         const Spacer(),
-                        if (!widget.product.isContainer) ...[
-                          Row(
-                            children: [
-                              const Text("Prix : ", style: TextStyle(color: Colors.grey)),
-                              SizedBox(
-                                width: 80,
-                                height: 30,
-                                child: TextFormField(
-                                  controller: _priceController,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isAvailable ? Colors.black : Colors.grey),
-                                  decoration: const InputDecoration(
-                                    contentPadding: EdgeInsets.only(bottom: 10),
-                                    border: InputBorder.none,
-                                    suffixText: "€",
-                                  ),
-                                  onFieldSubmitted: (val) {
-                                    final double? newPrice = double.tryParse(val.replaceAll(',', '.'));
-                                    if (newPrice != null) {
-                                      widget.franchiseeMenuRef.doc(widget.product.productId).set({
-                                        'price': newPrice,
-                                        'isAvailable': isAvailable, // Keep existing status
-                                      }, SetOptions(merge: true));
-                                    }
-                                  },
-                                ),
+                        // ✨ PRIX AFFICHÉ STATIQUEMENT (Pas d'input ici)
+                        if (!product.isContainer)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                                color: isVisible ? Colors.blueGrey.shade50 : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8)
+                            ),
+                            child: Text(
+                              "${settings.price.toStringAsFixed(2)} €",
+                              style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                  color: isVisible ? accentColor : Colors.grey
                               ),
-                            ],
+                            ),
                           ),
-                        ],
                         const SizedBox(height: 8),
                         Wrap(
                           spacing: 8,
@@ -1383,7 +1348,7 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
                             if (hasHours)
                               _DetailChip(
                                   icon: Icons.schedule,
-                                  label: "${widget.settings.availableStartTime} - ${widget.settings.availableEndTime}",
+                                  label: "${settings.availableStartTime} - ${settings.availableEndTime}",
                                   color: Colors.blue.shade700,
                                   bgColor: Colors.blue.shade50
                               ),
@@ -1402,39 +1367,61 @@ class _FranchiseeProductCardState extends State<FranchiseeProductCard> {
             ),
           ),
 
-          // --- BARRE D'ACTIONS ---
+          // --- BARRE D'ACTIONS OPTIMISÉE ---
           if (isVisible) ...[
             const Divider(height: 1),
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: widget.onTapConfig,
-                    icon: Icon(
-                        widget.product.isContainer ? Icons.folder_open : (hasComposition ? Icons.restaurant_menu : Icons.tune),
-                        size: 20,
-                        color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2, // Plus d'espace pour le bouton principal
+                    child: InkWell(
+                      onTap: onTapConfig,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                                product.isContainer ? Icons.folder_open : (hasComposition ? Icons.restaurant_menu : Icons.settings_outlined),
+                                size: 20,
+                                color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                                product.isContainer ? "OUVRIR DOSSIER" : (hasComposition ? "COMPOSITION & PRIX" : "PRIX & CONFIG"),
+                                style: TextStyle(
+                                    color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13
+                                )
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                    label: Text(
-                        widget.product.isContainer ? "Ouvrir Dossier" : (hasComposition ? "Gérer Composition" : "Modifier Prix"),
-                        style: TextStyle(
-                            color: hasComposition ? Colors.orange.shade800 : Colors.grey.shade800,
-                            fontWeight: hasComposition ? FontWeight.bold : FontWeight.normal
-                        )
+                  ),
+                  VerticalDivider(width: 1, indent: 8, endIndent: 8, color: Colors.grey.shade300),
+                  Expanded(
+                    flex: 1, // Bouton rapide pour le stock
+                    child: InkWell(
+                      onTap: () => onToggleStock(!isAvailable),
+                      child: Container(
+                        color: isAvailable ? Colors.transparent : Colors.orange.shade50,
+                        alignment: Alignment.center,
+                        child: Text(
+                          isAvailable ? "Mettre en Rupture" : "Restocker",
+                          style: TextStyle(
+                            color: isAvailable ? Colors.red.shade700 : Colors.green.shade700,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     ),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
                   ),
-                ),
-                Container(width: 1, height: 24, color: Colors.grey.shade300),
-                Expanded(
-                  child: TextButton.icon(
-                    onPressed: () => widget.onToggleStock(!isAvailable),
-                    icon: Icon(isAvailable ? Icons.remove_circle_outline : Icons.add_circle_outline, size: 20, color: isAvailable ? Colors.orange : Colors.green),
-                    label: Text(isAvailable ? "Rupture" : "Restock", style: TextStyle(color: isAvailable ? Colors.orange.shade900 : Colors.green.shade900)),
-                    style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ]
         ],
