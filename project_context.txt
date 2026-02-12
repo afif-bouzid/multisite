@@ -3063,7 +3063,6 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
 ==================================================
 FILE PATH: lib/back_office/views/franchisor/product_creation_view.dart
 ==================================================
-
 import 'package:flutter/material.dart';
 import '../../../models.dart';
 class FranchisorProductCreationView extends StatefulWidget {
@@ -7107,33 +7106,68 @@ class SectionsView extends StatelessWidget {
               ),
             );
           }
+          sections.sort((a, b) => a.title.compareTo(b.title));
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: sections.length,
             separatorBuilder: (c, i) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final section = sections[index];
-              return Container(
-                decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2))
-                    ]),
-                child: ListTile(
-                  title: Text(section.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                      "${section.items.length} produits • ${section.selectionMin}-${section.selectionMax} choix"),
-                  trailing: Row(
+              return _buildSectionCard(context, section, repository);
+            },
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add),
+        label: const Text("Nouvelle Section",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => const SectionFormView())),
+      ),
+    );
+  }
+  Widget _buildSectionCard(BuildContext context, ProductSection section, FranchiseRepository repo) {
+    return Container(
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+                color: Colors.black.withOpacity(0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2))
+          ]),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (context) => SectionFormView(sectionToEdit: section))),
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      section.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                  ),
+                  Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       _buildActionButton(
                         icon: Icons.edit,
-                        color: Colors.blue,
+                        color: Colors.blueGrey,
                         onTap: () => Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -7143,7 +7177,7 @@ class SectionsView extends StatelessWidget {
                       const SizedBox(width: 8),
                       _buildActionButton(
                         icon: Icons.delete_outline,
-                        color: Colors.red,
+                        color: Colors.redAccent,
                         onTap: () async {
                           final confirm = await showDialog<bool>(
                               context: context,
@@ -7166,28 +7200,42 @@ class SectionsView extends StatelessWidget {
                                 ],
                               ));
                           if (confirm == true) {
-                            await repository.deleteSection(section.sectionId);
+                            await repo.deleteSection(section.sectionId);
                           }
                         },
                       ),
                     ],
                   ),
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.add),
-        label: const Text("Nouvelle Section",
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const SectionFormView())),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildInfoBadge(
+                    icon: _getTypeIcon(section.type),
+                    label: _getTypeLabel(section.type),
+                    color: _getTypeColor(section.type),
+                    isBold: true,
+                  ),
+                  _buildInfoBadge(
+                    icon: Icons.unfold_more_rounded,
+                    label: "Choix : ${section.selectionMin} - ${section.selectionMax}",
+                    color: Colors.grey.shade700,
+                    bgColor: Colors.grey.shade100,
+                  ),
+                  _buildInfoBadge(
+                    icon: Icons.fastfood_rounded,
+                    label: "${section.items.length} produits",
+                    color: Colors.blueGrey.shade700,
+                    bgColor: Colors.blueGrey.shade50,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -7209,6 +7257,59 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
+  Widget _buildInfoBadge({
+    required IconData icon,
+    required String label,
+    required Color color,
+    Color? bgColor,
+    bool isBold = false,
+  }) {
+    final background = bgColor ?? color.withOpacity(0.12);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: isBold ? FontWeight.w600 : FontWeight.w500,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  String _getTypeLabel(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('radio') || t.contains('unique')) return 'Choix Unique';
+    if (t.contains('check') || t.contains('multi')) return 'Choix Multiples';
+    if (t.contains('quantity') || t.contains('increment')) return 'Quantité (Compteur)';
+    return 'Standard';
+  }
+  Color _getTypeColor(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE65100);
+    if (t.contains('check') || t.contains('multi')) return const Color(0xFF1565C0);
+    if (t.contains('quantity') || t.contains('increment')) return const Color(0xFF2E7D32);
+    return Colors.grey.shade800;
+  }
+  IconData _getTypeIcon(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('radio') || t.contains('unique')) return Icons.radio_button_checked;
+    if (t.contains('check') || t.contains('multi')) return Icons.check_box;
+    if (t.contains('quantity') || t.contains('increment')) return Icons.exposure_plus_1;
+    return Icons.widgets;
+  }
 }
 class SectionFormView extends StatefulWidget {
   final ProductSection? sectionToEdit;
@@ -7221,7 +7322,7 @@ class _SectionFormViewState extends State<SectionFormView> {
   final _titleController = TextEditingController();
   final _minController = TextEditingController(text: "0");
   final _maxController = TextEditingController(text: "1");
-  String _type = 'checkbox'; 
+  String _type = 'checkbox';
   List<SectionItem> _items = [];
   bool _isSaving = false;
   final FranchiseRepository _repository = FranchiseRepository();
@@ -7517,7 +7618,8 @@ class _SectionFormViewState extends State<SectionFormView> {
                                   border: UnderlineInputBorder(),
                                 ),
                                 onChanged: (val) {
-                                  final p = double.tryParse(val.replaceAll(',', '.')) ?? 0.0;
+                                  final normalized = val.replaceAll(',', '.');
+                                  final p = double.tryParse(normalized) ?? 0.0;
                                   item.supplementPrice = p;
                                 },
                               ),
@@ -7564,7 +7666,7 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String? _selectedFilterId; 
+  String? _selectedFilterId;
   List<MasterProduct> _selectedProducts = [];
   @override
   void initState() {
@@ -8540,18 +8642,19 @@ class _FranchiseeContainerConfigDialogState
   }
   List<MasterProduct> _getContainerChildren() {
     if (widget.containerProduct.containerProductIds.isEmpty) return [];
-    List<MasterProduct> foundChildren = [];
-    for (String childId in widget.containerProduct.containerProductIds) {
+    return widget.containerProduct.containerProductIds
+        .map((childId) {
       try {
-        final child = widget.allProducts.firstWhere(
+        return widget.allProducts.firstWhere(
               (p) => p.id == childId,
         );
-        foundChildren.add(child);
       } catch (e) {
         print("Produit enfant introuvable pour l'ID: $childId");
+        return null;
       }
-    }
-    return foundChildren;
+    })
+        .whereType<MasterProduct>() 
+        .toList();
   }
   @override
   Widget build(BuildContext context) {
@@ -8572,7 +8675,8 @@ class _FranchiseeContainerConfigDialogState
         height: 400,
         child: children.isEmpty
             ? const Center(
-          child: Text("Ce conteneur semble vide ou les produits liés sont introuvables."),
+          child: Text(
+              "Ce conteneur semble vide ou les produits liés sont introuvables."),
         )
             : ListView.separated(
           itemCount: children.length,
@@ -8587,27 +8691,36 @@ class _FranchiseeContainerConfigDialogState
                 decoration: BoxDecoration(
                   color: Colors.grey[200],
                   borderRadius: BorderRadius.circular(8),
-                  image: (child.photoUrl != null && child.photoUrl!.isNotEmpty)
+                  image: (child.photoUrl != null &&
+                      child.photoUrl!.isNotEmpty)
                       ? DecorationImage(
-                      image: CachedNetworkImageProvider(child.photoUrl!),
+                      image:
+                      CachedNetworkImageProvider(child.photoUrl!),
                       fit: BoxFit.cover)
                       : null,
                 ),
-                child: (child.photoUrl == null || child.photoUrl!.isEmpty)
-                    ? const Icon(Icons.fastfood, size: 20, color: Colors.grey)
+                child: (child.photoUrl == null ||
+                    child.photoUrl!.isEmpty)
+                    ? const Icon(Icons.fastfood,
+                    size: 20, color: Colors.grey)
                     : null,
               ),
-              title: Text(child.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(child.isIngredient ? "Ingrédient / Produit Interne" : "Produit standard"),
+              title: Text(child.name,
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Text(child.isIngredient
+                  ? "Ingrédient / Produit Interne"
+                  : "Produit standard"),
               trailing: SizedBox(
                 width: 100,
                 child: TextField(
                   controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true),
                   decoration: const InputDecoration(
                     labelText: "Prix €",
                     border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                    contentPadding:
+                    EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                   ),
                   onChanged: (val) {
                   },
@@ -8624,15 +8737,16 @@ class _FranchiseeContainerConfigDialogState
         ),
         ElevatedButton(
           onPressed: () {
-            children.forEach((child) {
+            for (var child in children) {
               final ctrl = _controllers[child.id];
               if (ctrl != null) {
-                final double? newPrice = double.tryParse(ctrl.text.replaceAll(',', '.'));
+                final double? newPrice =
+                double.tryParse(ctrl.text.replaceAll(',', '.'));
                 if (newPrice != null) {
                   widget.onUpdateChildPrice(child, newPrice);
                 }
               }
-            });
+            }
             Navigator.pop(context);
           },
           child: const Text("Enregistrer tout"),
@@ -14444,6 +14558,9 @@ class CompositeProductDialog extends StatefulWidget {
   final double basePrice;
   final double vatRate;
   final List<ProductSection> allSections;
+  final ProductOption? initialOption;
+  final Map<String, List<SectionItem>>? initialSelectedOptions;
+  final List<String>? initialRemovedIngredients;
   const CompositeProductDialog({
     super.key,
     required this.product,
@@ -14451,6 +14568,9 @@ class CompositeProductDialog extends StatefulWidget {
     required this.basePrice,
     required this.vatRate,
     required this.allSections,
+    this.initialOption,
+    this.initialSelectedOptions,
+    this.initialRemovedIngredients,
   });
   @override
   State<CompositeProductDialog> createState() => _CompositeProductDialogState();
@@ -14467,8 +14587,18 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
   @override
   void initState() {
     super.initState();
-    if (widget.product.options.isNotEmpty) {
+    if (widget.initialOption != null) {
+      _selectedOption = widget.initialOption;
+    } else if (widget.product.options.isNotEmpty) {
       _selectedOption = widget.product.options.first;
+    }
+    if (widget.initialSelectedOptions != null) {
+      widget.initialSelectedOptions!.forEach((key, list) {
+        _selectedOptions[key] = List.from(list);
+      });
+    }
+    if (widget.initialRemovedIngredients != null) {
+      _removedIngredientProductIds.addAll(widget.initialRemovedIngredients!);
     }
     _loadSections();
     _loadSupplementOverrides();
@@ -14478,16 +14608,19 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
   }
   void _loadSections() {
     setState(() => _isLoadingSections = true);
-    final List<String> targetSectionIds = _selectedOption != null && _selectedOption!.sectionIds.isNotEmpty
+    final List<String> sectionsToDisplayIds =
+    _selectedOption != null && _selectedOption!.sectionIds.isNotEmpty
         ? _selectedOption!.sectionIds
         : widget.product.sectionIds;
     List<ProductSection> sections = widget.allSections
-        .where((s) => targetSectionIds.contains(s.sectionId))
+        .where((s) => sectionsToDisplayIds.contains(s.sectionId))
         .toList();
     sections.sort((a, b) {
-      int indexA = targetSectionIds.indexOf(a.sectionId);
-      int indexB = targetSectionIds.indexOf(b.sectionId);
-      return (indexA == -1 ? 999 : indexA).compareTo(indexB == -1 ? 999 : indexB);
+      int indexA = widget.product.sectionIds.indexOf(a.sectionId);
+      int indexB = widget.product.sectionIds.indexOf(b.sectionId);
+      if (indexA == -1) indexA = 999;
+      if (indexB == -1) indexB = 999;
+      return indexA.compareTo(indexB);
     });
     setState(() {
       _relevantSections = sections;
@@ -14513,13 +14646,13 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
             backgroundColor: Colors.grey.shade100,
             labelStyle: TextStyle(
                 color: isSelected ? Colors.black : Colors.black87,
-                fontWeight: isSelected ? FontWeight.w900 : FontWeight.normal
-            ),
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.normal),
             onSelected: (selected) {
               if (selected) {
                 setState(() {
                   _selectedOption = option;
-                  _selectedOptions.clear(); 
+                  _selectedOptions
+                      .clear(); 
                 });
                 _loadSections(); 
               }
@@ -14542,7 +14675,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
             .where('productId', whereIn: sublist)
             .get();
         for (var doc in snapshot.docs) {
-          loadedIngredients.add(MasterProduct.fromFirestore(doc.data(), doc.id));
+          loadedIngredients
+              .add(MasterProduct.fromFirestore(doc.data(), doc.id));
         }
       }
       if (mounted) setState(() => _baseIngredients = loadedIngredients);
@@ -14572,7 +14706,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
   void _onOptionSelected(ProductSection section, SectionItem item) {
     setState(() {
       final sectionId = section.sectionId;
-      if (!_selectedOptions.containsKey(sectionId)) _selectedOptions[sectionId] = [];
+      if (!_selectedOptions.containsKey(sectionId))
+        _selectedOptions[sectionId] = [];
       List<SectionItem> selections = _selectedOptions[sectionId]!;
       final isSelected = selections.any((i) => i.product.id == item.product.id);
       if (section.type == 'radio') {
@@ -14605,7 +14740,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
           _showMaxSnackBar(section.selectionMax);
         }
       } else if (qty > 0) {
-        final index = selections.indexWhere((i) => i.product.id == item.product.id);
+        final index =
+        selections.indexWhere((i) => i.product.id == item.product.id);
         if (index != -1) selections.removeAt(index);
       }
     });
@@ -14624,12 +14760,14 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       _supplementOverrides[item.product.productId] ?? item.supplementPrice;
   bool _areMinimumsMet() {
     for (var section in _relevantSections) {
-      if ((_selectedOptions[section.sectionId]?.length ?? 0) < section.selectionMin) return false;
+      if ((_selectedOptions[section.sectionId]?.length ?? 0) <
+          section.selectionMin) return false;
     }
     return true;
   }
   void _validateAndClose() {
-    double currentTotal = widget.basePrice + (_selectedOption?.priceOverride ?? 0.0);
+    double currentTotal =
+        widget.basePrice + (_selectedOption?.priceOverride ?? 0.0);
     _selectedOptions.forEach((_, items) {
       for (var item in items) {
         currentTotal += _getFinalSupplementPrice(item);
@@ -14651,7 +14789,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
   @override
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
-    double currentTotal = widget.basePrice + (_selectedOption?.priceOverride ?? 0.0);
+    double currentTotal =
+        widget.basePrice + (_selectedOption?.priceOverride ?? 0.0);
     _selectedOptions.forEach((_, items) {
       for (var item in items) {
         currentTotal += _getFinalSupplementPrice(item);
@@ -14668,7 +14807,9 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
         children: [
           Text("COMPOSITION : ${widget.product.name.toUpperCase()}",
               style: const TextStyle(
-                  fontWeight: FontWeight.w900, fontSize: 26, color: AppColors.bkBlack)),
+                  fontWeight: FontWeight.w900,
+                  fontSize: 26,
+                  color: AppColors.bkBlack)),
           const Divider(thickness: 2, color: AppColors.bkBlack),
         ],
       ),
@@ -14690,31 +14831,57 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                     border: Border.all(color: Colors.grey.shade300, width: 1.5),
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
-                      BoxShadow(color: Colors.grey.shade100, blurRadius: 4, offset: const Offset(0, 2))
+                      BoxShadow(
+                          color: Colors.grey.shade100,
+                          blurRadius: 4,
+                          offset: const Offset(0, 2))
                     ],
                   ),
                   child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 12),
                     title: const Text("INGRÉDIENTS DE BASE",
-                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w900, fontSize: 18)),
                     subtitle: Padding(
                       padding: const EdgeInsets.only(top: 4.0),
                       child: _removedIngredientProductIds.isEmpty
                           ? const Text("Recette Standard",
-                          style: TextStyle(fontSize: 16, color: Colors.green, fontWeight: FontWeight.bold))
+                          style: TextStyle(
+                              fontSize: 16,
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold))
                           : Text(
                           "SANS : ${_baseIngredients.where((p) => _removedIngredientProductIds.contains(p.productId)).map((p) => p.name).join(", ")}",
-                          style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16)),
+                          style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16)),
                     ),
                     trailing: FilledButton.icon(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.black,
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                       icon: const Icon(Icons.edit, size: 20),
                       label: const Text("MODIFIER"),
-                      onPressed: () {
+                      onPressed: () async {
+                        final result = await showDialog<List<String>>(
+                          context: context,
+                          builder: (context) => _IngredientCustomizationDialog(
+                            baseIngredients: _baseIngredients,
+                            initiallyRemovedIds: _removedIngredientProductIds,
+                          ),
+                        );
+                        if (result != null) {
+                          setState(() {
+                            _removedIngredientProductIds.clear();
+                            _removedIngredientProductIds.addAll(result);
+                          });
+                        }
                       },
                     ),
                   ),
@@ -14723,8 +14890,10 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                 const Center(
                     child: Padding(
                         padding: EdgeInsets.all(40),
-                        child: Text("Aucune option disponible pour cette configuration.",
-                            style: TextStyle(color: Colors.grey, fontSize: 18)))),
+                        child: Text(
+                            "Aucune option disponible pour cette configuration.",
+                            style:
+                            TextStyle(color: Colors.grey, fontSize: 18)))),
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('users')
@@ -14735,7 +14904,9 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                   Map<String, bool> stockMap = {};
                   if (snapshot.hasData) {
                     for (var doc in snapshot.data!.docs) {
-                      stockMap[doc.id] = (doc.data() as Map<String, dynamic>)['isAvailable'] ?? true;
+                      stockMap[doc.id] =
+                          (doc.data() as Map<String, dynamic>)['isAvailable'] ??
+                              true;
                     }
                   }
                   return ListView.separated(
@@ -14745,28 +14916,46 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                     separatorBuilder: (_, __) => const SizedBox(height: 30),
                     itemBuilder: (context, index) {
                       final section = _relevantSections[index];
-                      final selections = _selectedOptions[section.sectionId] ?? [];
-                      final isMinMet = selections.length >= section.selectionMin;
+                      final selections =
+                          _selectedOptions[section.sectionId] ?? [];
+                      final isMinMet =
+                          selections.length >= section.selectionMin;
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 12),
                             margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: isMinMet ? AppColors.bkBlack : Colors.red.shade700,
+                              color: isMinMet
+                                  ? AppColors.bkBlack
+                                  : Colors.red.shade700,
                               borderRadius: BorderRadius.circular(12),
-                              boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
+                              boxShadow: const [
+                                BoxShadow(
+                                    color: Colors.black12,
+                                    blurRadius: 4,
+                                    offset: Offset(0, 2))
+                              ],
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(isMinMet ? Icons.check_circle : Icons.info_outline, color: Colors.white, size: 24),
+                                Icon(
+                                    isMinMet
+                                        ? Icons.check_circle
+                                        : Icons.info_outline,
+                                    color: Colors.white,
+                                    size: 24),
                                 const SizedBox(width: 12),
                                 Text(
                                   "${section.title.toUpperCase()} (${selections.length} / ${section.selectionMax})",
                                   style: const TextStyle(
-                                      color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 0.5),
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      letterSpacing: 0.5),
                                 ),
                               ],
                             ),
@@ -14774,7 +14963,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                           GridView.builder(
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
-                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            gridDelegate:
+                            const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 3,
                               childAspectRatio: 2.6,
                               crossAxisSpacing: 16,
@@ -14783,21 +14973,32 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                             itemCount: section.items.length,
                             itemBuilder: (context, itemIndex) {
                               final item = section.items[itemIndex];
-                              final isAvailable = stockMap[item.product.productId] ?? true;
+                              final isAvailable =
+                                  stockMap[item.product.productId] ?? true;
                               final supplement = _getFinalSupplementPrice(item);
                               int qty = 0;
                               bool isSelected = false;
                               if (section.type == 'increment') {
-                                qty = selections.where((i) => i.product.id == item.product.id).length;
+                                qty = selections
+                                    .where((i) => i.product.id == item.product.id)
+                                    .length;
                                 isSelected = qty > 0;
                               } else {
-                                isSelected = selections.any((i) => i.product.id == item.product.id);
+                                isSelected = selections
+                                    .any((i) => i.product.id == item.product.id);
                               }
-                              final maxReached = selections.length >= section.selectionMax;
-                              bool canInteract = isAvailable || isSelected || qty > 0;
+                              final maxReached =
+                                  selections.length >= section.selectionMax;
+                              bool canInteract =
+                                  isAvailable || isSelected || qty > 0;
                               bool isDisabled = !canInteract ||
-                                  (section.type == 'increment' && maxReached && qty == 0) ||
-                                  (section.type != 'increment' && !isSelected && maxReached && section.type != 'radio');
+                                  (section.type == 'increment' &&
+                                      maxReached &&
+                                      qty == 0) ||
+                                  (section.type != 'increment' &&
+                                      !isSelected &&
+                                      maxReached &&
+                                      section.type != 'radio');
                               return _buildOptionCard(
                                 section: section,
                                 item: item,
@@ -14833,7 +15034,10 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
           child: TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text("ANNULER",
-                  style: TextStyle(color: Colors.grey, fontSize: 18, fontWeight: FontWeight.bold))),
+                  style: TextStyle(
+                      color: Colors.grey,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold))),
         ),
         const SizedBox(width: 16),
         SizedBox(
@@ -14841,20 +15045,27 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
           width: 250,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _areMinimumsMet() ? AppColors.bkYellow : Colors.grey.shade300,
+              backgroundColor: _areMinimumsMet()
+                  ? AppColors.bkYellow
+                  : Colors.grey.shade300,
               foregroundColor: AppColors.bkBlack,
               elevation: 4,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
             ),
             onPressed: _areMinimumsMet() ? _validateAndClose : null,
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text("AJOUTER", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                const Text("AJOUTER",
+                    style:
+                    TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                 if (currentTotal > 0) ...[
-                  const VerticalDivider(width: 24, thickness: 1, color: Colors.black26),
+                  const VerticalDivider(
+                      width: 24, thickness: 1, color: Colors.black26),
                   Text("${currentTotal.toStringAsFixed(2)} €",
-                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.w900, fontSize: 18)),
                 ]
               ],
             ),
@@ -14898,9 +15109,15 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
                   child: section.type == 'radio'
-                      ? Icon(isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
+                      ? Icon(
+                      isSelected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
                       color: isDisabled ? Colors.grey : Colors.black)
-                      : Icon(isSelected ? Icons.check_box : Icons.check_box_outline_blank,
+                      : Icon(
+                      isSelected
+                          ? Icons.check_box
+                          : Icons.check_box_outline_blank,
                       color: isDisabled ? Colors.grey : Colors.black),
                 ),
               Expanded(
@@ -14914,16 +15131,25 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         fontSize: 15,
-                        fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
+                        fontWeight:
+                        isActive ? FontWeight.w900 : FontWeight.w600,
                         color: isDisabled ? Colors.grey : Colors.black,
-                        decoration: !isAvailable ? TextDecoration.lineThrough : null,
+                        decoration:
+                        !isAvailable ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     if (!isAvailable)
-                      const Text("ÉPUISÉ", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 11)),
+                      const Text("ÉPUISÉ",
+                          style: TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 11)),
                     if (supplementPrice > 0 && isAvailable)
                       Text("+ ${supplementPrice.toStringAsFixed(2)} €",
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.black54)),
+                          style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black54)),
                   ],
                 ),
               ),
@@ -14931,9 +15157,18 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    _buildIncBtn(Icons.remove, quantity > 0, () => _onIncrementOption(section, item, -1), isRed: true),
-                    SizedBox(width: 32, child: Center(child: Text("$quantity", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)))),
-                    _buildIncBtn(Icons.add, !isDisabled && isAvailable, () => _onIncrementOption(section, item, 1)),
+                    _buildIncBtn(Icons.remove, quantity > 0,
+                            () => _onIncrementOption(section, item, -1),
+                        isRed: true),
+                    SizedBox(
+                        width: 32,
+                        child: Center(
+                            child: Text("$quantity",
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18)))),
+                    _buildIncBtn(Icons.add, !isDisabled && isAvailable,
+                            () => _onIncrementOption(section, item, 1)),
                   ],
                 )
             ],
@@ -14942,16 +15177,21 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       ),
     );
   }
-  Widget _buildIncBtn(IconData icon, bool enabled, VoidCallback onTap, {bool isRed = false}) {
+  Widget _buildIncBtn(IconData icon, bool enabled, VoidCallback onTap,
+      {bool isRed = false}) {
     return InkWell(
       onTap: enabled ? onTap : null,
       child: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          color: enabled ? (isRed ? Colors.red.shade100 : Colors.black) : Colors.grey.shade200,
+          color: enabled
+              ? (isRed ? Colors.red.shade100 : Colors.black)
+              : Colors.grey.shade200,
           shape: BoxShape.circle,
         ),
-        child: Icon(icon, size: 16, color: enabled ? (isRed ? Colors.red : Colors.white) : Colors.grey),
+        child: Icon(icon,
+            size: 16,
+            color: enabled ? (isRed ? Colors.red : Colors.white) : Colors.grey),
       ),
     );
   }
@@ -14986,7 +15226,7 @@ class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
                 const SizedBox(width: 12),
                 const Text("Historique Session en cours",
                     style:
-                        TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                    TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close, size: 28),
@@ -15042,7 +15282,7 @@ class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
                                   ? tx.identifier
                                   : "Ticket #${tx.id.substring(0, 5).toUpperCase()}",
                               style:
-                                  const TextStyle(fontWeight: FontWeight.bold),
+                              const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
                                 DateFormat('dd/MM HH:mm').format(tx.timestamp)),
@@ -15220,13 +15460,15 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
                       List<dynamic> optionsGroups = [];
                       if (item['options'] is List) {
                         optionsGroups = item['options'];
-                      } else if (item['selectedOptions'] is List)
+                      } else if (item['selectedOptions'] is List) {
                         optionsGroups = item['selectedOptions'];
+                      }
                       List<dynamic> removedIngredients = [];
                       if (item['removedIngredientNames'] is List) {
                         removedIngredients = item['removedIngredientNames'];
-                      } else if (item['removedIngredients'] is List)
+                      } else if (item['removedIngredients'] is List) {
                         removedIngredients = item['removedIngredients'];
+                      }
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: Column(
@@ -15263,22 +15505,20 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
                                         final subName = subOpt['name'] ?? '';
                                         final subPrice =
                                             (subOpt['supplementPrice'] as num?)
-                                                    ?.toDouble() ??
+                                                ?.toDouble() ??
                                                 0.0;
                                         return _buildOptionLine(
                                             subName, subPrice);
                                       }).toList(),
                                     );
-                                  }
-                                  else {
+                                  } else {
                                     final subName = opt['name'] ?? '';
                                     final subPrice =
                                         (opt['price'] as num?)?.toDouble() ??
                                             0.0;
                                     return _buildOptionLine(subName, subPrice);
                                   }
-                                }
-                                else if (opt is String) {
+                                } else if (opt is String) {
                                   return _buildOptionLine(opt, 0.0);
                                 }
                                 return const SizedBox.shrink();
@@ -15367,7 +15607,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
                       ),
                       onPressed: () => _handleReprint(context, isKitchen: true),
                       icon:
-                          const Icon(Icons.soup_kitchen, color: Colors.orange),
+                      const Icon(Icons.soup_kitchen, color: Colors.orange),
                       label: const Text("Ticket Cuisine"),
                     ),
                   ),
@@ -15466,7 +15706,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                 const SizedBox(width: 12),
                 const Text("Gestion des Stocks & Ruptures",
                     style:
-                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                    TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close, size: 32),
@@ -15480,19 +15720,19 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                     child: _buildTabButton(
                         "Produits Carte",
                         !_modeIngredients,
-                        () => setState(() {
-                              _modeIngredients = false;
-                              _selectedFilterId = null;
-                            }))),
+                            () => setState(() {
+                          _modeIngredients = false;
+                          _selectedFilterId = null;
+                        }))),
                 const SizedBox(width: 16),
                 Expanded(
                     child: _buildTabButton(
                         "Ingrédients",
                         _modeIngredients,
-                        () => setState(() {
-                              _modeIngredients = true;
-                              _selectedFilterId = null;
-                            }))),
+                            () => setState(() {
+                          _modeIngredients = true;
+                          _selectedFilterId = null;
+                        }))),
               ],
             ),
             const SizedBox(height: 20),
@@ -15517,7 +15757,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                       widget.menuSettings;
                   if (snapshot.hasData) {
                     activeSettings = Map.fromEntries(snapshot.data!.docs.map(
-                        (doc) => MapEntry(
+                            (doc) => MapEntry(
                             doc.id,
                             FranchiseeMenuItem.fromFirestore(
                                 doc.data() as Map<String, dynamic>))));
@@ -15542,7 +15782,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                   }).toList();
                   filtered.sort((a, b) => a.name.compareTo(b.name));
                   final activeFilters =
-                      filtered.expand((p) => p.filterIds).toSet();
+                  filtered.expand((p) => p.filterIds).toSet();
                   final visibleFilters = _filters
                       .where((f) => activeFilters.contains(f.id))
                       .toList();
@@ -15557,13 +15797,13 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                               _buildFilterChip(
                                   "Tout",
                                   _selectedFilterId == null,
-                                  () =>
+                                      () =>
                                       setState(() => _selectedFilterId = null)),
                               ...visibleFilters.map((f) => _buildFilterChip(
                                   f.name,
                                   _selectedFilterId == f.id,
-                                  () => setState(
-                                      () => _selectedFilterId = f.id))),
+                                      () => setState(
+                                          () => _selectedFilterId = f.id))),
                             ],
                           ),
                         ),
@@ -15571,122 +15811,122 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                       Expanded(
                         child: filtered.isEmpty
                             ? Center(
-                                child: Text("Aucun produit trouvé",
-                                    style: TextStyle(
-                                        color: Colors.grey.shade400,
-                                        fontSize: 18)))
+                            child: Text("Aucun produit trouvé",
+                                style: TextStyle(
+                                    color: Colors.grey.shade400,
+                                    fontSize: 18)))
                             : ListView.builder(
-                                itemCount: filtered.length,
-                                itemBuilder: (context, index) {
-                                  final product = filtered[index];
-                                  final settings =
-                                      activeSettings[product.productId];
-                                  final isAvailable =
-                                      settings?.isAvailable ?? false;
-                                  return Card(
-                                    elevation: 0,
-                                    color: Colors.white,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
-                                        side: BorderSide(
-                                            color: Colors.grey.shade200)),
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    child: Padding(
-                                      padding: const EdgeInsets.all(12),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 60,
-                                            height: 60,
-                                            decoration: BoxDecoration(
-                                                color: Colors.grey.shade100,
-                                                borderRadius:
-                                                    BorderRadius.circular(8)),
-                                            clipBehavior: Clip.antiAlias,
-                                            child: (product
-                                                        .photoUrl?.isNotEmpty ??
-                                                    false)
-                                                ? CachedNetworkImage(
-                                                    imageUrl: product.photoUrl!,
-                                                    fit: BoxFit.cover)
-                                                : Icon(
-                                                    product.isIngredient
-                                                        ? Icons.blender
-                                                        : Icons.fastfood,
-                                                    color:
-                                                        Colors.grey.shade400),
-                                          ),
-                                          const SizedBox(width: 16),
-                                          Expanded(
-                                            child: Text(product.name,
-                                                style: const TextStyle(
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 16)),
-                                          ),
-                                          InkWell(
-                                            onTap: () {
-                                              menuRef
-                                                  .doc(product.productId)
-                                                  .set({
-                                                'isAvailable': !isAvailable
-                                              }, SetOptions(merge: true));
-                                              widget.onStockChanged(
-                                                  product.productId,
-                                                  !isAvailable);
-                                            },
-                                            borderRadius:
-                                                BorderRadius.circular(8),
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                      horizontal: 20,
-                                                      vertical: 12),
-                                              decoration: BoxDecoration(
+                          itemCount: filtered.length,
+                          itemBuilder: (context, index) {
+                            final product = filtered[index];
+                            final settings =
+                            activeSettings[product.productId];
+                            final isAvailable =
+                                settings?.isAvailable ?? false;
+                            return Card(
+                              elevation: 0,
+                              color: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                      color: Colors.grey.shade200)),
+                              margin: const EdgeInsets.only(bottom: 12),
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 60,
+                                      height: 60,
+                                      decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius:
+                                          BorderRadius.circular(8)),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: (product
+                                          .photoUrl?.isNotEmpty ??
+                                          false)
+                                          ? CachedNetworkImage(
+                                          imageUrl: product.photoUrl!,
+                                          fit: BoxFit.cover)
+                                          : Icon(
+                                          product.isIngredient
+                                              ? Icons.blender
+                                              : Icons.fastfood,
+                                          color:
+                                          Colors.grey.shade400),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Text(product.name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 16)),
+                                    ),
+                                    InkWell(
+                                      onTap: () {
+                                        menuRef
+                                            .doc(product.productId)
+                                            .set({
+                                          'isAvailable': !isAvailable
+                                        }, SetOptions(merge: true));
+                                        widget.onStockChanged(
+                                            product.productId,
+                                            !isAvailable);
+                                      },
+                                      borderRadius:
+                                      BorderRadius.circular(8),
+                                      child: Container(
+                                        padding:
+                                        const EdgeInsets.symmetric(
+                                            horizontal: 20,
+                                            vertical: 12),
+                                        decoration: BoxDecoration(
+                                          color: isAvailable
+                                              ? Colors.green.shade50
+                                              : Colors.red.shade50,
+                                          borderRadius:
+                                          BorderRadius.circular(8),
+                                          border: Border.all(
+                                              color: isAvailable
+                                                  ? Colors.green
+                                                  : Colors.red,
+                                              width: 2),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                                isAvailable
+                                                    ? Icons.check_circle
+                                                    : Icons.block,
                                                 color: isAvailable
-                                                    ? Colors.green.shade50
-                                                    : Colors.red.shade50,
-                                                borderRadius:
-                                                    BorderRadius.circular(8),
-                                                border: Border.all(
-                                                    color: isAvailable
-                                                        ? Colors.green
-                                                        : Colors.red,
-                                                    width: 2),
-                                              ),
-                                              child: Row(
-                                                children: [
-                                                  Icon(
-                                                      isAvailable
-                                                          ? Icons.check_circle
-                                                          : Icons.block,
-                                                      color: isAvailable
-                                                          ? Colors.green
-                                                          : Colors.red,
-                                                      size: 20),
-                                                  const SizedBox(width: 8),
-                                                  Text(
-                                                    isAvailable
-                                                        ? "EN STOCK"
-                                                        : "ÉPUISÉ",
-                                                    style: TextStyle(
-                                                        fontWeight:
-                                                            FontWeight.bold,
-                                                        color: isAvailable
-                                                            ? Colors
-                                                                .green.shade800
-                                                            : Colors
-                                                                .red.shade800),
-                                                  ),
-                                                ],
-                                              ),
+                                                    ? Colors.green
+                                                    : Colors.red,
+                                                size: 20),
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              isAvailable
+                                                  ? "EN STOCK"
+                                                  : "ÉPUISÉ",
+                                              style: TextStyle(
+                                                  fontWeight:
+                                                  FontWeight.bold,
+                                                  color: isAvailable
+                                                      ? Colors
+                                                      .green.shade800
+                                                      : Colors
+                                                      .red.shade800),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  );
-                                },
+                                  ],
+                                ),
                               ),
+                            );
+                          },
+                        ),
                       ),
                     ],
                   );
@@ -15838,12 +16078,11 @@ class CombineLatestStream<T, R> extends Stream<R> {
   StreamSubscription<R> listen(void Function(R event)? onData,
       {Function? onError, void Function()? onDone, bool? cancelOnError}) {
     return Stream<R>.fromFuture(
-            Future.wait(streams.map((s) => s.first)) as Future<R>)
+        Future.wait(streams.map((s) => s.first)) as Future<R>)
         .listen(onData,
-            onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
 }
-
 
 
 ==================================================
@@ -17230,7 +17469,9 @@ class _CartItemCard extends StatelessWidget {
           vatRate: item.vatRate,
           sections: sections,
           initialOptions: item.selectedOptions,
-          franchiseeId: '', allProductsRef: [],
+          franchiseeId: '',
+          allProductsRef: [],
+          initialRemovedIngredientIds: item.removedIngredientProductIds,
         ),
       ),
     );
@@ -17359,6 +17600,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../../../../core/cart_provider.dart';
 import '../../../../../core/theme/app_colors.dart';
@@ -17375,24 +17617,29 @@ Color? _colorFromHex(String? hexString) {
 class BouncingButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
-  const BouncingButton({super.key, required this.child, this.onTap});
+  final bool haptic;
+  const BouncingButton({super.key, required this.child, this.onTap, this.haptic = false});
   @override
   State<BouncingButton> createState() => _BouncingButtonState();
 }
 class _BouncingButtonState extends State<BouncingButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  final Duration _duration = const Duration(milliseconds: 100);
+  final Duration _duration = const Duration(milliseconds: 80);
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: _duration, lowerBound: 0.95, upperBound: 1.0);
+    _controller = AnimationController(vsync: this, duration: _duration, lowerBound: 0.96, upperBound: 1.0);
     _controller.value = 1.0;
   }
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => _controller.reverse(),
-      onTapUp: (_) { _controller.forward(); widget.onTap?.call(); },
+      onTapUp: (_) {
+        _controller.forward();
+        if (widget.haptic) HapticFeedback.selectionClick();
+        widget.onTap?.call();
+      },
       onTapCancel: () => _controller.forward(),
       child: ScaleTransition(scale: _controller, child: widget.child),
     );
@@ -17425,17 +17672,11 @@ class _ProductViewContentState extends State<ProductViewContent> {
       _selectedKioskCategoryId = categories.first.id;
       _autoSelectFirstFilter(categories.first);
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _precacheAllActiveImages();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAllActiveImages());
   }
   void _autoSelectFirstFilter(KioskCategory cat) {
     final validFilters = _getValidFiltersForCategory(cat);
-    if (validFilters.isNotEmpty) {
-      _selectedKioskFilterId = validFilters.first.id;
-    } else {
-      _selectedKioskFilterId = null;
-    }
+    _selectedKioskFilterId = validFilters.isNotEmpty ? validFilters.first.id : null;
   }
   List<KioskFilter> _getValidFiltersForCategory(KioskCategory cat) {
     final activeProducts = widget.posData.products.where((p) => !p.isIngredient && (widget.posData.menuSettings[p.productId]?.isVisible ?? false));
@@ -17445,9 +17686,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
   List<KioskCategory> _getValidCategories() {
     final visibleProducts = widget.posData.products.where((p) => !p.isIngredient && (widget.posData.menuSettings[p.productId]?.isVisible ?? false));
     final visibleFilterIds = visibleProducts.expand((p) => p.kioskFilterIds).toSet();
-    return widget.posData.kioskCategories
-        .where((c) => c.filters.any((f) => visibleFilterIds.contains(f.id)))
-        .toList();
+    return widget.posData.kioskCategories.where((c) => c.filters.any((f) => visibleFilterIds.contains(f.id))).toList();
   }
   void _precacheAllActiveImages() {
     if (!mounted) return;
@@ -17456,10 +17695,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
       return isVisible && !p.isIngredient && p.photoUrl != null && p.photoUrl!.isNotEmpty;
     });
     for (var product in activeProducts) {
-      precacheImage(
-        CachedNetworkImageProvider(product.photoUrl!, maxWidth: 300),
-        context,
-      );
+      precacheImage(CachedNetworkImageProvider(product.photoUrl!, maxWidth: 300), context);
     }
   }
   List<MasterProduct> _getFilteredProducts() {
@@ -17503,6 +17739,8 @@ class _ProductViewContentState extends State<ProductViewContent> {
             vatRate: settings.vatRate,
             sections: sections,
             allProductsRef: widget.posData.products,
+            initialOptions: null,
+            initialRemovedIngredientIds: null,
           ),
         ),
       );
@@ -17525,7 +17763,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.white)),
+        content: Text(message.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.white)),
         duration: const Duration(milliseconds: 300),
         backgroundColor: Colors.black,
         behavior: SnackBarBehavior.fixed,
@@ -17537,35 +17775,19 @@ class _ProductViewContentState extends State<ProductViewContent> {
   }
   @override
   Widget build(BuildContext context) {
+    final content = _folderStack.isNotEmpty
+        ? _buildFolderView(_folderStack.last)
+        : Column(children: [_buildSubCategoryFilters(), Expanded(child: _buildProductGrid())]);
     if (widget.isTablet) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           SizedBox(width: 160, child: _buildFastSidebar()),
-          Expanded(
-            child: Container(
-              color: const Color(0xFFF5F5F5),
-              child: _folderStack.isNotEmpty
-                  ? _buildFolderView(_folderStack.last)
-                  : Column(
-                children: [
-                  _buildSubCategoryFilters(),
-                  Expanded(child: _buildProductGrid()),
-                ],
-              ),
-            ),
-          ),
-        ],
-      );
-    } else {
-      if (_folderStack.isNotEmpty) return _buildFolderView(_folderStack.last);
-      return Column(
-        children: [
-          _buildSubCategoryFilters(),
-          Expanded(child: _buildProductGrid()),
+          Expanded(child: Container(color: const Color(0xFFF5F5F5), child: content)),
         ],
       );
     }
+    return content;
   }
   Widget _buildFolderView(MasterProduct folder) {
     final validIds = folder.containerProductIds.toSet();
@@ -17575,26 +17797,26 @@ class _ProductViewContentState extends State<ProductViewContent> {
     return Column(
       children: [
         Container(
-          height: 70,
-          color: Colors.orange.shade700,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
+          height: 80,
+          color: Colors.orange.shade800,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
             children: [
               SizedBox(
-                height: 50, width: 140,
+                height: 55, width: 140,
                 child: ElevatedButton.icon(
                   onPressed: _navigateBack,
                   icon: const Icon(Icons.arrow_back, color: Colors.black, size: 28),
-                  label: const Text("RETOUR", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
+                  label: const Text("RETOUR", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: Colors.black)),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
                 ),
               ),
-              const SizedBox(width: 20),
-              Expanded(child: Text(folder.name.toUpperCase(), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white), overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 24),
+              Expanded(child: Text(folder.name.toUpperCase(), style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1), overflow: TextOverflow.ellipsis)),
             ],
           ),
         ),
-        Expanded(child: _buildOptimizedGrid(contentProducts, isInsideFolder: true)),
+        Expanded(child: _buildOptimizedGrid(contentProducts)),
       ],
     );
   }
@@ -17604,15 +17826,13 @@ class _ProductViewContentState extends State<ProductViewContent> {
       color: Colors.white,
       child: ListView(
         padding: EdgeInsets.zero,
-        children: [
-          ...categories.map((cat) => _buildSidebarTile(cat.name.toUpperCase(), _selectedKioskCategoryId == cat.id, () {
-            setState(() {
-              _selectedKioskCategoryId = cat.id;
-              _folderStack.clear();
-              _autoSelectFirstFilter(cat);
-            });
-          })),
-        ],
+        children: categories.map((cat) => _buildSidebarTile(cat.name.toUpperCase(), _selectedKioskCategoryId == cat.id, () {
+          setState(() {
+            _selectedKioskCategoryId = cat.id;
+            _folderStack.clear();
+            _autoSelectFirstFilter(cat);
+          });
+        })).toList(),
       ),
     );
   }
@@ -17621,34 +17841,27 @@ class _ProductViewContentState extends State<ProductViewContent> {
       onTap: onTap,
       child: Container(
         height: 100,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16),
         decoration: BoxDecoration(
           color: isSelected ? Colors.black : Colors.white,
-          border: const Border(bottom: BorderSide(color: Colors.black12)),
+          border: const Border(bottom: BorderSide(color: Colors.black12, width: 1)),
         ),
         alignment: Alignment.centerLeft,
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isSelected ? Colors.white : Colors.black87, letterSpacing: 0.5),
-          maxLines: 2,
-        ),
+        child: Text(label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: isSelected ? Colors.white : Colors.black87, letterSpacing: 0.5), maxLines: 2),
       ),
     );
   }
   Widget _buildProductGrid() {
     final products = _getFilteredProducts();
-    if (products.isEmpty) return const Center(child: Text("VIDE", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.grey)));
-    return _buildOptimizedGrid(products, isInsideFolder: false);
+    if (products.isEmpty) return const Center(child: Text("VIDE", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.grey)));
+    return _buildOptimizedGrid(products);
   }
-  Widget _buildOptimizedGrid(List<MasterProduct> products, {required bool isInsideFolder}) {
+  Widget _buildOptimizedGrid(List<MasterProduct> products) {
     return GridView.builder(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       cacheExtent: 500,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 220,
-        childAspectRatio: 0.8,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+        maxCrossAxisExtent: 240, childAspectRatio: 0.75, crossAxisSpacing: 16, mainAxisSpacing: 16,
       ),
       itemCount: products.length,
       itemBuilder: (context, index) {
@@ -17666,12 +17879,13 @@ class _ProductViewContentState extends State<ProductViewContent> {
     final bool hasCustomization = product.ingredientProductIds.isNotEmpty || product.sectionIds.isNotEmpty;
     return BouncingButton(
       onTap: onTap,
+      haptic: true,
       child: Container(
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 4, offset: Offset(0, 2))],
-          border: Border.all(color: Colors.grey.shade200, width: 1),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4))],
+          border: Border.all(color: Colors.grey.shade200, width: 1.5),
         ),
         clipBehavior: Clip.hardEdge,
         child: Column(
@@ -17684,55 +17898,45 @@ class _ProductViewContentState extends State<ProductViewContent> {
                 children: [
                   if (product.photoUrl != null && product.photoUrl!.isNotEmpty)
                     CachedNetworkImage(
-                      imageUrl: product.photoUrl!,
-                      fit: BoxFit.cover,
-                      memCacheWidth: 200,
-                      maxWidthDiskCache: 400,
-                      fadeInDuration: Duration.zero,
-                      fadeOutDuration: Duration.zero,
-                      placeholder: (context, url) => Container(color: placeholderColor),
-                      errorWidget: (context, url, error) => Container(color: placeholderColor, child: const Icon(Icons.broken_image, color: Colors.black12)),
+                      imageUrl: product.photoUrl!, fit: BoxFit.cover,
+                      placeholder: (_, __) => Container(color: placeholderColor),
+                      errorWidget: (_, __, ___) => Container(color: placeholderColor, child: const Icon(Icons.broken_image, color: Colors.black12)),
                     )
                   else
-                    Container(color: placeholderColor, child: Icon(isContainer ? Icons.folder : Icons.restaurant, color: Colors.black12, size: 40)),
-                  if (isContainer) Positioned(top: 0, right: 0, child: Container(padding: const EdgeInsets.all(6), color: Colors.black, child: const Icon(Icons.arrow_forward, size: 14, color: Colors.white))),
+                    Container(color: placeholderColor, child: Icon(isContainer ? Icons.folder : Icons.restaurant, color: Colors.black12, size: 50)),
+                  if (isContainer) Positioned(top: 10, right: 10, child: CircleAvatar(backgroundColor: Colors.white, radius: 16, child: const Icon(Icons.arrow_forward, size: 20, color: Colors.black))),
                   if (!settings.isAvailable)
-                    Container(
-                        color: Colors.black.withOpacity(0.6),
-                        alignment: Alignment.center,
-                        child: Transform.rotate(
-                          angle: -0.2,
-                          child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                              decoration: BoxDecoration(border: Border.all(color: Colors.white, width: 2), borderRadius: BorderRadius.circular(8)),
-                              child: const Text("ÉPUISÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18, letterSpacing: 2))
-                          ),
-                        )
-                    ),
+                    Container(color: Colors.black87, alignment: Alignment.center, child: const Text("ÉPUISÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 2))),
                   if (hasCustomization && !isContainer && settings.isAvailable)
-                    Positioned(
-                      bottom: 4, right: 4,
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                        child: const Icon(Icons.edit, size: 10, color: Colors.white),
-                      ),
-                    ),
+                    Positioned(bottom: 8, right: 8, child: CircleAvatar(backgroundColor: Colors.white, radius: 14, child: Icon(Icons.tune, size: 18, color: Colors.black))),
                 ],
               ),
             ),
             Expanded(
-              flex: 3,
+              flex: 4,
               child: Container(
-                padding: const EdgeInsets.all(4),
-                color: isContainer ? const Color(0xFFFFE0B2) : Colors.white,
+                padding: const EdgeInsets.all(10),
+                color: isContainer ? const Color(0xFFFFF3E0) : Colors.white,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(product.name, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14, height: 1.1, color: Colors.black87)),
+                    Text(
+                        product.name.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Colors.black, height: 1.1)
+                    ),
                     if (!isContainer && !settings.hidePriceOnCard) ...[
-                      const SizedBox(height: 4),
-                      Text("${settings.price.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: Colors.black)),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: Colors.black, borderRadius: BorderRadius.circular(6)),
+                        child: Text(
+                            "${settings.price.toStringAsFixed(2)} €",
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: Colors.white)
+                        ),
+                      ),
                     ]
                   ],
                 ),
@@ -17750,20 +17954,13 @@ class _ProductViewContentState extends State<ProductViewContent> {
     final validFilters = _getValidFiltersForCategory(cat);
     if (validFilters.length < 2) return const SizedBox.shrink();
     return Container(
-      height: 75,
-      color: Colors.white,
+      height: 80, color: Colors.white,
       child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        itemCount: validFilters.length, 
-        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        itemCount: validFilters.length, separatorBuilder: (_, __) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final f = validFilters[index];
-          return _buildChip(
-              f.name.toUpperCase(),
-              _selectedKioskFilterId == f.id,
-                  () => setState(() => _selectedKioskFilterId = f.id)
-          );
+          return _buildChip(f.name.toUpperCase(), _selectedKioskFilterId == f.id, () => setState(() => _selectedKioskFilterId = f.id));
         },
       ),
     );
@@ -17771,15 +17968,17 @@ class _ProductViewContentState extends State<ProductViewContent> {
   Widget _buildChip(String label, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 28),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? Colors.black : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.black, width: isSelected ? 0 : 1),
+          color: isSelected ? Colors.black : Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(color: isSelected ? Colors.black : Colors.grey.shade300, width: 2),
+          boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))] : [],
         ),
-        child: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.bold, fontSize: 15)),
+        child: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 15, letterSpacing: 0.5)),
       ),
     );
   }
@@ -17791,6 +17990,7 @@ class ProductOptionsPage extends StatefulWidget {
   final double vatRate;
   final List<ProductSection> sections;
   final Map<String, List<SectionItem>>? initialOptions;
+  final List<String>? initialRemovedIngredientIds;
   final List<MasterProduct> allProductsRef;
   const ProductOptionsPage({
     super.key,
@@ -17801,6 +18001,7 @@ class ProductOptionsPage extends StatefulWidget {
     required this.sections,
     required this.allProductsRef,
     this.initialOptions,
+    this.initialRemovedIngredientIds,
   });
   @override
   State<ProductOptionsPage> createState() => _ProductOptionsPageState();
@@ -17812,13 +18013,22 @@ class _PosCache {
 class _ProductOptionsPageState extends State<ProductOptionsPage> {
   final Map<String, Map<String, int>> _selectionQuantities = {};
   final Map<String, SectionItem> _itemLookup = {};
+  late List<ProductSection> _sortedSections;
   List<MasterProduct> _baseIngredients = [];
   Map<String, double> _supplementOverrides = {};
   final Set<String> _removedIngredientIds = {};
   @override
   void initState() {
     super.initState();
-    for (var section in widget.sections) {
+    _sortedSections = List.from(widget.sections);
+    _sortedSections.sort((a, b) {
+      int indexA = widget.product.sectionIds.indexOf(a.sectionId);
+      int indexB = widget.product.sectionIds.indexOf(b.sectionId);
+      if (indexA == -1) indexA = 999;
+      if (indexB == -1) indexB = 999;
+      return indexA.compareTo(indexB);
+    });
+    for (var section in _sortedSections) {
       for (var item in section.items) {
         _itemLookup[item.product.id] = item;
       }
@@ -17832,17 +18042,15 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         _selectionQuantities[sectionId] = sectionMap;
       });
     }
+    if (widget.initialRemovedIngredientIds != null) {
+      _removedIngredientIds.addAll(widget.initialRemovedIngredientIds!);
+    }
     if (widget.product.ingredientProductIds.isNotEmpty) {
-      final local = widget.allProductsRef
-          .where((p) => widget.product.ingredientProductIds.contains(p.productId))
-          .toList();
+      final local = widget.allProductsRef.where((p) => widget.product.ingredientProductIds.contains(p.productId)).toList();
       if (local.length >= widget.product.ingredientProductIds.length) {
         _baseIngredients = local;
       } else {
-        final cached = widget.product.ingredientProductIds
-            .map((id) => _PosCache.ingredients[id])
-            .whereType<MasterProduct>()
-            .toList();
+        final cached = widget.product.ingredientProductIds.map((id) => _PosCache.ingredients[id]).whereType<MasterProduct>().toList();
         if (cached.length >= widget.product.ingredientProductIds.length) {
           _baseIngredients = cached;
         } else {
@@ -17858,63 +18066,47 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
   }
   Future<void> _fetchIngredients() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('master_products')
-          .where('productId', whereIn: widget.product.ingredientProductIds)
-          .get();
+      final snapshot = await FirebaseFirestore.instance.collection('master_products').where('productId', whereIn: widget.product.ingredientProductIds).get();
       final fetched = snapshot.docs.map((d) => MasterProduct.fromFirestore(d.data(), d.id)).toList();
-      for (var p in fetched) {
-        _PosCache.ingredients[p.productId] = p;
-      }
+      for (var p in fetched) _PosCache.ingredients[p.productId] = p;
       if (mounted) setState(() => _baseIngredients = fetched);
     } catch (_) {}
   }
   Future<void> _fetchPrices() async {
     try {
-      final snapshot = await FirebaseFirestore.instance
-          .collection('users')
-          .doc(widget.franchiseeId)
-          .collection('menu')
-          .doc(widget.product.productId)
-          .collection('supplement_overrides')
-          .get();
-      final prices = {
-        for (var doc in snapshot.docs)
-          doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
-      };
+      final snapshot = await FirebaseFirestore.instance.collection('users').doc(widget.franchiseeId).collection('menu').doc(widget.product.productId).collection('supplement_overrides').get();
+      final prices = {for (var doc in snapshot.docs) doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0};
       _PosCache.prices[widget.product.productId] = prices;
       if (mounted) setState(() => _supplementOverrides = prices);
     } catch (_) {}
   }
-  double _getActualPrice(SectionItem item) {
-    if (_supplementOverrides.containsKey(item.product.productId)) {
-      return _supplementOverrides[item.product.productId]!;
-    }
-    return item.supplementPrice;
-  }
+  double _getActualPrice(SectionItem item) => _supplementOverrides[item.product.productId] ?? item.supplementPrice;
   double get _totalPrice {
     double total = widget.basePrice;
-    _selectionQuantities.forEach((sectionId, itemsMap) {
+    _selectionQuantities.forEach((_, itemsMap) {
       itemsMap.forEach((itemId, qty) {
         final item = _itemLookup[itemId];
-        if (item != null) {
-          total += (_getActualPrice(item) * qty);
-        }
+        if (item != null) total += (_getActualPrice(item) * qty);
       });
     });
     return total;
   }
   void _updateQuantity(ProductSection section, SectionItem item, int delta) {
+    HapticFeedback.lightImpact();
     setState(() {
       final sectionMap = _selectionQuantities[section.sectionId] ?? {};
       int currentQty = sectionMap[item.product.id] ?? 0;
-      if (section.type == 'unique' || section.type == 'radio') {
+      final String typeLower = section.type.toLowerCase();
+      final bool isRadio = typeLower.contains('unique') || typeLower.contains('radio');
+      final bool isIncremental = typeLower.contains('increment') || typeLower.contains('quantity') || typeLower.contains('compteur');
+      if (isRadio) {
         if (delta > 0) {
           sectionMap.clear();
           sectionMap[item.product.id] = 1;
         }
       } else {
         int newQty = currentQty + delta;
+        if (!isIncremental && newQty > 1) newQty = 1;
         if (newQty < 0) newQty = 0;
         if (delta > 0 && section.selectionMax > 0) {
           int totalInSection = sectionMap.values.fold(0, (sum, q) => sum + q);
@@ -17926,23 +18118,17 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       _selectionQuantities[section.sectionId] = sectionMap;
     });
   }
-  bool _areRequirementsMet() {
-    for (var section in widget.sections) {
-      final sectionMap = _selectionQuantities[section.sectionId] ?? {};
-      int totalQty = sectionMap.values.fold(0, (sum, q) => sum + q);
-      if (totalQty < section.selectionMin) return false;
-    }
-    return true;
-  }
   bool _validate() {
-    for (var section in widget.sections) {
+    for (var section in _sortedSections) {
       final sectionMap = _selectionQuantities[section.sectionId] ?? {};
       int totalQty = sectionMap.values.fold(0, (sum, q) => sum + q);
       if (totalQty < section.selectionMin) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text("CHOIX OBLIGATOIRE : ${section.title.toUpperCase()}"),
-            backgroundColor: Colors.red.shade900,
-            behavior: SnackBarBehavior.fixed));
+            content: Text("⚠️ OBLIGATOIRE : ${section.title.toUpperCase()}", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            margin: const EdgeInsets.all(20)));
         return false;
       }
     }
@@ -17956,150 +18142,159 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       itemsMap.forEach((itemId, qty) {
         final item = _itemLookup[itemId];
         if (item != null) {
-          final adjustedItem = SectionItem(
-            product: item.product,
-            supplementPrice: _getActualPrice(item),
-          );
-          for (int i = 0; i < qty; i++) itemsList.add(adjustedItem);
+          final adjustedItem = SectionItem(product: item.product, supplementPrice: _getActualPrice(item));
+          for (int i = 0; i < qty; i++) {
+            itemsList.add(adjustedItem);
+          }
         }
       });
       if (itemsList.isNotEmpty) finalOptions[sectionId] = itemsList;
     });
     Navigator.pop(context, CartItem(
-      product: widget.product,
-      quantity: 1,
-      price: widget.basePrice,
-      vatRate: widget.vatRate,
+      product: widget.product, quantity: 1, price: widget.basePrice, vatRate: widget.vatRate,
       selectedOptions: finalOptions,
       removedIngredientProductIds: _removedIngredientIds.toList(),
-      removedIngredientNames: _baseIngredients
-          .where((p) => _removedIngredientIds.contains(p.productId))
-          .map((p) => p.name)
-          .toList(),
+      removedIngredientNames: _baseIngredients.where((p) => _removedIngredientIds.contains(p.productId)).map((p) => p.name).toList(),
     ));
   }
   void _showIngredientModifier() async {
     await showDialog(
       context: context,
-      builder: (ctx) => _IngredientCustomizationDialog(
-        baseIngredients: _baseIngredients,
-        initiallyRemovedIds: _removedIngredientIds.toList(),
-      ),
+      builder: (ctx) => _IngredientCustomizationDialog(baseIngredients: _baseIngredients, initiallyRemovedIds: _removedIngredientIds.toList()),
     ).then((result) {
-      if (result != null && result is List<String>) {
-        setState(() {
-          _removedIngredientIds.clear();
-          _removedIngredientIds.addAll(result);
-        });
-      }
+      if (result != null && result is List<String>) setState(() { _removedIngredientIds.clear(); _removedIngredientIds.addAll(result); });
     });
+  }
+  bool _areRequirementsMet() {
+    for (var section in _sortedSections) {
+      final sectionMap = _selectionQuantities[section.sectionId] ?? {};
+      int totalQty = sectionMap.values.fold(0, (sum, q) => sum + q);
+      if (totalQty < section.selectionMin) return false;
+    }
+    return true;
   }
   @override
   Widget build(BuildContext context) {
-    final bool isModif = widget.initialOptions != null;
+    final bool isModif = widget.initialOptions != null || widget.initialRemovedIngredientIds != null;
     final bool isFormValid = _areRequirementsMet();
+    final Color primaryColor = isModif ? AppColors.bkBlue : Colors.black;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8F8),
+      backgroundColor: const Color(0xFFF2F4F7),
       body: Column(
         children: [
           Container(
-            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top),
-            color: isModif ? Colors.blue.shade900 : Colors.black,
-            child: Container(
-              height: 80,
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Row(
-                      children: [
-                        Icon(isModif ? Icons.edit : Icons.add_circle_outline, color: Colors.white, size: 30),
-                        const SizedBox(width: 15),
-                        Flexible(
-                          child: Text(
-                            widget.product.name.toUpperCase(),
-                            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 1),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
+            padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 10, bottom: 16, left: 24, right: 24),
+            decoration: BoxDecoration(color: primaryColor),
+            height: 110,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Positioned(
+                  left: 0,
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(12)),
+                        child: Icon(isModif ? Icons.edit : Icons.restaurant, color: Colors.white, size: 34),
+                      ),
+                      const SizedBox(width: 20),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        child: Text(widget.product.name.toUpperCase(),
+                            style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: Colors.white, letterSpacing: 0.5), overflow: TextOverflow.ellipsis),
+                      ),
+                    ],
                   ),
-                  if (_baseIngredients.isNotEmpty) ...[
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        foregroundColor: Colors.white,
-                        elevation: 0,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+                if (_baseIngredients.isNotEmpty)
+                  Align(
+                    alignment: Alignment.center,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: BorderSide(color: Colors.white.withOpacity(0.6), width: 3),
+                          backgroundColor: Colors.white.withOpacity(0.1),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(35)),
+                          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16)
                       ),
                       onPressed: _showIngredientModifier,
-                      icon: const Icon(Icons.layers_clear, size: 18),
+                      icon: const Icon(Icons.layers_clear, size: 24),
                       label: Text(
-                        _removedIngredientIds.isEmpty ? "INGRÉDIENTS" : "MODIFIÉ (${_removedIngredientIds.length})",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        icon: const Icon(Icons.close, color: Colors.white, size: 40),
-                        onPressed: () => Navigator.pop(context),
+                        _removedIngredientIds.isEmpty ? "MODIFIER INGRÉDIENTS" : "MODIFIÉ (${_removedIngredientIds.length})",
+                        style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
                       ),
                     ),
                   ),
-                ],
-              ),
+                Positioned(
+                  right: 0,
+                  child: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white, size: 44),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ),
+              ],
             ),
           ),
           Expanded(
             child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+              padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
               children: [
                 if (_removedIngredientIds.isNotEmpty && _baseIngredients.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: Text(
-                      "SANS : ${_baseIngredients.where((p) => _removedIngredientIds.contains(p.productId)).map((p) => p.name).join(", ")}",
-                      style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 16),
-                      textAlign: TextAlign.center,
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 32),
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.red.shade100, width: 2.5)),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.no_food, color: Colors.red, size: 34),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Text("SANS : ${_baseIngredients.where((p) => _removedIngredientIds.contains(p.productId)).map((p) => p.name).join(", ")}",
+                              style: const TextStyle(color: Colors.red, fontWeight: FontWeight.w900, fontSize: 18)),
+                        ),
+                      ],
                     ),
                   ),
-                ...widget.sections.map((section) => _buildSectionBlock(section)),
-                if (widget.sections.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 40),
-                    child: Center(child: Text("Aucune option supplémentaire.", style: TextStyle(color: Colors.grey, fontSize: 16))),
-                  ),
+                ..._sortedSections.map((section) => _buildSectionBlock(section)),
+                if (_sortedSections.isEmpty)
+                  const Padding(padding: EdgeInsets.all(40), child: Center(child: Text("Aucune option disponible", style: TextStyle(color: Colors.grey, fontSize: 22, fontWeight: FontWeight.w900)))),
               ],
             ),
           ),
           Container(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
               color: Colors.white,
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10)],
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, -5))],
             ),
             child: SafeArea(
               top: false,
               child: SizedBox(
                 width: double.infinity,
-                height: 85,
+                height: 90,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isFormValid
-                        ? (isModif ? Colors.blue.shade700 : Colors.green.shade700)
-                        : Colors.grey.shade400,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    backgroundColor: isFormValid ? (isModif ? AppColors.bkBlue : AppColors.bkGreen) : Colors.grey.shade300,
+                    elevation: 8,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
                   ),
                   onPressed: isFormValid ? _onConfirm : null,
-                  child: Text(
-                    "${isModif ? 'ENREGISTRER' : 'VALIDER LA SÉLECTION'}  —  ${_totalPrice.toStringAsFixed(2)} €",
-                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                          isModif ? 'ENREGISTRER' : 'AJOUTER AU PANIER',
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: isFormValid ? Colors.white : Colors.grey.shade600, letterSpacing: 1)
+                      ),
+                      const SizedBox(width: 40),
+                      Container(width: 3, height: 40, color: isFormValid ? Colors.white38 : Colors.grey),
+                      const SizedBox(width: 40),
+                      Text(
+                          "${_totalPrice.toStringAsFixed(2)} €",
+                          style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: isFormValid ? Colors.white : Colors.grey.shade600)
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -18110,28 +18305,31 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     );
   }
   Widget _buildSectionBlock(ProductSection section) {
-    final bool isMultiple = section.type != 'unique' && section.type != 'radio';
+    final String typeLower = section.type.toLowerCase();
+    final bool isRadio = typeLower.contains('unique') || typeLower.contains('radio');
+    final bool isIncremental = typeLower.contains('increment') || typeLower.contains('quantity') || typeLower.contains('compteur');
     final sectionMap = _selectionQuantities[section.sectionId] ?? {};
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 12),
+        Container(
+          margin: const EdgeInsets.only(bottom: 20, left: 4),
           child: Row(
             children: [
-              Text(section.title.toUpperCase(), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Colors.black)),
-              if (section.selectionMin > 0) ...[
-                const SizedBox(width: 12),
+              Text(section.title.toUpperCase(),
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 22, color: AppColors.bkBlack, letterSpacing: 1.2)),
+              const SizedBox(width: 20),
+              if (section.selectionMin > 0)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(4)),
-                  child: const Text("OBLIGATOIRE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  decoration: BoxDecoration(color: const Color(0xFFFFEAEA), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.red.shade100, width: 2)),
+                  child: Text("OBLIGATOIRE", style: TextStyle(color: Colors.red.shade800, fontWeight: FontWeight.w900, fontSize: 13)),
+                ),
+              if (section.selectionMax > 0 && !isRadio)
+                Padding(
+                  padding: const EdgeInsets.only(left: 12),
+                  child: Text("(Max ${section.selectionMax})", style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.w900, fontSize: 17)),
                 )
-              ],
-              if (isMultiple && section.selectionMax > 0) ...[
-                const SizedBox(width: 8),
-                Text("(Max ${section.selectionMax})", style: TextStyle(color: Colors.grey.shade600, fontSize: 14, fontWeight: FontWeight.bold)),
-              ]
             ],
           ),
         ),
@@ -18139,10 +18337,10 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 220,
-            mainAxisExtent: 80,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
+            maxCrossAxisExtent: 280, 
+            mainAxisExtent: 105,      
+            crossAxisSpacing: 20,
+            mainAxisSpacing: 20,
           ),
           itemCount: section.items.length,
           itemBuilder: (context, index) {
@@ -18150,81 +18348,142 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
             final int qty = sectionMap[item.product.id] ?? 0;
             final bool isSelected = qty > 0;
             final double displayPrice = _getActualPrice(item);
-            VoidCallback onTapAction;
-            if (isMultiple) {
-              onTapAction = () {
-                final int delta = isSelected ? -qty : 1;
-                _updateQuantity(section, item, delta);
-              };
-            } else {
-              onTapAction = () => _updateQuantity(section, item, 1);
-            }
-            return Material(
-              color: isSelected ? (isMultiple ? Colors.blue.shade50 : Colors.black) : Colors.white,
-              elevation: isSelected ? 2 : 1,
-              shadowColor: Colors.black26,
-              clipBehavior: Clip.antiAlias,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                    color: isSelected
-                        ? (isMultiple ? Colors.blue : Colors.black)
-                        : Colors.grey.shade300,
-                    width: isSelected ? 2 : 1
+            final int totalInSection = sectionMap.values.fold(0, (sum, q) => sum + q);
+            final bool canAdd = section.selectionMax <= 0 || totalInSection < section.selectionMax;
+            if (isIncremental) {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: isSelected ? Colors.black : Colors.grey.shade200, width: isSelected ? 4 : 2),
+                  boxShadow: [
+                    if(isSelected) BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 12, offset: const Offset(0, 5))
+                  ],
                 ),
-              ),
-              child: InkWell(
-                onTap: onTapAction,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                                item.product.name,
-                                style: TextStyle(
-                                    fontWeight: FontWeight.w800,
-                                    fontSize: 13,
-                                    color: isSelected && !isMultiple ? Colors.white : Colors.black87
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis
-                            ),
-                            if (displayPrice > 0)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 2),
-                                child: Text(
-                                    "+${displayPrice.toStringAsFixed(2)}€",
-                                    style: TextStyle(
-                                        color: isSelected && !isMultiple ? Colors.greenAccent : Colors.green.shade700,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12
-                                    )
-                                ),
-                              )
-                          ],
+                child: Row(
+                  children: [
+                    if (isSelected)
+                      InkWell(
+                        onTap: () => _updateQuantity(section, item, -1),
+                        borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
+                        child: Container(
+                          width: 65, 
+                          height: double.infinity,
+                          decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.horizontal(left: Radius.circular(16))),
+                          child: Icon(Icons.remove, color: Colors.red.shade800, size: 32),
                         ),
                       ),
-                      if (isMultiple)
-                        Icon(
-                          isSelected ? Icons.check_box : Icons.check_box_outline_blank,
-                          color: isSelected ? Colors.blue : Colors.grey.shade400,
-                          size: 28,
-                        )
-                      else if (isSelected)
-                        const Icon(Icons.check_circle, color: Colors.white, size: 24),
-                    ],
+                    if (isSelected) Container(width: 2, height: double.infinity, color: Colors.grey.shade100),
+                    Expanded(
+                      child: InkWell(
+                        onTap: canAdd ? () => _updateQuantity(section, item, 1) : null,
+                        borderRadius: BorderRadius.horizontal(right: const Radius.circular(16), left: isSelected ? Radius.zero : const Radius.circular(16)),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(item.product.name,
+                                        style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: isSelected ? Colors.black : Colors.grey.shade900, height: 1.1),
+                                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                                    if (displayPrice > 0)
+                                      Text("+${displayPrice.toStringAsFixed(2)}€",
+                                          style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w900, fontSize: 15)),
+                                  ],
+                                ),
+                              ),
+                              if (qty > 0)
+                                Container(
+                                  width: 36, height: 36,
+                                  margin: const EdgeInsets.only(left: 8),
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(color: Colors.black, shape: BoxShape.circle),
+                                  child: Text("$qty", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)),
+                                )
+                              else
+                                Icon(Icons.add, color: canAdd ? Colors.black : Colors.grey.shade300, size: 32)
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            } else {
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                decoration: BoxDecoration(
+                  color: isSelected ? (isRadio ? Colors.grey.shade100 : Colors.blue.shade50) : Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: isSelected ? (isRadio ? Colors.black : AppColors.bkBlue) : Colors.grey.shade200,
+                      width: isSelected ? 4 : 2
                   ),
                 ),
-              ),
-            );
+                child: InkWell(
+                  onTap: () {
+                    if (isRadio) {
+                      _updateQuantity(section, item, 1);
+                    } else {
+                      if (!isSelected && !canAdd) return;
+                      _updateQuantity(section, item, isSelected ? -1 : 1);
+                    }
+                  },
+                  borderRadius: BorderRadius.circular(20),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(item.product.name,
+                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 17, color: isSelected ? Colors.black : Colors.grey.shade900, height: 1.1),
+                                  maxLines: 2, overflow: TextOverflow.ellipsis),
+                              if (displayPrice > 0)
+                                Text("+${displayPrice.toStringAsFixed(2)}€",
+                                    style: TextStyle(color: Colors.green.shade900, fontWeight: FontWeight.w900, fontSize: 15)),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        if (isRadio)
+                          Container(
+                            width: 32, height: 32,
+                            decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: isSelected ? Colors.black : Colors.grey.shade400, width: 3),
+                                color: isSelected ? Colors.black : Colors.transparent
+                            ),
+                            child: isSelected ? const Icon(Icons.check, size: 22, color: Colors.white) : null,
+                          )
+                        else
+                          Container(
+                            width: 34, height: 34,
+                            decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                color: isSelected ? AppColors.bkBlue : Colors.white,
+                                border: Border.all(color: isSelected ? AppColors.bkBlue : Colors.grey.shade400, width: 3)
+                            ),
+                            child: isSelected ? const Icon(Icons.check, size: 26, color: Colors.white) : null,
+                          )
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }
           },
         ),
-        const SizedBox(height: 35),
+        const SizedBox(height: 40),
       ],
     );
   }
@@ -18232,10 +18491,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
 class _IngredientCustomizationDialog extends StatefulWidget {
   final List<MasterProduct> baseIngredients;
   final List<String> initiallyRemovedIds;
-  const _IngredientCustomizationDialog({
-    required this.baseIngredients,
-    required this.initiallyRemovedIds,
-  });
+  const _IngredientCustomizationDialog({required this.baseIngredients, required this.initiallyRemovedIds});
   @override
   State<_IngredientCustomizationDialog> createState() => _IngredientCustomizationDialogState();
 }
@@ -18249,49 +18505,58 @@ class _IngredientCustomizationDialogState extends State<_IngredientCustomization
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text("Personnaliser les ingrédients", style: TextStyle(fontWeight: FontWeight.bold)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+      title: const Text("INGRÉDIENTS INCLUS", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: 0.8)),
       content: SizedBox(
-        width: 500,
-        height: 400,
+        width: 600,
+        height: 500,
         child: ListView.separated(
           itemCount: widget.baseIngredients.length,
-          separatorBuilder: (_, __) => const Divider(),
+          separatorBuilder: (_, __) => const Divider(height: 1, thickness: 2),
           itemBuilder: (context, index) {
             final ingredient = widget.baseIngredients[index];
             final bool isKept = !_removedIds.contains(ingredient.productId);
             return ListTile(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               title: Text(ingredient.name,
                   style: TextStyle(
                       decoration: !isKept ? TextDecoration.lineThrough : null,
                       color: !isKept ? Colors.grey : Colors.black,
-                      fontWeight: FontWeight.bold)),
-              subtitle: Text(isKept ? "Inclus" : "Retiré"),
-              trailing: Switch(
-                value: isKept,
-                activeThumbColor: Colors.green,
-                onChanged: (bool value) {
-                  setState(() {
-                    if (value) {
+                      fontWeight: FontWeight.w900,
+                      fontSize: 20
+                  )),
+              trailing: Transform.scale(
+                scale: 1.5,
+                child: Switch.adaptive(
+                  value: isKept,
+                  activeColor: AppColors.bkGreen,
+                  onChanged: (val) {
+                    setState(() { if (val) {
                       _removedIds.remove(ingredient.productId);
                     } else {
                       _removedIds.add(ingredient.productId);
-                    }
-                  });
-                },
+                    } });
+                    HapticFeedback.selectionClick();
+                  },
+                ),
               ),
             );
           },
         ),
       ),
+      actionsPadding: const EdgeInsets.all(24),
       actions: [
-        TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
+        TextButton(onPressed: () => Navigator.pop(context),
+            child: const Text("ANNULER", style: TextStyle(color: Colors.grey, fontWeight: FontWeight.w900, fontSize: 18))),
         ElevatedButton(
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.black, foregroundColor: Colors.white),
+          style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.black,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16)
+          ),
           onPressed: () => Navigator.pop(context, _removedIds.toList()),
-          child: const Text("Valider"),
+          child: const Text("VALIDER", style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20)),
         ),
       ],
     );
@@ -19509,7 +19774,7 @@ class PosContainerDialog extends StatelessWidget {
       } catch (e) {
         return null;
       }
-    }).whereType<MasterProduct>().toList(); 
+    }).whereType<MasterProduct>().toList();
   }
 }
 
@@ -22863,7 +23128,6 @@ class MasterProduct {
     required this.name,
     this.description,
     this.photoUrl,
-    this.kioskFilterIds = const [],
     this.color,
     this.price, 
     this.isComposite = false,
@@ -22873,6 +23137,7 @@ class MasterProduct {
     this.options = const [],
     this.filterIds = const [],
     this.sectionIds = const [],
+    this.kioskFilterIds = const [],
     this.ingredientProductIds = const [],
     this.position,
     this.createdBy = '',

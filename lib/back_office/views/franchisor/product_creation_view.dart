@@ -1,10 +1,8 @@
-// FILE: lib/backoffice/franchisor/product_creation_view.dart
 import 'package:flutter/material.dart';
 
 import '../../../models.dart';
 
 class FranchisorProductCreationView extends StatefulWidget {
-  // Supposons que vous passez la liste de tous les produits existants pour les mettre dans le conteneur
   final List<Product> availableProducts;
   final Function(Product) onSave;
 

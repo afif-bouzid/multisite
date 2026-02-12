@@ -1,10 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models.dart';
 
-/// --------------------------------------------------------------------------
-/// CLASSE 1 : LA MODALE (LE DOSSIER OUVERT)
-/// Affiche une grille des produits contenus dans le produit "Conteneur".
-/// --------------------------------------------------------------------------
 class ContainerSelectionDialog extends StatelessWidget {
   final Product containerProduct;
   final List<Product> allProducts; // Tout le catalogue pour retrouver les enfants

@@ -64,7 +64,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
     cart.updateVatRates(orderType: cart.orderType, settings: widget.posData.menuSettings);
   }
 
-  // ... (Autres méthodes de dialogue inchangées pour économiser de l'espace) ...
   Future<void> _showPaidOrdersHistory(BuildContext context, String franchiseeId) async {
     showDialog(context: context, builder: (_) => PaidOrdersHistoryDialog(franchiseeId: franchiseeId));
   }
@@ -756,7 +755,9 @@ class _CartItemCard extends StatelessWidget {
           vatRate: item.vatRate,
           sections: sections,
           initialOptions: item.selectedOptions,
-          franchiseeId: '', allProductsRef: [],
+          franchiseeId: '',
+          allProductsRef: [],
+          initialRemovedIngredientIds: item.removedIngredientProductIds,
         ),
       ),
     );

@@ -28,7 +28,6 @@ class FranchiseeProductEditView extends StatelessWidget {
             if (!product.isContainer)
               _buildPriceEditor(context, product),
 
-            // Si c'est un conteneur, on affiche la liste des enfants pour modifier LEURS prix
             if (product.isContainer) ...[
               const Text(
                 "Ce produit est un dossier. Voici ce qu'il contient :",
