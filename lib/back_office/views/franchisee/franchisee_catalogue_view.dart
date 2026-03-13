@@ -133,8 +133,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
 
     final results = await Future.wait([
-      repository.getFiltersStream(franchisorId).first,
-      repository.getKioskCategoriesStream(franchisorId).first,
+      repository
+          .getFiltersStream(franchisorId)
+          .first,
+      repository
+          .getKioskCategoriesStream(franchisorId)
+          .first,
     ]);
     if (mounted) {
       final filters = results[0] as List<ProductFilter>;
@@ -250,8 +254,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
   }
 
-  Future<void> _saveSubFilterOrder(
-      String mainCategoryId, List<String> subFilterIds) async {
+  Future<void> _saveSubFilterOrder(String mainCategoryId,
+      List<String> subFilterIds) async {
     if (_isSavingSubFilterOrder) return;
     setState(() => _isSavingSubFilterOrder = true);
 
@@ -407,7 +411,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
-        title: const Text("Gestion Catalogue", style: TextStyle(fontWeight: FontWeight.bold)),
+        title: const Text(
+            "Gestion Catalogue", style: TextStyle(fontWeight: FontWeight.bold)),
         elevation: 0,
         backgroundColor: Colors.white,
         foregroundColor: Colors.black,
@@ -461,7 +466,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     children: [
                       _buildSmartFilterChip("Tout", _SmartFilter.all),
                       const SizedBox(width: 8),
-                      _buildSmartFilterChip("Dossiers", _SmartFilter.containers, icon: Icons.folder, color: Colors.indigo),
+                      _buildSmartFilterChip("Dossiers", _SmartFilter.containers,
+                          icon: Icons.folder, color: Colors.indigo),
                       const SizedBox(width: 8),
                       _buildSmartFilterChip("Actifs", _SmartFilter.active,
                           icon: Icons.check_circle_outline,
@@ -481,20 +487,21 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                                     fontWeight: FontWeight.bold,
                                     color: Colors.grey))),
                         const SizedBox(width: 8),
-                        ..._allBackOfficeFilters.map((f) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
-                          child: ChoiceChip(
-                            label: Text(f.name),
-                            selected: _selectedBackOfficeFilterId == f.id,
-                            onSelected: (sel) {
-                              setState(() {
-                                _selectedBackOfficeFilterId =
-                                sel ? f.id : null;
-                                _selectedKioskFilterId = null;
-                              });
-                            },
-                          ),
-                        )),
+                        ..._allBackOfficeFilters.map((f) =>
+                            Padding(
+                              padding: const EdgeInsets.only(right: 8),
+                              child: ChoiceChip(
+                                label: Text(f.name),
+                                selected: _selectedBackOfficeFilterId == f.id,
+                                onSelected: (sel) {
+                                  setState(() {
+                                    _selectedBackOfficeFilterId =
+                                    sel ? f.id : null;
+                                    _selectedKioskFilterId = null;
+                                  });
+                                },
+                              ),
+                            )),
                       ]
                     ],
                   ),
@@ -538,11 +545,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     currentFranchiseeSettings =
                     Map<String, FranchiseeMenuItem>.fromEntries(
                       (menuSnapshot.data?.docs ?? []).map(
-                            (doc) => MapEntry(
-                          doc.id,
-                          FranchiseeMenuItem.fromFirestore(
-                              doc.data() as Map<String, dynamic>),
-                        ),
+                            (doc) =>
+                            MapEntry(
+                              doc.id,
+                              FranchiseeMenuItem.fromFirestore(
+                                  doc.data() as Map<String, dynamic>),
+                            ),
                       ),
                     );
 
@@ -582,13 +590,15 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                         return s != null && s.availableStartTime != null;
                       }).toList();
                     } else if (_currentSmartFilter == _SmartFilter.containers) {
-                      filteredProducts = filteredProducts.where((p) => p.isContainer).toList();
+                      filteredProducts = filteredProducts.where((p) =>
+                      p.isContainer).toList();
                     }
 
                     if (_selectedBackOfficeFilterId != null) {
                       filteredProducts = filteredProducts
-                          .where((p) => p.filterIds
-                          .contains(_selectedBackOfficeFilterId))
+                          .where((p) =>
+                          p.filterIds
+                              .contains(_selectedBackOfficeFilterId))
                           .toList();
                     }
 
@@ -651,7 +661,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         _currentSmartFilter = selected ? value : _SmartFilter.all);
       },
       backgroundColor: Colors.white,
-      selectedColor: color ?? Theme.of(context).primaryColor,
+      selectedColor: color ?? Theme
+          .of(context)
+          .primaryColor,
       labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87),
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
@@ -695,8 +707,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
   // --- VIEWS ---
 
-  Widget _buildPriceView(
-      List<MasterProduct> productsToDisplay,
+  Widget _buildPriceView(List<MasterProduct> productsToDisplay,
       Map<String, FranchiseeMenuItem> franchiseeSettings,
       CollectionReference franchiseeMenuRef,
       List<MasterProduct> allMasterProducts) {
@@ -713,7 +724,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
         return FranchiseeProductCard(
           product: product,
-          settings: settings ?? FranchiseeMenuItem(masterProductId: product.productId, price: product.price ?? 0.0),
+          settings: settings ?? FranchiseeMenuItem(
+              masterProductId: product.productId, price: product.price ?? 0.0),
           franchiseeId: franchiseeId!,
           franchisorId: franchisorId!,
           franchiseeMenuRef: franchiseeMenuRef,
@@ -775,28 +787,28 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
   }
 
-  Future<void> _confirmDisable(
-      BuildContext context,
+  Future<void> _confirmDisable(BuildContext context,
       CollectionReference menuRef,
       MasterProduct product,
       FranchiseeMenuItem? settings) async {
     final confirm = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Désactiver et Réinitialiser ?"),
-        content: const Text(
-            "Désactiver ce produit supprimera également tous ses prix et ordres personnalisés.\n\nContinuer ?"),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text("Annuler")),
-          TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child:
-              const Text("Confirmer", style: TextStyle(color: Colors.red))),
-        ],
-      ),
+      builder: (ctx) =>
+          AlertDialog(
+            title: const Text("Désactiver et Réinitialiser ?"),
+            content: const Text(
+                "Désactiver ce produit supprimera également tous ses prix et ordres personnalisés.\n\nContinuer ?"),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("Annuler")),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child:
+                  const Text("Confirmer", style: TextStyle(color: Colors.red))),
+            ],
+          ),
     );
     if (confirm != true) return;
 
@@ -822,8 +834,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   }
 
   // --- ORDRE D'AFFICHAGE ---
-  Widget _buildOrderView(
-      CollectionReference franchiseeMenuRef,
+  Widget _buildOrderView(CollectionReference franchiseeMenuRef,
       List<MasterProduct> allMasterProducts,
       Map<String, FranchiseeMenuItem> franchiseeSettings) {
     if (_isLoadingFilters) {
@@ -873,7 +884,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                   style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
-                      color: Theme.of(context).primaryColorDark)),
+                      color: Theme
+                          .of(context)
+                          .primaryColorDark)),
               onExpansionChanged: (bool expanded) {
                 setState(() {
                   _expansionState[item.categoryId] = expanded;
@@ -941,7 +954,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                           decoration: isAvailable
                               ? TextDecoration.none
                               : TextDecoration.lineThrough)),
-                  trailing: Text("${item.settings.price.toStringAsFixed(2)} €",
+                  trailing: Text("${item.settings.price?.toStringAsFixed(2)} €",
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
@@ -963,14 +976,14 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           _saveFilterOrder();
         } else if (movedItem is _SubFilterHeader) {
           _saveSubFilterOrder(movedItem.parentCategoryId, []); // Simplifié
-        } else if (movedItem is ({MasterProduct product, FranchiseeMenuItem settings})) {
+        } else
+        if (movedItem is ({MasterProduct product, FranchiseeMenuItem settings})) {
           _saveOrder(franchiseeMenuRef);
         }
       },
     );
   }
 
-  // --- MODALE DE CONFIGURATION COMPLÈTE ---
   void _showPriceDialog(BuildContext context, CollectionReference menuRef,
       MasterProduct product, FranchiseeMenuItem? currentSettings,
       {bool isComposite = false,
@@ -980,11 +993,23 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         List<MasterProduct>? allProducts,
         Map<String, FranchiseeMenuItem>? franchiseeSettings}) {
 
-    final priceController = TextEditingController(text: currentSettings?.price.toStringAsFixed(2) ?? '0.00');
+    // --- LOGIQUE D'INITIALISATION ---
+    // On n'affiche une valeur que si elle existe REELLEMENT dans les settings du franchisé.
+    // Si currentSettings.price est null, le champ reste VIDE pour afficher le prix conseillé en gris (hint).
+    String initialPrice = '';
+    if (currentSettings != null && currentSettings.price != null) {
+      initialPrice = currentSettings.price!.toStringAsFixed(2);
+    }
+
+    final priceController = TextEditingController(text: initialPrice);
+
+    // Initialisation des options
     final Map<String, TextEditingController> optionControllers = {};
     for (var opt in product.options) {
-      double existingPrice = currentSettings?.optionPrices[opt.id] ?? 0.0;
-      optionControllers[opt.id] = TextEditingController(text: existingPrice.toStringAsFixed(2));
+      double? existingPrice = currentSettings?.optionPrices[opt.id];
+      optionControllers[opt.id] = TextEditingController(
+          text: existingPrice != null ? existingPrice.toStringAsFixed(2) : ""
+      );
     }
 
     final List<double> vatRates = [5.5, 10.0, 20.0];
@@ -992,7 +1017,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     double selectedTakeawayVat = currentSettings?.takeawayVatRate ?? 5.5;
     bool hidePrice = currentSettings?.hidePriceOnCard ?? false;
 
-    // ✅ CONDITION : Afficher l'icône de gestion si composite OU sections OU ingrédients
     final bool showCompositionBtn = isComposite || product.sectionIds.isNotEmpty || product.ingredientProductIds.isNotEmpty;
 
     TimeOfDay? startTime;
@@ -1025,7 +1049,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // ✅ AFFICHER LE BOUTON SI showCompositionBtn est VRAI
                     if (showCompositionBtn && !isContainer) ...[
                       Container(
                         width: double.infinity,
@@ -1065,7 +1088,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                                 allProducts: allProducts ?? [],
                                 franchiseeSettings: franchiseeSettings ?? {},
                                 onUpdateChildPrice: (child, newPrice) {
-                                  _saveChildProductPrice(menuRef, child, newPrice);
+                                  // Géré par le composant
                                 },
                               ),
                             );
@@ -1077,12 +1100,23 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
 
                     Text("Prix et Taxes", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
-                    // ✨ OPTIMISATION : Autofocus activé pour saisie directe
                     TextFormField(
                       controller: priceController,
                       autofocus: true,
-                      decoration: const InputDecoration(labelText: "Prix TTC (€)", prefixIcon: Icon(Icons.euro), border: OutlineInputBorder()),
-                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: "Prix TTC (€)",
+                        // Affiche le prix par défaut du franchiseur si RIEN n'est saisi
+                        hintText: "Conseillé : ${product.price?.toStringAsFixed(2)} €",
+                        helperText: "Laissez vide pour le prix franchiseur",
+                        prefixIcon: const Icon(Icons.euro),
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.clear, size: 20),
+                          tooltip: "Effacer pour revenir au prix franchiseur",
+                          onPressed: () => priceController.clear(),
+                        ),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     ),
                     const SizedBox(height: 16),
                     Row(
@@ -1128,8 +1162,13 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                                 width: 100,
                                 child: TextFormField(
                                   controller: optionControllers[opt.id],
-                                  decoration: const InputDecoration(labelText: "Prix €", isDense: true, border: OutlineInputBorder()),
-                                  keyboardType: TextInputType.number,
+                                  decoration: const InputDecoration(
+                                    labelText: "Prix €",
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    hintText: "0.00",
+                                  ),
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 ),
                               ),
                             ],
@@ -1146,34 +1185,55 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
           ElevatedButton(
-              onPressed: () {
-                final double? basePrice = double.tryParse(priceController.text.replaceAll(',', '.'));
+              onPressed: () async {
+                final String rawText = priceController.text.replaceAll(',', '.').trim();
+                final double? parsedPrice = double.tryParse(rawText);
 
-                if (basePrice != null) {
-                  String? startStr = startTime != null ? "${startTime!.hour}:${startTime!.minute.toString().padLeft(2,'0')}" : null;
-                  String? endStr = endTime != null ? "${endTime!.hour}:${endTime!.minute.toString().padLeft(2,'0')}" : null;
+                // Préparation des données
+                String? startStr = startTime != null ? "${startTime!.hour}:${startTime!.minute.toString().padLeft(2,'0')}" : null;
+                String? endStr = endTime != null ? "${endTime!.hour}:${endTime!.minute.toString().padLeft(2,'0')}" : null;
 
-                  Map<String, double> newOptionPrices = {};
-                  optionControllers.forEach((key, controller) {
-                    double? val = double.tryParse(controller.text.replaceAll(',', '.'));
+                Map<String, double> newOptionPrices = {};
+                optionControllers.forEach((key, controller) {
+                  final String optText = controller.text.replaceAll(',', '.').trim();
+                  if (optText.isNotEmpty) {
+                    double? val = double.tryParse(optText);
                     if (val != null) newOptionPrices[key] = val;
-                  });
+                  }
+                });
 
-                  menuRef.doc(product.productId).set({
-                    'price': basePrice,
-                    'vatRate': selectedVat,
-                    'takeawayVatRate': selectedTakeawayVat,
-                    'hidePriceOnCard': hidePrice,
-                    'availableStartTime': startStr,
-                    'availableEndTime': endStr,
-                    'optionPrices': newOptionPrices,
-                    'masterProductId': product.productId,
-                    'isVisible': true,
-                    'isAvailable': true,
-                    'isContainer': isContainer,
-                    'containerProductIds': product.containerProductIds,
-                  }, SetOptions(merge: true));
+                final Map<String, dynamic> data = {
+                  'vatRate': selectedVat,
+                  'takeawayVatRate': selectedTakeawayVat,
+                  'hidePriceOnCard': hidePrice,
+                  'availableStartTime': startStr,
+                  'availableEndTime': endStr,
+                  'optionPrices': newOptionPrices,
+                  'masterProductId': product.productId,
+                  'isVisible': true,
+                  'isAvailable': true,
+                  'isContainer': isContainer,
+                  'containerProductIds': product.containerProductIds,
+                  'updatedAt': FieldValue.serverTimestamp(),
+                };
+
+                // --- LOGIQUE DE SUPPRESSION (Identique aux ingrédients) ---
+                if (rawText.isEmpty) {
+                  // L'utilisateur a tout effacé -> On supprime le champ 'price'
+                  // C'est cette suppression qui permet de récupérer le prix franchiseur
+                  data['price'] = FieldValue.delete();
+                } else {
+                  // L'utilisateur a mis une valeur (même 0) -> On l'enregistre
+                  data['price'] = parsedPrice ?? 0.0;
+                }
+
+                await menuRef.doc(product.productId).set(data, SetOptions(merge: true));
+
+                if (context.mounted) {
                   Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(rawText.isEmpty ? "Prix réinitialisé au prix franchiseur" : "Prix mis à jour")),
+                  );
                 }
               },
               child: const Text("Enregistrer")
@@ -1181,8 +1241,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         ],
       ),
     );
-  }
-}
+  }}
 
 // =========================================================================
 // WIDGET CARTE PRODUIT - OPTIMISÉ (Stateless)
@@ -1333,7 +1392,7 @@ class FranchiseeProductCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(8)
                             ),
                             child: Text(
-                              "${settings.price.toStringAsFixed(2)} €",
+                              "${settings.price?.toStringAsFixed(2)} €",
                               style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,

@@ -838,7 +838,7 @@ class FranchiseRepository {
         itemDocs.sort((a, b) {
           final posA = (a.data()['position'] as num?)?.toInt() ?? 999;
           final posB = (b.data()['position'] as num?)?.toInt() ?? 999;
-          return posB.compareTo(posA);
+          return posA.compareTo(posB);
         });
 
         final productIds = itemDocs

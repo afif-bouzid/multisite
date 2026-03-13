@@ -234,6 +234,11 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       _identifierController.text = identifier;
     }
 
+    // 1. On prépare le libellé en Français pour l'imprimante
+    final String kitchenOrderType = cart.orderType == OrderType.takeaway
+        ? "A EMPORTER"
+        : "SUR PLACE";
+
     final itemsToPrint = cart.items.where((item) => !item.isSentToKitchen).toList();
     final bool allItemsAlreadySent = itemsToPrint.isEmpty && cart.items.isNotEmpty;
 
@@ -252,12 +257,14 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       if (confirmReprint != true) return;
 
       if (printerConfig.isKitchenPrintingEnabled) {
+        // RÉIMPRESSION
         await PrintingService().printKitchenTicketSafe(
           printerConfig: printerConfig,
-          itemsToPrint: cart.items,
+          itemsToPrint: cart.items, // On envoie la liste
           identifier: cart.orderIdentifier!,
           isUpdate: false,
           isReprint: true,
+          orderType: kitchenOrderType, // On passe l'info ici
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Réimpression envoyée."), backgroundColor: Colors.blue));
@@ -266,20 +273,21 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       return;
     }
 
+    // ENVOI NORMAL
     cart.markUnsentItemsAsSent();
     HapticFeedback.heavyImpact();
 
     if (printerConfig.isKitchenPrintingEnabled) {
-      PrintingService().printKitchenTicketSafe(
+      await PrintingService().printKitchenTicketSafe(
         printerConfig: printerConfig,
         itemsToPrint: itemsToPrint,
         identifier: cart.orderIdentifier!,
         isUpdate: cart.items.length > itemsToPrint.length,
         isReprint: false,
+        orderType: kitchenOrderType, // On passe l'info ici aussi
       );
     }
   }
-
   Future<void> _processPayment(Map<String, dynamic> paymentMethods, CartProvider cart) async {
     if (cart.items.isEmpty) return;
 

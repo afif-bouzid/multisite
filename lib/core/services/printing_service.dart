@@ -28,7 +28,7 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
   final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
   final String header = params['header']?.toString() ?? '';
   final String identifier = params['identifier']?.toString() ?? '';
-  final String orderType = params['orderType']?.toString() ?? ''; // [MODIFICATION] Récupération du type
+  final String orderType = params['orderType']?.toString() ?? '';
   final List<dynamic> lines = params['lines'] as List? ?? [];
   final String date = params['date']?.toString() ?? '';
   final CapabilityProfile profile = params['profile'];
@@ -44,10 +44,20 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
     bytes += generator.text(header, styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, codeTable: 'CP1252'));
   }
 
-  // [MODIFICATION] Affichage du type de commande (SUR PLACE / EMPORTER)
+  // Affichage du type de commande (SUR PLACE / EMPORTER) en GROS et GRAS
   if (orderType.isNotEmpty) {
     bytes += generator.feed(1);
-    bytes += generator.text(orderType, styles: const PosStyles(align: PosAlign.center, bold: true, reverse: true, width: PosTextSize.size2, height: PosTextSize.size2, codeTable: 'CP1252'));
+    bytes += generator.text(
+        orderType,
+        styles: const PosStyles(
+            align: PosAlign.center,
+            bold: true,
+            reverse: true, // Texte blanc sur fond noir
+            width: PosTextSize.size2,
+            height: PosTextSize.size2,
+            codeTable: 'CP1252'
+        )
+    );
     bytes += generator.feed(1);
   }
 
@@ -278,35 +288,25 @@ class PrintingService {
   Map<String, dynamic> _cleanItemForPrint(dynamic item) {
     List<String> options = [];
 
-    // Fonction locale pour extraire les options (modifiée pour corriger le bug historique)
     void extractOpts(dynamic raw) {
       if (raw == null) return;
 
       if (raw is List) {
-        // --- CORRECTION: Gestion du format Historique (Liste de Maps avec 'items') ---
         for (var element in raw) {
-          // Si l'élément est une section sauvegardée (contient une liste 'items')
           if (element is Map && element.containsKey('items') && element['items'] is List) {
             var subItems = element['items'] as List;
             if (subItems.isNotEmpty) {
-              // On formate chaque sous-élément (le vrai produit)
               options.addAll(subItems.map((e) => _formatOptionString(e)));
-              // On ajoute le séparateur visuel pour regrouper par section
               options.add("___SECTION_SEP___");
             }
           } else {
-            // Cas standard (liste simple d'options ou ancien format)
             options.add(_formatOptionString(element));
           }
         }
-        // Supprimer le dernier séparateur s'il est à la fin
         if (options.isNotEmpty && options.last == "___SECTION_SEP___") {
           options.removeLast();
         }
-        // --------------------------------------------------------------------------
-
       } else if (raw is Map) {
-        // Cas standard du Panier "Live" (Map<String, List>)
         raw.forEach((k, v) {
           if (v is List && v.isNotEmpty) {
             options.addAll(v.map((e) => _formatOptionString(e)));
@@ -324,10 +324,8 @@ class PrintingService {
     if (item is Map) {
       qtyVal = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
       priceVal = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
-      // On tente de récupérer les options (format 'options' ou 'selectedOptions')
       extractOpts(item['options'] ?? item['selectedOptions']);
     } else {
-      // Cas où item est un objet Dart (CartItem ou autre)
       try {
         qtyVal = (item as dynamic).quantity;
       } catch (_) {}
@@ -354,6 +352,7 @@ class PrintingService {
       'removed': removed
     };
   }
+
   String _formatOptionString(dynamic optionItem) {
     String name = _extractName(optionItem);
     double price = 0.0;
@@ -385,7 +384,7 @@ class PrintingService {
     required String identifier,
     bool isUpdate = false,
     bool isReprint = false,
-    String? orderType // [MODIFICATION] Nouveau paramètre
+    String? orderType
   }) async {
     await _tryRestoreSavedDevice();
     final List<Map<String, dynamic>> lines = _standardizeItems(itemsToPrint);
@@ -394,7 +393,7 @@ class PrintingService {
       'paperWidthInt': 80,
       'header': isReprint ? "RE-IMPRESSION" : (isUpdate ? "AJOUT" : "NOUVEAU"),
       'identifier': identifier,
-      'orderType': orderType, // [MODIFICATION] Passage du paramètre
+      'orderType': orderType,
       'lines': lines,
       'date': DateFormat('HH:mm').format(DateTime.now()),
       'profile': await CapabilityProfile.load()
@@ -405,7 +404,6 @@ class PrintingService {
     await _tryRestoreSavedDevice();
     Map<String, dynamic> tMap = transaction is Map ? Map.from(transaction) : (transaction as dynamic).toMap();
 
-    // ON FORCE LE NETTOYAGE ICI AUSSI POUR AVOIR LES SECTIONS
     tMap['items'] = _standardizeItems(tMap['items'] as List);
 
     Map<String, dynamic> cMap = receiptConfig is Map ? Map.from(receiptConfig) : {};
@@ -429,7 +427,6 @@ class PrintingService {
       try { items = (transaction as dynamic).items; } catch(_) {}
     }
 
-    // [MODIFICATION] Détection du type de commande pour impression auto
     String orderTypeStr = "SUR PLACE";
     try {
       final tMap = transaction is Map ? transaction : (transaction as dynamic).toMap();
@@ -445,7 +442,7 @@ class PrintingService {
           printerConfig: printerConfig,
           itemsToPrint: items,
           identifier: "CLIENT",
-          orderType: orderTypeStr // [MODIFICATION] Envoi du type
+          orderType: orderTypeStr
       );
     }
   }

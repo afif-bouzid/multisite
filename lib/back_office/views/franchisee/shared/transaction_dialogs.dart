@@ -139,7 +139,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
             : widget.transaction.id;
 
         // 2. Conversion PROPRE des articles en Liste de Maps
-        // C'est souvent ici que ça bloque : on force la conversion pour être sûr
         final List<Map<String, dynamic>> cleanItems = widget.transaction.items
             .map((item) => _safeItemToMap(item))
             .toList();
@@ -148,11 +147,22 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
 
         if (cleanItems.isEmpty) throw Exception("Liste articles vide");
 
+        // --- DEBUT DE LA MODIFICATION ---
+        String orderTypeStr = "on_site";
+        try {
+          String typeRaw = (widget.transaction as dynamic).orderType.toString().toLowerCase();
+          if (typeRaw.contains('takeaway') || typeRaw.contains('emporter')) {
+            orderTypeStr = "takeaway";
+          }
+        } catch(_) {}
+        // --- FIN DE LA MODIFICATION ---
+
         await PrintingService().printKitchenTicketSafe(
           printerConfig: localConfig,
-          itemsToPrint: cleanItems, // On envoie la liste nettoyée
+          itemsToPrint: cleanItems,
           identifier: safeId,
           isReprint: true,
+          orderType: orderTypeStr, // <-- AJOUT DU PARAMETRE ICI
         );
       } else {
         // --- IMPRESSION TICKET CAISSE ---
@@ -183,7 +193,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
           };
         }
 
-        // C. FIX ID LENGTH : Le service de caisse coupe à 8 char, on s'assure qu'on les a
         if (transactionMap['id'] != null && transactionMap['id'].toString().length < 8) {
           transactionMap['id'] = transactionMap['id'].toString().padRight(8, ' ');
         }
@@ -303,7 +312,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
 
                     // LISTE DES ARTICLES
                     ...widget.transaction.items.map((item) {
-                      final name = item is Map ? item['name'] : (item as dynamic).name;
+                      final name =                                    item is Map ? item['name'] : (item as dynamic).name;
                       final quantity = item is Map ? (item['quantity'] ?? 1) : (item as dynamic).quantity;
                       final price = item is Map ? (item['price'] ?? 0.0) : (item as dynamic).price;
                       final double itemTotal = (double.parse(price.toString()) * int.parse(quantity.toString()));

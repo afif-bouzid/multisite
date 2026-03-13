@@ -32,7 +32,7 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
 
   Future<void> _pickImage() async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
       setState(() {
         _selectedImageFile = image;
