@@ -953,6 +953,7 @@ class ArrowClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
+
 class ProductFormView extends StatefulWidget {
   final MasterProduct? productToEdit;
   final bool isDuplicating;
@@ -1034,7 +1035,9 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
           if(match != null) _associatedSections.add(match);
         }
       }
+
       _ingredientProductIds = List.from(p.ingredientProductIds);
+
     } else {
       if (widget.preselectedFilterId != null) {
         _selectedKioskFilterIds.add(widget.preselectedFilterId!);
@@ -1047,25 +1050,15 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    for(var s in _subscriptions) {
-      s.cancel();
-    }
+    for(var s in _subscriptions) s.cancel();
     super.dispose();
   }
 
   Future<void> _pickImage() async {
-    // 1. On déclare et on attend la sélection de l'image d'abord
-    // On enlève imageQuality pour garder le PNG intact
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
-
-    // 2. On vérifie si l'utilisateur n'a pas annulé (image != null)
-    if (image != null) {
-      setState(() {
-        _imageFile = image;
-        _displayUrl = null;
-      });
-    }
+    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (image != null) setState(() { _imageFile = image; _displayUrl = null; });
   }
+
   void _showStepPicker() async {
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
     List<SectionGroup> groups = [];
@@ -1111,17 +1104,20 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 
+  // --- MISE À JOUR : MODAL AVEC FILTRES ---
   void _showProductLinkPicker() async {
+    // On ouvre le nouveau modal de sélection avancé en passant les filtres disponibles
     final List<String>? resultIds = await showDialog<List<String>>(
       context: context,
       builder: (ctx) => ContainerSelectionDialog(
         allProducts: widget.allProducts,
         alreadyLinkedIds: _linkedProductIds,
         currentProductId: widget.productToEdit?.id,
-        availableFilters: _loadedFilters,
+        availableFilters: _loadedFilters, // Passage des filtres ici
       ),
     );
 
+    // On ajoute les produits sélectionnés à la liste
     if (resultIds != null && resultIds.isNotEmpty) {
       setState(() {
         for (var id in resultIds) {
@@ -1182,7 +1178,10 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 icon: _isLoading
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check, size: 18),
-                label: const Text("Enregistrer", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                label: const Text(
+                  "Enregistrer",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
@@ -1225,27 +1224,22 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                   child: Container(
                     width: 120, height: 120,
                     decoration: BoxDecoration(
-                      // LOGIQUE 3 : Transparence (pas de fond opaque)
-                      color: Colors.transparent,
-                      borderRadius: BorderRadius.circular(16),
+                      color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
                       image: _imageFile != null
                           ? DecorationImage(
                           image: kIsWeb
                               ? NetworkImage(_imageFile!.path)
                               : FileImage(File(_imageFile!.path)) as ImageProvider,
-                          fit: BoxFit.contain)
-                          : (_displayUrl != null && _displayUrl!.isNotEmpty
-                          ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.contain)
+                          fit: BoxFit.cover)
+                          : (_displayUrl != null
+                          ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
                           : null),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: (_imageFile == null && (_displayUrl == null || _displayUrl!.isEmpty))
-                        ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40)
-                        : null,
+                    child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
                   ),
                 ),
-                // LOGIQUE 1 : Pas de croix rouge si pas d'image
-                if (_imageFile != null || (_displayUrl != null && _displayUrl!.isNotEmpty))
+                if (_imageFile != null || _displayUrl != null)
                   Positioned(
                     right: -5,
                     top: -5,
@@ -1258,7 +1252,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                       },
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]),
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
                         child: const Icon(Icons.cancel, color: Colors.red, size: 20),
                       ),
                     ),
@@ -1275,19 +1269,18 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                     validator: (v) => v!.isEmpty ? "Requis" : null,
                   ),
                   const SizedBox(height: 16),
-                  // LOGIQUE 2 : Pas d'input de prix si conteneur
-                  if (!_isContainer)
-                    TextFormField(
-                      controller: _priceController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: const InputDecoration(labelText: "Prix (€)", border: OutlineInputBorder(), suffixText: "€"),
-                    ),
+                  TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(labelText: "Prix (€)", border: OutlineInputBorder(), suffixText: "€"),
+                  ),
                 ],
               ),
             )
           ],
         ),
         const SizedBox(height: 16),
+
         SwitchListTile(
           title: const Text("Est un Conteneur ?"),
           subtitle: const Text("Permet de regrouper plusieurs produits (ex: Frites -> Petite, Grande)."),
@@ -1298,14 +1291,12 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
               : (val) {
             setState(() {
               _isContainer = val;
-              if(val) {
-                _isComposite = false;
-                _priceController.clear(); // On vide le prix par sécurité
-              }
+              if(val) _isComposite = false;
             });
           },
           contentPadding: EdgeInsets.zero,
         ),
+
         SwitchListTile(
           title: const Text("Est un ingrédient ?"),
           subtitle: const Text("Pour les fiches techniques uniquement"),
@@ -1321,40 +1312,69 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
           },
           contentPadding: EdgeInsets.zero,
         ),
+
         const SizedBox(height: 24),
         TextFormField(controller: _descriptionController, maxLines: 3, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
+
         const SizedBox(height: 24),
+
         if (!_isIngredient && !_isContainer) ...[
-          const Text("Ingrédients (pour la fiche technique)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          const Text(
+            "Ingrédients (pour la fiche technique)",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
-                  spacing: 8, runSpacing: 8,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     ..._ingredientProductIds.map((id) {
-                      final ingName = widget.allProducts.firstWhere((p) => p.productId == id, orElse: () => MasterProduct.empty()).name;
+                      final ingName = widget.allProducts
+                          .firstWhere((p) => p.productId == id,
+                          orElse: () => MasterProduct.empty())
+                          .name;
                       return Chip(
                         label: Text(ingName),
-                        onDeleted: () => setState(() => _ingredientProductIds.remove(id)),
+                        onDeleted: () {
+                          setState(() {
+                            _ingredientProductIds.remove(id);
+                          });
+                        },
                         backgroundColor: Colors.orange.shade50,
                         deleteIconColor: Colors.red,
                       );
                     }),
-                    ActionChip(avatar: const Icon(Icons.add, size: 18), label: const Text("Ajouter"), onPressed: _showIngredientPicker),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text("Ajouter"),
+                      onPressed: _showIngredientPicker,
+                    ),
                   ],
                 ),
                 if (_ingredientProductIds.isEmpty)
-                  const Padding(padding: EdgeInsets.only(top: 8.0), child: Text("Aucun ingrédient sélectionné.", style: TextStyle(color: Colors.grey, fontSize: 12))),
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "Aucun ingrédient sélectionné.",
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ),
               ],
             ),
           ),
           const SizedBox(height: 24),
         ],
+
         const Text("Filtres Back-Office", style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
@@ -1364,7 +1384,9 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
             return FilterChip(
               label: Text(filter.name),
               selected: isSelected,
-              onSelected: (selected) => setState(() => selected ? _selectedFilterIds.add(filter.id) : _selectedFilterIds.remove(filter.id)),
+              onSelected: (selected) {
+                setState(() { selected ? _selectedFilterIds.add(filter.id) : _selectedFilterIds.remove(filter.id); });
+              },
             );
           }).toList(),
         ),
@@ -1373,7 +1395,9 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   }
 
   Widget _buildContentTab() {
-    if (_isContainer) return _buildContainerManager();
+    if (_isContainer) {
+      return _buildContainerManager();
+    }
     return _buildSectionsManager();
   }
 
@@ -1385,7 +1409,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         children: [
           _buildSectionHeader(
             title: "Produits liés au conteneur",
-            subtitle: "Ajoutez ici les produits qui apparaîtront dans ce dossier.",
+            subtitle: "Ajoutez ici les produits qui apparaîtront dans ce dossier (ex: Petite Frite, Grande Frite).",
             icon: Icons.folder_copy_rounded,
             color: Colors.orange.shade800,
             action: ElevatedButton.icon(
@@ -1396,6 +1420,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 backgroundColor: Colors.orange.shade800,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -1416,23 +1441,30 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
               itemBuilder: (context, index) {
                 final prodId = _linkedProductIds[index];
                 final product = widget.allProducts.firstWhere((p) => p.id == prodId, orElse: () => MasterProduct(id: prodId, productId: prodId, name: "Produit Introuvable", createdBy: ''));
+
                 return Padding(
                   key: ValueKey("link_$prodId"),
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Card(
+                    elevation: 2,
+                    shadowColor: Colors.black12,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       leading: Container(
                         width: 50, height: 50,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
-                          color: Colors.transparent, // LOGIQUE 3
-                          image: (product.photoUrl != null && product.photoUrl!.isNotEmpty) ? DecorationImage(image: CachedNetworkImageProvider(product.photoUrl!), fit: BoxFit.contain) : null,
+                          color: Colors.grey.shade200,
+                          image: (product.photoUrl != null && product.photoUrl!.isNotEmpty) ? DecorationImage(image: CachedNetworkImageProvider(product.photoUrl!), fit: BoxFit.cover) : null,
                         ),
                         child: (product.photoUrl == null || product.photoUrl!.isEmpty) ? const Icon(Icons.fastfood, color: Colors.grey) : null,
                       ),
-                      title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      trailing: IconButton(icon: const Icon(Icons.link_off_rounded, color: Colors.red), onPressed: () => setState(() => _linkedProductIds.removeAt(index))),
+                      title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.link_off_rounded, color: Colors.red),
+                        onPressed: () => setState(() => _linkedProductIds.removeAt(index)),
+                      ),
                     ),
                   ),
                 );
@@ -1464,6 +1496,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 backgroundColor: Colors.blue.shade800,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -1487,12 +1520,35 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                   key: ValueKey("g_sec_${section.sectionId}"),
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Card(
+                    elevation: 2,
+                    shadowColor: Colors.black12,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
-                      leading: Icon(Icons.drag_handle_rounded, color: Colors.blue.shade700),
-                      title: Text(section.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                      subtitle: Text("${section.selectionMin} à ${section.selectionMax} choix"),
-                      trailing: IconButton(icon: const Icon(Icons.delete_outline_rounded, color: Colors.red), onPressed: () => setState(() => _associatedSections.removeAt(index))),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.shade50,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(Icons.drag_handle_rounded, color: Colors.blue.shade700),
+                      ),
+                      title: Text(
+                        section.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                      subtitle: Text(
+                        "${section.selectionMin} à ${section.selectionMax} choix",
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.red.shade50,
+                          padding: const EdgeInsets.all(12),
+                        ),
+                        onPressed: () => setState(() => _associatedSections.removeAt(index)),
+                      ),
                     ),
                   ),
                 );
@@ -1505,15 +1561,33 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     );
   }
 
-  Widget _buildSectionHeader({required String title, required String subtitle, required IconData icon, required Color color, required Widget action}) {
+  Widget _buildSectionHeader({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required Color color,
+    required Widget action,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 28)),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
+              child: Icon(icon, color: color, size: 28),
+            ),
             const SizedBox(width: 12),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))])),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black87)),
+                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.2)),
+                ],
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),
@@ -1526,8 +1600,18 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(32),
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-      child: Column(children: [Icon(Icons.inbox_rounded, size: 48, color: Colors.grey.shade300), const SizedBox(height: 12), Text(message, style: TextStyle(color: Colors.grey.shade500))]),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.inbox_rounded, size: 48, color: Colors.grey.shade300),
+          const SizedBox(height: 12),
+          Text(message, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
+        ],
+      ),
     );
   }
 
@@ -1547,7 +1631,15 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 title: Text(filter.name),
                 value: isSelected,
                 activeColor: Colors.black,
-                onChanged: (val) => setState(() => val == true ? _selectedKioskFilterIds.add(filter.id) : _selectedKioskFilterIds.remove(filter.id)),
+                onChanged: (val) {
+                  setState(() {
+                    if (val == true) {
+                      _selectedKioskFilterIds.add(filter.id);
+                    } else {
+                      _selectedKioskFilterIds.remove(filter.id);
+                    }
+                  });
+                },
               );
             }).toList(),
           );
@@ -1560,15 +1652,23 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     final repo = FranchiseRepository();
-    List<String> finalIngredientsIds = (!_isContainer && !_isIngredient) ? _ingredientProductIds : [];
-    List<String> finalSectionIds = (!_isContainer && !_isIngredient) ? _associatedSections.map((s) => s.sectionId).toList() : [];
+
+    List<String> finalIngredientsIds = [];
+    if (!_isContainer && !_isIngredient) {
+      finalIngredientsIds = _ingredientProductIds;
+    }
+
+    List<String> finalSectionIds = [];
+    if (!_isContainer && !_isIngredient) {
+      finalSectionIds = _associatedSections.map((s) => s.sectionId).toList();
+    }
 
     try {
       await repo.saveProduct(
         product: widget.isDuplicating ? null : widget.productToEdit,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
-        price: _isContainer ? 0.0 : (double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0.0),
+        price: double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0.0,
         isComposite: _isComposite,
         isIngredient: _isIngredient,
         isContainer: _isContainer,
@@ -1590,7 +1690,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 }
-
 
 class _IngredientSearchDialog extends StatefulWidget {
   final List<MasterProduct> ingredients;
