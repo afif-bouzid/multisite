@@ -2,6 +2,9 @@
 import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../models.dart';
 
 class PosLocalConfig {
   String franchiseeId;
@@ -42,38 +45,53 @@ class PosLocalConfig {
 }
 
 class LocalConfigService {
-  static const String _fileName = "pos_config.json";
+  static const String _printerConfigKey = 'printer_config';
+  static const String _receiptConfigKey = 'receipt_config';
 
-  Future<String> _getFilePath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return '${directory.path}/$_fileName';
-  }
+  Future<PrinterConfig> getPrinterConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? jsonString = prefs.getString(_printerConfigKey);
 
-  Future<PosLocalConfig> loadConfig() async {
-    try {
-      final path = await _getFilePath();
-      final file = File(path);
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        return PosLocalConfig.fromJson(jsonDecode(content));
+    if (jsonString != null) {
+      try {
+        return PrinterConfig.fromFirestore(json.decode(jsonString));
+      } catch (e) {
+        return PrinterConfig();
       }
-    } catch (e) {}
-    return PosLocalConfig();
+    }
+    return PrinterConfig();
   }
 
-  Future<void> saveConfig(PosLocalConfig config) async {
-    final path = await _getFilePath();
-    final file = File(path);
-    await file.writeAsString(jsonEncode(config.toJson()));
+  Future<void> savePrinterConfig(PrinterConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    String jsonString = json.encode(config.toMap());
+    await prefs.setString(_printerConfigKey, jsonString);
   }
 
-  Future<void> clearConfig() async {
-    try {
-      final path = await _getFilePath();
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
+  Future<ReceiptConfig> getReceiptConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? jsonString = prefs.getString(_receiptConfigKey);
+    if (jsonString != null) {
+      try {
+        return ReceiptConfig.fromMap(json.decode(jsonString));
+      } catch (e) {
+        return ReceiptConfig(
+            headerText: '',
+            footerText: '',
+            showVatDetails: true,
+            printReceiptOnPayment: true);
       }
-    } catch (e) {}
+    }
+    return ReceiptConfig(
+        headerText: '',
+        footerText: '',
+        showVatDetails: true,
+        printReceiptOnPayment: true);
+  }
+
+  Future<void> saveReceiptConfig(ReceiptConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    String jsonString = json.encode(config.toMap());
+    await prefs.setString(_receiptConfigKey, jsonString);
   }
 }

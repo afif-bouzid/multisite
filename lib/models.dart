@@ -763,6 +763,8 @@ class PrinterConfig {
   final PrinterType type;
   final PaperWidth paperWidth;
   final bool isKitchenPrintingEnabled;
+  final bool isBluetooth;
+  final String? macAddress;
 
   PrinterConfig({
     this.name = 'Imprimante Cuisine',
@@ -770,6 +772,8 @@ class PrinterConfig {
     this.type = PrinterType.escpos,
     this.paperWidth = PaperWidth.mm80,
     this.isKitchenPrintingEnabled = true,
+    this.isBluetooth = false,
+    this.macAddress,
   });
 
   factory PrinterConfig.fromFirestore(Map<String, dynamic> data) {
@@ -785,6 +789,8 @@ class PrinterConfig {
         orElse: () => PaperWidth.mm80,
       ),
       isKitchenPrintingEnabled: data['isKitchenPrintingEnabled'] ?? true,
+      isBluetooth: data['isBluetooth'] ?? false,
+      macAddress: data['macAddress'],
     );
   }
 
@@ -795,45 +801,44 @@ class PrinterConfig {
       'type': type.toString(),
       'paperWidth': paperWidth.toString(),
       'isKitchenPrintingEnabled': isKitchenPrintingEnabled,
+      'isBluetooth': isBluetooth,
+      'macAddress': macAddress,
     };
   }
 }
 
 class ReceiptConfig {
-  final String? logoUrl;
   final String headerText;
   final String footerText;
   final bool showVatDetails;
   final bool printReceiptOnPayment;
 
   ReceiptConfig({
-    this.logoUrl,
-    this.headerText = 'Merci de votre visite !',
-    this.footerText = 'À bientôt !',
-    this.showVatDetails = true,
-    this.printReceiptOnPayment = true,
+    required this.headerText,
+    required this.footerText,
+    required this.showVatDetails,
+    required this.printReceiptOnPayment,
   });
-
-  factory ReceiptConfig.fromFirestore(Map<String, dynamic> data) {
-    return ReceiptConfig(
-      logoUrl: data['logoUrl'],
-      headerText: data['headerText'] ?? 'Merci de votre visite !',
-      footerText: data['footerText'] ?? 'À bientôt !',
-      showVatDetails: data['showVatDetails'] ?? true,
-      printReceiptOnPayment: data['printReceiptOnPayment'] ?? true,
-    );
-  }
 
   Map<String, dynamic> toMap() {
     return {
-      'logoUrl': logoUrl,
       'headerText': headerText,
       'footerText': footerText,
       'showVatDetails': showVatDetails,
       'printReceiptOnPayment': printReceiptOnPayment,
     };
   }
+
+  factory ReceiptConfig.fromMap(Map<String, dynamic> map) {
+    return ReceiptConfig(
+      headerText: map['headerText'] ?? '',
+      footerText: map['footerText'] ?? '',
+      showVatDetails: map['showVatDetails'] ?? true,
+      printReceiptOnPayment: map['printReceiptOnPayment'] ?? true,
+    );
+  }
 }
+
 
 class AvailabilitySchedule {
   final List<int> daysOfWeek;

@@ -1,9 +1,8 @@
-﻿import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+﻿import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:flutter/material.dart';
 
-import '../../../core/auth_provider.dart';
-import '../../../core/repository/repository.dart';
 import '../../../core/services/local_config_service.dart';
+import '../../../core/services/printing_service.dart';
 import '../../../models.dart';
 
 class FranchiseeSettingsView extends StatelessWidget {
@@ -15,6 +14,7 @@ class FranchiseeSettingsView extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
+          title: const Text("Paramètres"),
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.print_outlined), text: "Imprimantes"),
@@ -43,9 +43,15 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   final _formKey = GlobalKey<FormState>();
   final _receiptIpController = TextEditingController();
   final _kitchenIpController = TextEditingController();
-  bool _isAutoPrint = false;
+
+  bool _useBluetooth = false;
+  List<BluetoothDevice> _devices = [];
+  BluetoothDevice? _selectedDevice;
+  bool _isScanning = false;
 
   final LocalConfigService _localService = LocalConfigService();
+  final PrintingService _printingService = PrintingService();
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -54,81 +60,263 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   }
 
   Future<void> _loadSettings() async {
-    final config = await _localService.loadConfig();
-    setState(() {
-      _receiptIpController.text = config.receiptPrinterIp;
-      _kitchenIpController.text = config.kitchenPrinterIp;
-      _isAutoPrint = config.isAutoPrintEnabled;
-    });
-  }
-
-  Future<void> _saveSettings() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    final currentConfig = await _localService.loadConfig();
-
-    currentConfig.receiptPrinterIp = _receiptIpController.text;
-    currentConfig.kitchenPrinterIp = _kitchenIpController.text;
-    currentConfig.isAutoPrintEnabled = _isAutoPrint;
-
-    await _localService.saveConfig(currentConfig);
+    setState(() => _isLoading = true);
+    final config = await _localService.getPrinterConfig();
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Configuration locale enregistrée !"),
-          backgroundColor: Colors.green));
+      setState(() {
+        _receiptIpController.text = config.ipAddress;
+        _useBluetooth = config.isBluetooth;
+        _kitchenIpController.text = "192.168.1.100"; // Ou charger depuis config si dispo
+      });
+
+      if (_useBluetooth) {
+        await _scanBluetoothDevices();
+
+        // Logique de reconnexion automatique à l'ouverture
+        if (config.macAddress != null && _devices.isNotEmpty) {
+          try {
+            final device = _devices.firstWhere(
+                  (d) => d.address == config.macAddress,
+            );
+
+            setState(() {
+              _selectedDevice = device;
+            });
+
+            // SUPER IMPORTANT : On réinjecte l'imprimante dans le service actif
+            _printingService.selectDevice(device);
+
+          } catch (e) {
+            _selectedDevice = null;
+          }
+        }
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _scanBluetoothDevices() async {
+    setState(() {
+      _isScanning = true;
+      _devices = [];
+    });
+
+    try {
+      final devices = await _printingService.getBluetoothDevices();
+      if (mounted) {
+        setState(() {
+          _devices = devices;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur scan Bluetooth: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    }
+  }
+
+  // --- C'EST ICI QUE TOUT SE JOUE ---
+  Future<void> _saveSettings() async {
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+
+      // 1. Sauvegarde dans la base de données locale (Persistance long terme)
+      final newConfig = PrinterConfig(
+        name: _useBluetooth
+            ? (_selectedDevice?.name ?? 'Imprimante BT')
+            : 'Imprimante Principale',
+        ipAddress: _receiptIpController.text,
+        isBluetooth: _useBluetooth,
+        macAddress: _useBluetooth ? _selectedDevice?.address : null,
+      );
+
+      await _localService.savePrinterConfig(newConfig);
+
+      // 2. MISE A JOUR IMMEDIATE DU SERVICE D'IMPRESSION (Session en cours)
+      // C'est ce qui manquait : on force le service à utiliser ce device tout de suite
+      if (_useBluetooth && _selectedDevice != null) {
+        await _printingService.selectDevice(_selectedDevice!);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuration enregistrée et appliquée !'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _testPrint() async {
+    setState(() => _isLoading = true);
+    try {
+      // On s'assure que le service a bien l'info avant de tester
+      if (_useBluetooth && _selectedDevice != null) {
+        _printingService.selectDevice(_selectedDevice!);
+      }
+
+      final testConfig = PrinterConfig(
+        ipAddress: _receiptIpController.text,
+        isBluetooth: _useBluetooth,
+        macAddress: _selectedDevice?.address,
+      );
+
+      await _printingService.printTestTicket(printerConfig: testConfig);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ticket de test envoyé')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Text("Configuration Réseau (Local)",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _receiptIpController,
-            decoration: const InputDecoration(
-              labelText: "IP Imprimante CAISSE (Ticket Client)",
-              hintText: "ex: 192.168.1.100",
-              prefixIcon: Icon(Icons.receipt),
-              border: OutlineInputBorder(),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Imprimante Principale",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _kitchenIpController,
-            decoration: const InputDecoration(
-              labelText: "IP Imprimante CUISINE (Fabrication)",
-              hintText: "ex: 192.168.1.101",
-              prefixIcon: Icon(Icons.soup_kitchen),
-              border: OutlineInputBorder(),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              title: const Text("Utiliser Bluetooth"),
+              subtitle: Text(_useBluetooth ? "Bluetooth" : "Réseau (IP)"),
+              value: _useBluetooth,
+              onChanged: (val) {
+                setState(() {
+                  _useBluetooth = val;
+                  if (val && _devices.isEmpty) {
+                    _scanBluetoothDevices();
+                  }
+                });
+              },
             ),
-          ),
-          const Divider(height: 40),
-          SwitchListTile(
-            title: const Text("Mode Automatique Borne"),
-            subtitle: const Text(
-                "Si activé, la caisse détecte les paiements borne et imprime automatiquement en cuisine."),
-            value: _isAutoPrint,
-            onChanged: (val) => setState(() => _isAutoPrint = val),
-            secondary: const Icon(Icons.autorenew, color: Colors.blue),
-          ),
-          const SizedBox(height: 30),
-          ElevatedButton.icon(
-            onPressed: _saveSettings,
-            icon: const Icon(Icons.save),
-            label: const Text("Enregistrer la configuration"),
-            style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(20),
-                backgroundColor: Colors.blueGrey.shade800,
-                foregroundColor: Colors.white),
-          )
-        ],
+            const Divider(),
+            if (_useBluetooth) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<BluetoothDevice>(
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: "Choisir l'appareil",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.bluetooth),
+                      ),
+                      value: _selectedDevice,
+                      items: _devices.map((d) {
+                        return DropdownMenuItem(
+                          value: d,
+                          child: Text(d.name ?? d.address ?? "Inconnu"),
+                        );
+                      }).toList(),
+                      onChanged: (device) {
+                        setState(() => _selectedDevice = device);
+                      },
+                      validator: (value) =>
+                      value == null ? "Sélectionnez une imprimante" : null,
+                    ),
+                  ),
+                  IconButton(
+                    icon: _isScanning
+                        ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh),
+                    onPressed: _isScanning ? null : _scanBluetoothDevices,
+                  )
+                ],
+              ),
+            ] else ...[
+              TextFormField(
+                controller: _receiptIpController,
+                decoration: const InputDecoration(
+                  labelText: "Adresse IP",
+                  hintText: "192.168.1.200",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lan),
+                ),
+                keyboardType: TextInputType.datetime,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'IP requise';
+                  return null;
+                },
+              ),
+            ],
+            const SizedBox(height: 24),
+            const Text(
+              "Imprimante Cuisine",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _kitchenIpController,
+              decoration: const InputDecoration(
+                labelText: "Adresse IP Cuisine",
+                hintText: "192.168.1.100",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.kitchen),
+              ),
+              keyboardType: TextInputType.datetime,
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.print),
+                    label: const Text("Tester"),
+                    onPressed: _testPrint,
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.save),
+                    label: const Text("Enregistrer"),
+                    onPressed: _saveSettings,
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -142,92 +330,108 @@ class ReceiptSettingsForm extends StatefulWidget {
 }
 
 class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
-  bool _isLoading = false;
-  late String _franchiseeId;
-  final _repository = FranchiseRepository();
+  final headerController = TextEditingController();
+  final footerController = TextEditingController();
+  final LocalConfigService _localService = LocalConfigService();
+
+  ReceiptConfig _config = ReceiptConfig(
+      headerText: '',
+      footerText: '',
+      showVatDetails: true,
+      printReceiptOnPayment: true);
+
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _franchiseeId =
-        Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+    _loadReceiptSettings();
+  }
+
+  Future<void> _loadReceiptSettings() async {
+    setState(() => _isLoading = true);
+    final config = await _localService.getReceiptConfig();
+    setState(() {
+      _config = config;
+      headerController.text = config.headerText;
+      footerController.text = config.footerText;
+      _isLoading = false;
+    });
   }
 
   Future<void> _saveSettings(
-    ReceiptConfig currentConfig, {
-    String? headerText,
-    String? footerText,
-    bool? showVatDetails,
-    bool? printReceiptOnPayment,
-  }) async {
-    if (_isLoading) return;
+      {String? headerText,
+        String? footerText,
+        bool? showVatDetails,
+        bool? printReceiptOnPayment}) async {
     setState(() => _isLoading = true);
 
     final newConfig = ReceiptConfig(
-      headerText: headerText ?? currentConfig.headerText,
-      footerText: footerText ?? currentConfig.footerText,
-      showVatDetails: showVatDetails ?? currentConfig.showVatDetails,
+      headerText: headerText ?? headerController.text,
+      footerText: footerText ?? footerController.text,
+      showVatDetails: showVatDetails ?? _config.showVatDetails,
       printReceiptOnPayment:
-          printReceiptOnPayment ?? currentConfig.printReceiptOnPayment,
+      printReceiptOnPayment ?? _config.printReceiptOnPayment,
     );
-    try {
-      await _repository.saveReceiptConfig(_franchiseeId, newConfig);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.red));
-      }
+
+    await _localService.saveReceiptConfig(newConfig);
+
+    setState(() {
+      _config = newConfig;
+      _isLoading = false;
+    });
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Préférences sauvegardées')),
+      );
     }
-    if (mounted) setState(() => _isLoading = false);
   }
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<ReceiptConfig>(
-      stream: _repository.getReceiptConfigStream(_franchiseeId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
 
-        final config = snapshot.data!;
-        final headerController = TextEditingController(text: config.headerText);
-        final footerController = TextEditingController(text: config.footerText);
-        return ListView(
-          padding: const EdgeInsets.all(24.0),
-          children: [
-            TextFormField(
-                controller: headerController,
-                decoration: const InputDecoration(labelText: "Texte d'en-tête"),
-                onEditingComplete: () =>
-                    _saveSettings(config, headerText: headerController.text),
-                maxLines: 3),
-            const SizedBox(height: 16),
-            TextFormField(
-                controller: footerController,
-                decoration:
-                    const InputDecoration(labelText: "Texte de pied de page"),
-                onEditingComplete: () =>
-                    _saveSettings(config, footerText: footerController.text),
-                maxLines: 3),
-            const SizedBox(height: 16),
-            SwitchListTile(
-                title: const Text("Impression automatique après paiement"),
-                subtitle: const Text(
-                    "Désactivez si vousne voulez pas de ticket client."),
-                value: config.printReceiptOnPayment,
-                onChanged: (value) =>
-                    _saveSettings(config, printReceiptOnPayment: value)),
-            SwitchListTile(
-                title: const Text("Afficher le détail de la TVA"),
-                value: config.showVatDetails,
-                onChanged: (value) =>
-                    _saveSettings(config, showVatDetails: value)),
-            const Divider(height: 40),
-            if (_isLoading) const Center(child: CircularProgressIndicator()),
-          ],
-        );
-      },
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text("Personnalisation",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: headerController,
+          decoration: const InputDecoration(
+            labelText: "En-tête du ticket",
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          onEditingComplete: () => _saveSettings(),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: footerController,
+          decoration: const InputDecoration(
+            labelText: "Pied de page",
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          onEditingComplete: () => _saveSettings(),
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text("Imprimer auto. après paiement"),
+          value: _config.printReceiptOnPayment,
+          onChanged: (value) => _saveSettings(printReceiptOnPayment: value),
+        ),
+        SwitchListTile(
+          title: const Text("Détail TVA"),
+          value: _config.showVatDetails,
+          onChanged: (value) => _saveSettings(showVatDetails: value),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton(
+            onPressed: () => _saveSettings(), child: const Text("Enregistrer"))
+      ],
     );
   }
 }

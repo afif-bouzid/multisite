@@ -38,10 +38,8 @@ class _FranchiseeCompositeOverridesDialogState
     extends State<FranchiseeCompositeOverridesDialog> {
   late Future<List<SectionOverrideData>> _dataFuture;
   final Map<String, TextEditingController> _priceControllers = {};
-  final Map<String, List<SectionItem>> _orderedItems = {};
   bool _isLoading = false;
 
-  // Référence à la sous-collection du menu franchisé pour ce produit
   late final DocumentReference _menuProductRef;
 
   @override
@@ -65,30 +63,21 @@ class _FranchiseeCompositeOverridesDialogState
 
     // 2. Récupérer les overrides de prix
     final priceOverridesSnapshot =
-        await _menuProductRef.collection('supplement_overrides').get();
+    await _menuProductRef.collection('supplement_overrides').get();
     final priceOverrides = {
       for (var doc in priceOverridesSnapshot.docs)
         doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
     };
 
-    // 3. Récupérer les overrides d'ordre
-    final orderOverridesSnapshot =
-        await _menuProductRef.collection('section_overrides').get();
-    final orderOverrides = {
-      for (var doc in orderOverridesSnapshot.docs)
-        doc.id: List<String>.from(doc.data()['itemOrder'] ?? [])
-    };
-
     List<SectionOverrideData> finalData = [];
     for (var section in baseSections) {
       List<SectionItem> items = List.from(section.items);
-      final order = orderOverrides[section.sectionId];
 
-      if (order != null && order.isNotEmpty) {
-        // Appliquer l'ordre personnalisé
+      // TRI : On force l'ordre selon la liste "ingredientProductIds" du produit (Master Order)
+      if (widget.product.ingredientProductIds.isNotEmpty) {
         items.sort((a, b) {
-          int indexA = order.indexOf(a.product.productId);
-          int indexB = order.indexOf(b.product.productId);
+          int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
+          int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
           if (indexA == -1) indexA = 999;
           if (indexB == -1) indexB = 999;
           return indexA.compareTo(indexB);
@@ -99,12 +88,9 @@ class _FranchiseeCompositeOverridesDialogState
       for (var item in items) {
         final overridePrice = priceOverrides[item.product.productId];
         _priceControllers[item.product.productId] = TextEditingController(
-          text: overridePrice?.toStringAsFixed(2),
+          text: overridePrice != null ? overridePrice.toStringAsFixed(2) : "",
         );
       }
-
-      // Stocker l'ordre initial (pour le drag-and-drop)
-      _orderedItems[section.sectionId] = items;
 
       finalData.add(SectionOverrideData(
         section: section,
@@ -113,6 +99,7 @@ class _FranchiseeCompositeOverridesDialogState
       ));
     }
 
+    // Tri des sections selon l'ordre défini dans le produit
     finalData.sort((a, b) {
       int indexA = widget.product.sectionIds.indexOf(a.section.sectionId);
       int indexB = widget.product.sectionIds.indexOf(b.section.sectionId);
@@ -126,27 +113,21 @@ class _FranchiseeCompositeOverridesDialogState
     setState(() => _isLoading = true);
     final batch = FirebaseFirestore.instance.batch();
 
-    // 1. Sauvegarder les PRIX
+    // Sauvegarder uniquement les PRIX dans supplement_overrides pour mise à jour instantanée
     _priceControllers.forEach((productId, controller) {
       final priceRef =
-          _menuProductRef.collection('supplement_overrides').doc(productId);
-      final priceValue = double.tryParse(controller.text.replaceAll(',', '.'));
+      _menuProductRef.collection('supplement_overrides').doc(productId);
 
-      if (priceValue != null && priceValue >= 0) {
-        // Sauvegarde le nouveau prix
-        batch.set(priceRef, {'price': priceValue});
+      final textVal = controller.text.replaceAll(',', '.').trim();
+
+      if (textVal.isNotEmpty) {
+        final priceValue = double.tryParse(textVal);
+        if (priceValue != null && priceValue >= 0) {
+          batch.set(priceRef, {'price': priceValue}, SetOptions(merge: true));
+        }
       } else {
-        // Si le champ est vide ou invalide, on supprime l'override
         batch.delete(priceRef);
       }
-    });
-
-    // 2. Sauvegarder l'ORDRE
-    _orderedItems.forEach((sectionId, items) {
-      final orderRef =
-          _menuProductRef.collection('section_overrides').doc(sectionId);
-      final itemOrder = items.map((item) => item.product.productId).toList();
-      batch.set(orderRef, {'itemOrder': itemOrder});
     });
 
     try {
@@ -154,7 +135,7 @@ class _FranchiseeCompositeOverridesDialogState
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Options et prix des suppléments mis à jour."),
+          content: Text("Prix mis à jour ! Visible immédiatement en caisse."),
           backgroundColor: Colors.green,
         ));
       }
@@ -166,9 +147,7 @@ class _FranchiseeCompositeOverridesDialogState
         ));
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -180,43 +159,125 @@ class _FranchiseeCompositeOverridesDialogState
     super.dispose();
   }
 
+  // --- LOGIQUE DES ICONES DE SECTION ---
+  Widget _getSectionIcon(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('increment') || t.contains('quantity') || t.contains('compteur')) {
+      return const Icon(Icons.add_circle_outline, color: Colors.blue);
+    } else if (t.contains('unique') || t.contains('radio')) {
+      return const Icon(Icons.radio_button_checked, color: Colors.orange);
+    } else {
+      return const Icon(Icons.check_box, color: Colors.green);
+    }
+  }
+
+  String _getSectionTypeText(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('increment')) return "INCRÉMENTATION";
+    if (t.contains('unique') || t.contains('radio')) return "CHOIX UNIQUE (RADIO)";
+    return "CHOIX MULTIPLE (CHECKBOX)";
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("Gérer les options de '${widget.product.name}'"),
+      title: Row(
+        children: [
+          const Icon(Icons.settings_suggest, size: 28),
+          const SizedBox(width: 12),
+          Expanded(child: Text("Options de '${widget.product.name}'")),
+        ],
+      ),
       content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.6, // 60% de la largeur
-        height: MediaQuery.of(context).size.height * 0.7, // 70% de la hauteur
+        width: MediaQuery.of(context).size.width * 0.7,
+        height: MediaQuery.of(context).size.height * 0.8,
         child: FutureBuilder<List<SectionOverrideData>>(
           future: _dataFuture,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting ||
-                _isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) {
-              return Center(child: Text("Erreur: ${snapshot.error}"));
-            }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text("Aucune section trouvée."));
-            }
-
-            final sectionDataList = snapshot.data!;
+            if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
+            if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucune section trouvée."));
 
             return ListView.builder(
-              itemCount: sectionDataList.length,
+              itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
-                final sectionData = sectionDataList[index];
+                final data = snapshot.data![index];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),
-                  clipBehavior: Clip.antiAlias,
-                  child: ExpansionTile(
-                    title: Text(sectionData.section.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text("${sectionData.items.length} options"),
-                    initiallyExpanded: index == 0,
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Column(
                     children: [
-                      _buildReorderableList(sectionData.section.sectionId)
+                      // Header de la section avec infos type et min/max
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        ),
+                        child: Row(
+                          children: [
+                            _getSectionIcon(data.section.type),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(data.section.title.toUpperCase(),
+                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                                  Text(_getSectionTypeText(data.section.type),
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.grey.shade300)
+                              ),
+                              child: Text(
+                                "MIN: ${data.section.selectionMin} / MAX: ${data.section.selectionMax == 0 ? '∞' : data.section.selectionMax}",
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      // Liste des items (Simple ListView, pas de Drag & Drop)
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: data.items.length,
+                        separatorBuilder: (context, i) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final item = data.items[idx];
+                          final controller = _priceControllers[item.product.productId];
+                          return ListTile(
+                            title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text("Prix base: ${item.supplementPrice.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 12)),
+                            trailing: SizedBox(
+                              width: 140,
+                              child: TextField(
+                                controller: controller,
+                                textAlign: TextAlign.right,
+                                decoration: const InputDecoration(
+                                    labelText: "Prix perso (€)",
+                                    hintText: "Défaut",
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    suffixText: "€"
+                                ),
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*([.,]?\d{0,2})'))],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 );
@@ -226,70 +287,18 @@ class _FranchiseeCompositeOverridesDialogState
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Annuler"),
-        ),
-        ElevatedButton(
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
           onPressed: _isLoading ? null : _saveChanges,
-          child: const Text("Sauvegarder"),
+          icon: const Icon(Icons.save),
+          label: const Text("Sauvegarder les prix"),
         ),
       ],
-    );
-  }
-
-  Widget _buildReorderableList(String sectionId) {
-    final items = _orderedItems[sectionId] ?? [];
-
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final controller = _priceControllers[item.product.productId];
-
-        return Container(
-          key: ValueKey(item.product.id),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            color: index % 2 == 0 ? Colors.white : Colors.grey.shade50,
-          ),
-          child: ListTile(
-            leading: ReorderableDragStartListener(
-              index: index,
-              child: const Icon(Icons.drag_handle),
-            ),
-            title: Text(item.product.name),
-            subtitle: Text(
-                "Prix de base: ${item.supplementPrice.toStringAsFixed(2)} €"),
-            trailing: SizedBox(
-              width: 150,
-              child: TextFormField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: "Prix personnalisé (€)",
-                  hintText: "Aucun (base)",
-                  isDense: true,
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d*([.,]?\d{0,2})')),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) newIndex -= 1;
-          final item = _orderedItems[sectionId]!.removeAt(oldIndex);
-          _orderedItems[sectionId]!.insert(newIndex, item);
-        });
-      },
     );
   }
 }

@@ -17,19 +17,30 @@ class UpdateService {
       final response = await http.get(Uri.parse(
           'https://api.github.com/repos/$repoOwner/$repoName/releases/latest'));
 
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        debugPrint("Erreur GitHub API: ${response.statusCode}");
+        return null;
+      }
 
       final data = jsonDecode(response.body);
       final tagName = data['tag_name'];
 
-      final apkAsset = (data['assets'] as List)
-          .firstWhere((e) => e['name'].endsWith('.apk'), orElse: () => null);
+      // CORRECTION: On cherche l'APK de manière plus sûre
+      // Idéalement, si vous avez plusieurs APK (arm64, v7), filtrez ici.
+      final assets = data['assets'] as List?;
+      if (assets == null || assets.isEmpty) return null;
+
+      final apkAsset = assets.firstWhere(
+            (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
+        orElse: () => null,
+      );
 
       if (tagName == null || apkAsset == null) return null;
 
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
-      final latestVersion = tagName.replaceFirst('v', '');
+      // Nettoyage de la version (enlève le 'v' s'il existe)
+      final latestVersion = tagName.toString().replaceAll('v', '');
 
       if (_isNewer(latestVersion, currentVersion)) {
         return {
@@ -60,29 +71,44 @@ class UpdateService {
         if (l > c) return true;
         if (l < c) return false;
       }
-    } catch (_) {}
-
+    } catch (_) {
+      return false;
+    }
     return false;
   }
 
   static Future<void> downloadAndInstall(String apkUrl) async {
     try {
       final dir = await getTemporaryDirectory();
-      final file = File("${dir.path}/update.apk");
+      final savePath = "${dir.path}/update.apk";
+      final file = File(savePath);
 
-      final response = await http.get(Uri.parse(apkUrl));
+      // Si un vieux fichier existe, on le supprime
+      if (await file.exists()) {
+        await file.delete();
+      }
+
+      // CORRECTION CRITIQUE : Utilisation de Stream pour éviter le crash mémoire
+      final request = http.Request('GET', Uri.parse(apkUrl));
+      final response = await http.Client().send(request);
+
       if (response.statusCode != 200) {
         throw Exception("Échec du téléchargement : ${response.statusCode}");
       }
 
-      await file.writeAsBytes(response.bodyBytes);
+      // Écriture du fichier par morceaux (chunks)
+      final sink = file.openWrite();
+      await response.stream.pipe(sink);
+      await sink.close();
 
-      await platform.invokeMethod("installApk", {
-        "path": file.path,
-      });
+      debugPrint("Téléchargement terminé : $savePath");
+
+      // Appel au code natif
+      await platform.invokeMethod("installApk", { "path": savePath });
+
     } catch (e) {
-      debugPrint("Erreur install APK: $e");
-      throw Exception("Impossible d'installer l'APK : $e");
+      debugPrint("Erreur lors de la mise à jour : $e");
+      rethrow; // Relance l'erreur pour pouvoir l'afficher dans l'UI si besoin
     }
   }
 }
