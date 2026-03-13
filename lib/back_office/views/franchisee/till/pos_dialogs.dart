@@ -7,6 +7,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../../core/repository/repository.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../core/services/printing_service.dart';
 import '/models.dart';
 
 // --- DATA CLASS ---
@@ -1023,30 +1024,59 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
   bool _isReprinting = false;
   static const Color primaryColor = AppColors.bkBlack;
 
-  Future<void> _handleReprint(BuildContext context,
-      {required bool isKitchen}) async {
-    setState(() => _isReprinting = true);
+// DANS pos_dialogs.dart
+
+// DANS pos_dialogs.dart
+
+  Future<void> _handleReprint(BuildContext context, {required bool isKitchen}) async {
+    // 1. On lance le chargement
+    if (mounted) setState(() => _isReprinting = true);
+
     try {
+      final printingService = PrintingService();
+
+      // 2. On laisse le service récupérer la config sauvegardée (Pas de config forcée ici)
+      final Map<String, dynamic> printerConfig = {
+        'isBluetooth': true, // On privilégie le Bluetooth
+        'paperWidth': '80',
+      };
+
       if (isKitchen) {
-        await _repository.reprintKitchenTicket(widget.transaction.id);
+        await printingService.printKitchenTicketSafe(
+          printerConfig: printerConfig,
+          itemsToPrint: widget.transaction.items, // Utilise la liste brute
+          identifier: widget.transaction.identifier.isNotEmpty
+              ? widget.transaction.identifier
+              : "TICKET",
+          isReprint: true,
+        );
       } else {
-        await _repository.reprintReceipt(widget.transaction.id);
+        await printingService.printReceipt(
+          printerConfig: printerConfig,
+          transaction: widget.transaction, // Le service va maintenant nettoyer les items lui-même
+          franchisee: {}, // Laisse le service charger les vrais réglages
+          receiptConfig: {}, // Laisse le service charger le footer/header
+        );
       }
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text("Impression envoyée"),
             backgroundColor: Colors.green));
       }
     } catch (e) {
+      debugPrint("Erreur impression: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.red));
       }
     } finally {
-      if (mounted) setState(() => _isReprinting = false);
+      // 4. STOPPER LE MOULINAGE (Quoi qu'il arrive)
+      if (mounted) {
+        setState(() => _isReprinting = false);
+      }
     }
   }
-
   Widget _buildInfoRow(
       IconData icon, String label, String value, Color valueColor) {
     return Row(

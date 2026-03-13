@@ -1,0 +1,15 @@
+{
+  "projects": {
+    "default": "tenka-caisse"
+  },
+  "targets": {
+    "tenka-caisse": {
+      "hosting": {
+        "app2026": [
+          "ouiborne-2026"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

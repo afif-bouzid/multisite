@@ -10,11 +10,9 @@ import '../../../core/auth_provider.dart';
 import '../../../core/constants.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-// Assurez-vous que ce fichier existe bien, sinon commentez l'import
-import 'image_input_card.dart';
 
-enum ProductTypeFilter { sellable, ingredients }
-enum SellableTypeFilter { all, simple, composite }
+// MODIFICATION : Simplification de l'enum pour les 3 onglets principaux
+enum ProductTypeFilter { simple, container, ingredients }
 
 class CatalogueView extends StatefulWidget {
   const CatalogueView({super.key});
@@ -31,14 +29,19 @@ class _CatalogueViewState extends State<CatalogueView> {
   List<KioskCategory> _cachedKioskCategories = [];
   Map<String, String> _kioskFilterNames = {};
   Map<String, String> _filterToCategoryMap = {};
+
   String _searchQuery = '';
-  ProductTypeFilter _productTypeFilter = ProductTypeFilter.sellable;
-  SellableTypeFilter _sellableTypeFilter = SellableTypeFilter.all;
-  bool _showContainersOnly = false;
+
+  // MODIFICATION : On utilise uniquement ce filtre principal
+  ProductTypeFilter _productTypeFilter = ProductTypeFilter.simple;
+
   String? _selectedKioskCategoryId;
   String? _selectedSubFilterId;
   String? _selectedBackOfficeFilterId;
+
   bool _isLoading = true;
+  bool _areSectionsLoaded = false;
+
   final List<StreamSubscription> _subscriptions = [];
 
   @override
@@ -47,10 +50,8 @@ class _CatalogueViewState extends State<CatalogueView> {
     final repo = FranchiseRepository();
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
 
-    // Chargement Produits
     _subscriptions.add(repo.getMasterProductsStream(uid).listen((products) {
       if (mounted) {
-        // Tri par position si existant
         products.sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
         setState(() {
           _allProducts = products;
@@ -59,7 +60,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       }
     }));
 
-    // Chargement Sections
     _subscriptions.add(repo.getSectionsStream(uid).listen((sections) {
       final map = <String, String>{};
       for (var s in sections) {
@@ -69,11 +69,11 @@ class _CatalogueViewState extends State<CatalogueView> {
         setState(() {
           _cachedSectionsList = sections;
           _sectionNames = map;
+          _areSectionsLoaded = true;
         });
       }
     }));
 
-    // Chargement Catégories Borne
     _subscriptions.add(repo.getKioskCategoriesStream(uid).listen((cats) {
       final filterMap = <String, String>{};
       final catMap = <String, String>{};
@@ -92,7 +92,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       }
     }));
 
-    // Chargement Filtres BO
     _subscriptions.add(repo.getFiltersStream(uid).listen((filters) {
       if (mounted) setState(() => _cachedFilters = filters);
     }));
@@ -109,31 +108,36 @@ class _CatalogueViewState extends State<CatalogueView> {
     super.dispose();
   }
 
+  Color _getColorFromHex(String hexColor) {
+    try {
+      hexColor = hexColor.toUpperCase().replaceAll("#", "");
+      if (hexColor.length == 6) {
+        hexColor = "FF$hexColor";
+      }
+      return Color(int.parse(hexColor, radix: 16));
+    } catch (e) {
+      return Colors.grey;
+    }
+  }
+
   List<MasterProduct> _getFilteredProducts() {
     return _allProducts.where((product) {
-      // Filtre Recherche
+      // 1. Recherche texte
       if (_searchQuery.isNotEmpty) {
         if (!product.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
           return false;
         }
       }
-      // Filtre Type (Ingrédient vs Vendable)
+
+      // 2. Filtre par Onglet Principal (Produit / Dossier / Ingrédient)
       if (!_matchesProductType(product)) return false;
 
-      // Filtre Sous-type Vendable (Simple vs Composé)
-      if (_productTypeFilter == ProductTypeFilter.sellable) {
-        if (!_matchesSellableType(product)) return false;
-      }
-
-      // Filtre Conteneur uniquement
-      if (_showContainersOnly && !product.isContainer) return false;
-
-      // Filtre Étiquette BackOffice
+      // 3. Filtres Back-Office (Tags)
       if (_selectedBackOfficeFilterId != null) {
         if (!product.filterIds.contains(_selectedBackOfficeFilterId)) return false;
       }
 
-      // Filtre Catégorie Borne
+      // 4. Filtres Borne (Kiosk)
       if (_selectedKioskCategoryId != null) {
         if (!_matchesKioskCategory(product)) return false;
       }
@@ -141,23 +145,20 @@ class _CatalogueViewState extends State<CatalogueView> {
     }).toList();
   }
 
+  // MODIFICATION : Logique stricte des 3 onglets
   bool _matchesProductType(MasterProduct product) {
     switch (_productTypeFilter) {
-      case ProductTypeFilter.sellable:
-        return !product.isIngredient;
-      case ProductTypeFilter.ingredients:
-        return product.isIngredient;
-    }
-  }
+      case ProductTypeFilter.simple:
+      // Onglet "Produits" : Tout ce qui est vendable et NON conteneur
+        return !product.isIngredient && !product.isContainer;
 
-  bool _matchesSellableType(MasterProduct product) {
-    switch (_sellableTypeFilter) {
-      case SellableTypeFilter.all:
-        return true;
-      case SellableTypeFilter.simple:
-        return !product.isComposite; // isComposite est souvent true pour les menus
-      case SellableTypeFilter.composite:
-        return product.isComposite;
+      case ProductTypeFilter.container:
+      // Onglet "Dossiers" : Uniquement les conteneurs
+        return product.isContainer;
+
+      case ProductTypeFilter.ingredients:
+      // Onglet "Ingrédients"
+        return product.isIngredient;
     }
   }
 
@@ -178,7 +179,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       final item = currentList.removeAt(oldIndex);
       currentList.insert(newIndex, item);
     });
-    // Sauvegarde de l'ordre via repository
     await FranchiseRepository().updateMasterProductsOrder(currentList);
   }
 
@@ -192,8 +192,14 @@ class _CatalogueViewState extends State<CatalogueView> {
       body: Column(
         children: [
           _buildTopHeader(),
-          _buildCategoryTabs(),
+
+          // On affiche les catégories bornes uniquement pour les produits vendables (Simples ou Conteneurs)
+          // On masque pour les ingrédients
+          if (_productTypeFilter != ProductTypeFilter.ingredients)
+            _buildCategoryTabs(),
+
           if (_selectedKioskCategoryId != null) _buildSubCategoryBar(),
+
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -226,14 +232,14 @@ class _CatalogueViewState extends State<CatalogueView> {
 
   Widget _buildTopHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16), // Padding ajusté en bas car plus de 2ème ligne
       decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), offset: const Offset(0, 4), blurRadius: 10)]
       ),
       child: Column(
         children: [
-          // Barre de recherche et filtre Étiquette
+          // Ligne 1 : Recherche + Étiquettes
           Row(
             children: [
               Expanded(
@@ -281,51 +287,18 @@ class _CatalogueViewState extends State<CatalogueView> {
           ),
           const SizedBox(height: 16),
 
-          // Boutons Vendables / Ingrédients
+          // Ligne 2 : Les 3 Onglets Principaux (MODIFIÉ)
           Row(
             children: [
-              Expanded(child: _buildBigFilterBtn("Vendables", Icons.storefront, ProductTypeFilter.sellable)),
-              const SizedBox(width: 12),
+              Expanded(child: _buildBigFilterBtn("Produits", Icons.storefront, ProductTypeFilter.simple)),
+              const SizedBox(width: 8),
+              Expanded(child: _buildBigFilterBtn("Dossiers", Icons.folder_copy_rounded, ProductTypeFilter.container)),
+              const SizedBox(width: 8),
               Expanded(child: _buildBigFilterBtn("Ingrédients", Icons.kitchen, ProductTypeFilter.ingredients)),
             ],
           ),
 
-          // Sous-filtres Vendables
-          if (_productTypeFilter == ProductTypeFilter.sellable) ...[
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  _buildToggleChip("Produits Simples", SellableTypeFilter.simple),
-                  const SizedBox(width: 10),
-                  // _buildToggleChip("Menus & Composés", SellableTypeFilter.composite),
-                  // const SizedBox(width: 10),
-                  Container(height: 20, width: 1, color: Colors.grey[300]),
-                  const SizedBox(width: 10),
-                  FilterChip(
-                    label: const Text("Conteneurs (Frites...)"),
-                    selected: _showContainersOnly,
-                    onSelected: (val) {
-                      setState(() {
-                        _showContainersOnly = val;
-                      });
-                    },
-                    backgroundColor: Colors.white,
-                    selectedColor: Colors.orange.shade100,
-                    checkmarkColor: Colors.orange.shade800,
-                    labelStyle: TextStyle(
-                        color: _showContainersOnly ? Colors.orange.shade900 : Colors.grey[700],
-                        fontWeight: _showContainersOnly ? FontWeight.bold : FontWeight.normal,
-                        fontSize: 13
-                    ),
-                    shape: StadiumBorder(side: BorderSide(color: _showContainersOnly ? Colors.orange.shade200 : Colors.grey.shade300)),
-                  ),
-                ],
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
+          // Suppression de la ligne des sous-filtres ici (gain de place)
         ],
       ),
     );
@@ -355,44 +328,24 @@ class _CatalogueViewState extends State<CatalogueView> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: isSelected ? Colors.white : Colors.grey[700], size: 18),
-            const SizedBox(width: 8),
-            Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 14)),
+            // Petit ajustement : si l'écran est petit, on peut masquer le texte ou réduire la taille
+            Flexible(
+              child: Padding(
+                padding: const EdgeInsets.only(left: 6.0),
+                child: Text(label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: isSelected ? Colors.white : Colors.grey[700], fontWeight: FontWeight.bold, fontSize: 13)
+                ),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildToggleChip(String label, SellableTypeFilter type) {
-    final isSelected = _sellableTypeFilter == type;
-    return InkWell(
-      onTap: () {
-        setState(() {
-          if (isSelected) {
-            _sellableTypeFilter = SellableTypeFilter.all;
-          } else {
-            _sellableTypeFilter = type;
-          }
-        });
-      },
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue[50] : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? Colors.blue : Colors.grey.shade300),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: isSelected ? Colors.blue[800] : Colors.grey[600]),
-        ),
-      ),
-    );
-  }
-
   Widget _buildCategoryTabs() {
-    if (_productTypeFilter != ProductTypeFilter.sellable) return const SizedBox.shrink();
     return Container(
       color: Colors.white,
       height: 50,
@@ -474,7 +427,7 @@ class _CatalogueViewState extends State<CatalogueView> {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(0, 10, 0, 100),
         itemCount: list.length,
-        itemBuilder: (ctx, i) => _buildProductCard(list[i], repo, enableDrag: false),
+        itemBuilder: (ctx, i) => _buildProductCard(list[i], repo, enableDrag: false, index: i),
       );
     }
     return ReorderableListView.builder(
@@ -490,7 +443,7 @@ class _CatalogueViewState extends State<CatalogueView> {
           children: [
             if (_selectedSubFilterId == null)
               _buildSubCategoryHeaderIfNeeded(product, i, list),
-            _buildProductCard(product, repo, enableDrag: true, key: ValueKey(product.id)),
+            _buildProductCard(product, repo, enableDrag: true, key: ValueKey("card_${product.id}"), index: i),
           ],
         );
       },
@@ -560,10 +513,14 @@ class _CatalogueViewState extends State<CatalogueView> {
     return const SizedBox.shrink();
   }
 
-  Widget _buildProductCard(MasterProduct product, FranchiseRepository repo, {required bool enableDrag, Key? key}) {
+  Widget _buildProductCard(MasterProduct product, FranchiseRepository repo, {required bool enableDrag, Key? key, required int index}) {
     final bool isIngredient = product.isIngredient;
     final bool isContainer = product.isContainer;
     String? kioskLabel;
+
+    final productFilters = _cachedFilters
+        .where((f) => product.filterIds.contains(f.id))
+        .toList();
 
     if (product.kioskFilterIds.isNotEmpty) {
       for (var id in product.kioskFilterIds) {
@@ -580,9 +537,10 @@ class _CatalogueViewState extends State<CatalogueView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 5))
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
         ],
       ),
       child: Material(
@@ -635,12 +593,44 @@ class _CatalogueViewState extends State<CatalogueView> {
                       Text(
                           product.name,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                               fontSize: 19,
-                              color: Color(0xFF2D3436)
+                              color: Color(0xFF2D3436),
+                              letterSpacing: -0.5
                           )
                       ),
+
+                      if (productFilters.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6.0, bottom: 6.0),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: productFilters.map((filter) {
+                              final color = _getColorFromHex(filter.color ?? '#9E9E9E');
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: color.withOpacity(0.4), width: 1),
+                                ),
+                                child: Text(
+                                  filter.name.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: color.withOpacity(1.0),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
+
                       const SizedBox(height: 8),
+
                       if (kioskLabel != null)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -649,6 +639,17 @@ class _CatalogueViewState extends State<CatalogueView> {
                           child: Text(
                               kioskLabel,
                               style: TextStyle(fontSize: 12, color: Colors.purple.shade800, fontWeight: FontWeight.bold)
+                          ),
+                        ),
+
+                      if (!product.isContainer && product.description != null && product.description!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                              product.description!,
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis
                           ),
                         ),
 
@@ -667,65 +668,84 @@ class _CatalogueViewState extends State<CatalogueView> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.list_alt_rounded, size: 16, color: Colors.black54),
+                                  Icon(Icons.folder_open_rounded, size: 16, color: Colors.orange.shade800),
                                   const SizedBox(width: 8),
                                   Text(
-                                      "${product.containerProductIds.length} produit(s) lié(s)",
-                                      style: const TextStyle(
-                                          fontSize: 14,
+                                      "Contenu du dossier :",
+                                      style: TextStyle(
+                                          fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.black87
+                                          color: Colors.orange.shade900
                                       )
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              if (product.containerProductIds.isEmpty)
+                                const Text("Vide", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey))
+                              else
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: product.containerProductIds.map((id) {
+                                    final childProduct = _allProducts.firstWhere(
+                                            (p) => p.id == id,
+                                        orElse: () => MasterProduct(id: '', name: 'Inconnu', productId: '', createdBy: '')
+                                    );
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        childProduct.name,
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                                      ),
+                                    );
+                                  }).toList(),
+                                )
                             ],
                           ),
                         )
                       else if (product.sectionIds.isNotEmpty)
                         Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F7FF),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.blue.shade100),
-                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
-                                  Icon(Icons.layers_rounded, size: 16, color: Colors.blueGrey),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Configuration du produit :",
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.blueGrey
-                                    ),
-                                  ),
+                                  Icon(Icons.hub_rounded, size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 6),
+                                  Text("PERSONNALISATION :", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1)),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Divider(height: 1, color: Colors.white),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: product.sectionIds.map((sId) => _buildSectionBadge(sId)).toList(),
-                              ),
+
+                              if (!_areSectionsLoaded)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                )
+                              else
+                                Wrap(
+                                  spacing: -12, // Chevauchement "puzzle"
+                                  runSpacing: 8,
+                                  children: List.generate(product.sectionIds.length, (idx) {
+                                    return _buildStepArrow(product.sectionIds[idx], idx, product.sectionIds.length);
+                                  }),
+                                ),
                             ],
                           ),
-                        )
-                      else
+                        ),
+
+                      if (!isIngredient && (product.price ?? 0) > 0)
                         Text(
-                            product.description ?? "Aucune description disponible.",
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis
+                            "${product.price!.toStringAsFixed(2)} €",
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF00B894))
                         ),
                     ],
                   ),
@@ -749,7 +769,7 @@ class _CatalogueViewState extends State<CatalogueView> {
                 ),
                 if (enableDrag)
                   ReorderableDragStartListener(
-                    index: _allProducts.indexOf(product),
+                    index: index,
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
                       child: Icon(Icons.drag_indicator_rounded, color: Colors.grey.shade400, size: 30),
@@ -763,76 +783,101 @@ class _CatalogueViewState extends State<CatalogueView> {
     );
   }
 
-  Widget _buildSectionBadge(String sectionId) {
+  // --- FLÈCHES STEP-BY-STEP PREMIUM ---
+  Widget _buildStepArrow(String sectionId, int index, int total) {
     ProductSection section;
     try {
       section = _cachedSectionsList.firstWhere((s) => s.sectionId == sectionId);
     } catch (e) {
-      section = ProductSection(id: '0', sectionId: sectionId, title: 'Section introuvable ($sectionId)', selectionMin: 0, selectionMax: 0, type: 'checkbox', items: [], filterIds: []);
+      section = ProductSection(id: '0', sectionId: sectionId, title: '?', selectionMin: 0, selectionMax: 0, type: 'checkbox', items: [], filterIds: []);
     }
-    IconData icon;
-    Color color;
-    String typeLabel;
-    final typeLower = section.type.toString().toLowerCase().trim();
-    if (typeLower.contains('radio') || typeLower.contains('unique')) {
-      icon = Icons.radio_button_checked_rounded;
-      color = Colors.deepOrange;
-      typeLabel = 'Choix Unique';
-    } else if (typeLower.contains('increment') || typeLower.contains('quantity')) {
-      icon = Icons.exposure_plus_1_rounded;
-      color = Colors.green;
-      typeLabel = 'Incrémental';
-    } else {
-      icon = Icons.check_box_rounded;
-      color = Colors.blue.shade700;
-      typeLabel = 'Choix Multiple';
-    }
-    return Container(
-      margin: const EdgeInsets.only(top: 4, bottom: 4, right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                section.title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87,
-                  height: 1.1,
+
+    final bool isFirst = index == 0;
+    final bool isLast = index == total - 1;
+
+    Color sectionColor = _getSectionTypeColor(section.type);
+    Color textColor = Colors.white;
+
+    return ClipPath(
+      clipper: ArrowClipper(isFirst: isFirst, isLast: isLast),
+      child: Container(
+        padding: EdgeInsets.only(
+            left: isFirst ? 14 : 26,
+            right: isLast ? 14 : 26,
+            top: 7,
+            bottom: 7
+        ),
+        decoration: BoxDecoration(
+            color: sectionColor,
+            gradient: LinearGradient(
+                colors: [sectionColor, sectionColor.withOpacity(0.85)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight
+            ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 2, offset: const Offset(0, 1))
+            ]
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getSectionIcon(section.type),
+              color: textColor.withOpacity(0.95),
+              size: 14,
+            ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  section.title.toUpperCase(),
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      height: 1.0
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                "$typeLabel • Min: ${section.selectionMin} / Max: ${section.selectionMax}",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
+                const SizedBox(height: 2),
+                Text(
+                  "${_getTypeLabel(section.type)} • ${section.selectionMin}-${section.selectionMax}",
+                  style: TextStyle(
+                      color: textColor.withOpacity(0.9),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  IconData _getSectionIcon(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) return Icons.radio_button_checked;
+    if (t.contains('increment') || t.contains('quantity')) return Icons.exposure_plus_1;
+    return Icons.check_box;
+  }
+
+  String _getTypeLabel(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) return "Unique";
+    if (t.contains('quantity')) return "Qté";
+    return "Checkbox";
+  }
+
+  Color _getSectionTypeColor(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE67E22);
+    if (t.contains('quantity')) return const Color(0xFF27AE60);
+    return const Color(0xFF2980B9);
   }
 
   Widget _buildEmptyState() {
@@ -869,9 +914,45 @@ class _CatalogueViewState extends State<CatalogueView> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// FORMULAIRE PRODUIT (AJOUT / MODIFICATION)
-// ---------------------------------------------------------------------------
+class ArrowClipper extends CustomClipper<Path> {
+  final bool isFirst;
+  final bool isLast;
+  final double arrowWidth = 14.0;
+
+  ArrowClipper({required this.isFirst, required this.isLast});
+
+  @override
+  Path getClip(Size size) {
+    Path path = Path();
+    final w = size.width;
+    final h = size.height;
+
+    if (isFirst) {
+      path.moveTo(0, 0);
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(arrowWidth, h / 2);
+      path.lineTo(0, h);
+    }
+
+    path.lineTo(0, h);
+
+    if (isLast) {
+      path.lineTo(w, h);
+      path.lineTo(w, 0);
+    } else {
+      path.lineTo(w - arrowWidth, h);
+      path.lineTo(w, h / 2);
+      path.lineTo(w - arrowWidth, 0);
+    }
+
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
 
 class ProductFormView extends StatefulWidget {
   final MasterProduct? productToEdit;
@@ -910,18 +991,15 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   List<String> _selectedKioskFilterIds = [];
   bool _isLoading = false;
   List<ProductSection> _allAvailableSections = [];
-  late TabController _tabController;
   List<ProductFilter> _loadedFilters = [];
   List<KioskCategory> _loadedKioskCategories = [];
   final List<StreamSubscription> _subscriptions = [];
 
-  // ID des ingrédients sélectionnés
   List<String> _ingredientProductIds = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _allAvailableSections = List.from(widget.preloadedSections);
 
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
@@ -950,7 +1028,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       _selectedFilterIds = List.from(p.filterIds);
       _selectedKioskFilterIds = List.from(p.kioskFilterIds);
 
-      // Recharger les sections complètes à partir de leurs IDs
       if (p.sectionIds.isNotEmpty) {
         _associatedSections = [];
         for (var sid in p.sectionIds) {
@@ -959,7 +1036,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         }
       }
 
-      // Initialisation des ingrédients
       _ingredientProductIds = List.from(p.ingredientProductIds);
 
     } else {
@@ -974,7 +1050,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _tabController.dispose();
     for(var s in _subscriptions) s.cancel();
     super.dispose();
   }
@@ -984,23 +1059,16 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     if (image != null) setState(() { _imageFile = image; _displayUrl = null; });
   }
 
-  // --- ACTIONS MODALES ---
-
-  // Nouvelle méthode pour ajouter une étape (Section ou Groupe)
   void _showStepPicker() async {
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
-
-    // Récupération des groupes en direct
     List<SectionGroup> groups = [];
     try {
       final repo = FranchiseRepository();
-      // On utilise first pour avoir les données une fois
       groups = await repo.getSectionGroupsStream(user.uid).first;
     } catch (_) {}
 
     if (!mounted) return;
 
-    // Affiche la modale "Ajouter une étape" (Section ou Groupe)
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => _StepSelectionDialog(
@@ -1013,7 +1081,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       setState(() {
         if (result['type'] == 'section') {
           final s = result['data'] as ProductSection;
-          // Vérifier doublon
           if (!_associatedSections.any((x) => x.sectionId == s.sectionId)) {
             _associatedSections.add(s);
           } else {
@@ -1024,7 +1091,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
           int added = 0;
           for (var sid in g.sectionIds) {
             if (!_associatedSections.any((x) => x.sectionId == sid)) {
-              // On cherche la section correspondante dans la liste globale
               final match = _allAvailableSections.where((x) => x.sectionId == sid).firstOrNull;
               if (match != null) {
                 _associatedSections.add(match);
@@ -1038,53 +1104,31 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 
+  // --- MISE À JOUR : MODAL AVEC FILTRES ---
   void _showProductLinkPicker() async {
-    final candidates = widget.allProducts.where((p) => p.id != widget.productToEdit?.id && !_linkedProductIds.contains(p.id) && !p.isContainer).toList();
-
-    final MasterProduct? picked = await showDialog<MasterProduct>(
+    // On ouvre le nouveau modal de sélection avancé en passant les filtres disponibles
+    final List<String>? resultIds = await showDialog<List<String>>(
       context: context,
-      builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          constraints: const BoxConstraints(maxHeight: 500),
-          child: Column(
-            children: [
-              Text("Ajouter un produit au conteneur", style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 16),
-              if(candidates.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
-                  child: Text("Aucun autre produit disponible."),
-                ),
-              Expanded(
-                child: ListView.builder(
-                  itemCount: candidates.length,
-                  itemBuilder: (context, index) {
-                    final p = candidates[index];
-                    return ListTile(
-                      leading: CircleAvatar(backgroundImage: (p.photoUrl != null && p.photoUrl!.isNotEmpty) ? CachedNetworkImageProvider(p.photoUrl!) : null, child: (p.photoUrl == null || p.photoUrl!.isEmpty) ? const Icon(Icons.fastfood) : null),
-                      title: Text(p.name),
-                      onTap: () => Navigator.pop(context, p),
-                    );
-                  },
-                ),
-              ),
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler"))
-            ],
-          ),
-        ),
+      builder: (ctx) => ContainerSelectionDialog(
+        allProducts: widget.allProducts,
+        alreadyLinkedIds: _linkedProductIds,
+        currentProductId: widget.productToEdit?.id,
+        availableFilters: _loadedFilters, // Passage des filtres ici
       ),
     );
 
-    if (picked != null) {
+    // On ajoute les produits sélectionnés à la liste
+    if (resultIds != null && resultIds.isNotEmpty) {
       setState(() {
-        _linkedProductIds.add(picked.id);
+        for (var id in resultIds) {
+          if (!_linkedProductIds.contains(id)) {
+            _linkedProductIds.add(id);
+          }
+        }
       });
     }
   }
 
-  // Modale pour ajouter un ingrédient avec recherche
   void _showIngredientPicker() async {
     final availableIngredients = widget.allProducts
         .where((p) => p.isIngredient && !_ingredientProductIds.contains(p.productId))
@@ -1110,54 +1154,57 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: Text(widget.productToEdit == null ? "Nouveau Produit" : (widget.isDuplicating ? "Dupliquer" : "Modifier")),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0, top: 8, bottom: 8),
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _saveProduct,
-              icon: _isLoading
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check, size: 18),
-              label: const Text(
-                "Enregistrer",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 2,
+    List<Widget> tabs = [ const Tab(text: "Détails") ];
+    List<Widget> views = [ _buildDetailsTab() ];
+
+    if (!_isIngredient) {
+      tabs.add(const Tab(text: "Contenu & Étapes"));
+      views.add(_buildContentTab());
+      tabs.add(const Tab(text: "Borne"));
+      views.add(_buildKioskTab());
+    }
+
+    return DefaultTabController(
+      length: tabs.length,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(
+          title: Text(widget.productToEdit == null ? "Nouveau Produit" : (widget.isDuplicating ? "Dupliquer" : "Modifier")),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12.0, top: 8, bottom: 8),
+              child: ElevatedButton.icon(
+                onPressed: _isLoading ? null : _saveProduct,
+                icon: _isLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check, size: 18),
+                label: const Text(
+                  "Enregistrer",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 2,
+                ),
               ),
             ),
+          ],
+          bottom: TabBar(
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Colors.black,
+            tabs: tabs,
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.black,
-          tabs: const [
-            Tab(text: "Détails"),
-            Tab(text: "Contenu & Étapes"),
-            Tab(text: "Borne"),
-          ],
         ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: TabBarView(
-          controller: _tabController,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildDetailsTab(),
-            _buildContentTab(),
-            _buildKioskTab(),
-          ],
+        body: Form(
+          key: _formKey,
+          child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
+            children: views,
+          ),
         ),
       ),
     );
@@ -1170,25 +1217,47 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                width: 120, height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
-                    image: _imageFile != null
-                        ? DecorationImage(
-                        image: kIsWeb
-                            ? NetworkImage(_imageFile!.path)                   // ✅ Version WEB
-                            : FileImage(File(_imageFile!.path)) as ImageProvider, // ✅ Version MOBILE
-                        fit: BoxFit.cover)
-                        : (_displayUrl != null
-                        ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
-                        : null),
-                    border: Border.all(color: Colors.grey.shade300),
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    width: 120, height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
+                      image: _imageFile != null
+                          ? DecorationImage(
+                          image: kIsWeb
+                              ? NetworkImage(_imageFile!.path)
+                              : FileImage(File(_imageFile!.path)) as ImageProvider,
+                          fit: BoxFit.cover)
+                          : (_displayUrl != null
+                          ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
+                          : null),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
                   ),
-                child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
-              ),
+                ),
+                if (_imageFile != null || _displayUrl != null)
+                  Positioned(
+                    right: -5,
+                    top: -5,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _imageFile = null;
+                          _displayUrl = null;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        child: const Icon(Icons.cancel, color: Colors.red, size: 20),
+                      ),
+                    ),
+                  )
+              ],
             ),
             const SizedBox(width: 24),
             Expanded(
@@ -1248,61 +1317,64 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         TextFormField(controller: _descriptionController, maxLines: 3, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
 
         const SizedBox(height: 24),
-        const Text(
-          "Ingrédients (pour la fiche technique)",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ..._ingredientProductIds.map((id) {
-                    final ingName = widget.allProducts
-                        .firstWhere((p) => p.productId == id,
-                        orElse: () => MasterProduct.empty())
-                        .name;
-                    return Chip(
-                      label: Text(ingName),
-                      onDeleted: () {
-                        setState(() {
-                          _ingredientProductIds.remove(id);
-                        });
-                      },
-                      backgroundColor: Colors.orange.shade50,
-                      deleteIconColor: Colors.red,
-                    );
-                  }),
-                  ActionChip(
-                    avatar: const Icon(Icons.add, size: 18),
-                    label: const Text("Ajouter"),
-                    onPressed: _showIngredientPicker,
-                  ),
-                ],
-              ),
-              if (_ingredientProductIds.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    "Aucun ingrédient sélectionné.",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
-                ),
-            ],
-          ),
-        ),
 
-        const SizedBox(height: 24),
+        if (!_isIngredient && !_isContainer) ...[
+          const Text(
+            "Ingrédients (pour la fiche technique)",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ..._ingredientProductIds.map((id) {
+                      final ingName = widget.allProducts
+                          .firstWhere((p) => p.productId == id,
+                          orElse: () => MasterProduct.empty())
+                          .name;
+                      return Chip(
+                        label: Text(ingName),
+                        onDeleted: () {
+                          setState(() {
+                            _ingredientProductIds.remove(id);
+                          });
+                        },
+                        backgroundColor: Colors.orange.shade50,
+                        deleteIconColor: Colors.red,
+                      );
+                    }),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text("Ajouter"),
+                      onPressed: _showIngredientPicker,
+                    ),
+                  ],
+                ),
+                if (_ingredientProductIds.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "Aucun ingrédient sélectionné.",
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+        ],
+
         const Text("Filtres Back-Office", style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
@@ -1417,7 +1489,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
             icon: Icons.layers_rounded,
             color: Colors.blue.shade800,
             action: ElevatedButton.icon(
-              onPressed: _showStepPicker, // MODIFICATION : Nouvelle modale Section/Groupe
+              onPressed: _showStepPicker,
               icon: const Icon(Icons.add_rounded),
               label: const Text("Ajouter une étape"),
               style: ElevatedButton.styleFrom(
@@ -1581,13 +1653,11 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     setState(() => _isLoading = true);
     final repo = FranchiseRepository();
 
-    // Déterminer les ID des ingrédients en fonction du type
     List<String> finalIngredientsIds = [];
     if (!_isContainer && !_isIngredient) {
       finalIngredientsIds = _ingredientProductIds;
     }
 
-    // Déterminer les IDs des sections
     List<String> finalSectionIds = [];
     if (!_isContainer && !_isIngredient) {
       finalSectionIds = _associatedSections.map((s) => s.sectionId).toList();
@@ -1620,10 +1690,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 }
-
-// ---------------------------------------------------------------------------
-// MODALES CUSTOM (Ingrédients & Étapes)
-// ---------------------------------------------------------------------------
 
 class _IngredientSearchDialog extends StatefulWidget {
   final List<MasterProduct> ingredients;
@@ -1712,7 +1778,6 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
 
   @override
   Widget build(BuildContext context) {
-    // Filtrage dynamique
     final filteredSections = widget.availableSections.where((s) => s.title.toLowerCase().contains(_query.toLowerCase())).toList();
     final filteredGroups = widget.availableGroups.where((g) => g.name.toLowerCase().contains(_query.toLowerCase())).toList();
 
@@ -1751,7 +1816,6 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  // LISTE SECTIONS
                   filteredSections.isEmpty
                       ? const Center(child: Text("Aucune section"))
                       : ListView.separated(
@@ -1767,7 +1831,6 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
                       );
                     },
                   ),
-                  // LISTE GROUPES
                   filteredGroups.isEmpty
                       ? const Center(child: Text("Aucun groupe"))
                       : ListView.separated(
@@ -1792,6 +1855,204 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler"))
       ],
+    );
+  }
+}
+
+// ==============================================================================
+// MODAL AVANCÉ : SÉLECTION AVEC RECHERCHE ET FILTRES (TAGS)
+// ==============================================================================
+class ContainerSelectionDialog extends StatefulWidget {
+  final List<MasterProduct> allProducts;
+  final List<String> alreadyLinkedIds;
+  final String? currentProductId;
+  final List<ProductFilter> availableFilters; // NOUVEAU
+
+  const ContainerSelectionDialog({
+    super.key,
+    required this.allProducts,
+    required this.alreadyLinkedIds,
+    this.currentProductId,
+    this.availableFilters = const [],
+  });
+
+  @override
+  State<ContainerSelectionDialog> createState() => _ContainerSelectionDialogState();
+}
+
+class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
+  String _searchQuery = '';
+  // _showOnlySellable supprimé car forcé à true
+  String? _selectedFilterId; // Pour stocker le filtre (tag) sélectionné
+  final List<String> _tempSelectedIds = [];
+
+  @override
+  Widget build(BuildContext context) {
+    // Filtrage des produits
+    final filteredProducts = widget.allProducts.where((p) {
+      // 1. Exclure le produit lui-même
+      if (p.id == widget.currentProductId) return false;
+
+      // 2. Exclure les produits déjà liés
+      if (widget.alreadyLinkedIds.contains(p.id)) return false;
+
+      // 3. Exclure les conteneurs (on évite les boucles)
+      if (p.isContainer) return false;
+
+      // 4. Filtre Recherche (Texte)
+      if (_searchQuery.isNotEmpty && !p.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // 5. Filtre "Vendable" forcé (toujours exclure les ingrédients)
+      if (p.isIngredient) return false;
+
+      // 6. Filtre par Tag (Étiquette) - NOUVEAU
+      if (_selectedFilterId != null) {
+        if (!p.filterIds.contains(_selectedFilterId)) return false;
+      }
+
+      return true;
+    }).toList();
+
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        width: 500,
+        height: 700,
+        child: Column(
+          children: [
+            // --- En-tête ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text("Ajouter au dossier", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+              ],
+            ),
+            const Divider(),
+
+            // --- Barre de Recherche ---
+            TextField(
+              decoration: InputDecoration(
+                hintText: "Rechercher un produit...",
+                prefixIcon: const Icon(Icons.search),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                isDense: true,
+              ),
+              onChanged: (val) => setState(() => _searchQuery = val),
+            ),
+            const SizedBox(height: 10),
+
+            // --- Zone de Filtres (Tags) ---
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  // Liste des filtres Back-Office (Tags)
+                  ...widget.availableFilters.map((filter) {
+                    final isSelected = _selectedFilterId == filter.id;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6.0),
+                      child: FilterChip(
+                        label: Text(filter.name),
+                        selected: isSelected,
+                        onSelected: (val) {
+                          setState(() {
+                            // Toggle : si on reclique dessus, on désélectionne
+                            _selectedFilterId = val ? filter.id : null;
+                          });
+                        },
+                        selectedColor: Colors.blue.shade100,
+                        labelStyle: TextStyle(
+                            color: isSelected ? Colors.blue.shade900 : Colors.black87,
+                            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ],
+              ),
+            ),
+
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Text("${filteredProducts.length} produits trouvés", style: TextStyle(color: Colors.grey.shade600, fontSize: 12)),
+                ],
+              ),
+            ),
+
+            // --- Liste des Résultats ---
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade200),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: filteredProducts.isEmpty
+                    ? const Center(child: Text("Aucun produit correspondant."))
+                    : ListView.separated(
+                  itemCount: filteredProducts.length,
+                  separatorBuilder: (ctx, i) => const Divider(height: 1),
+                  itemBuilder: (ctx, i) {
+                    final prod = filteredProducts[i];
+                    final isSelected = _tempSelectedIds.contains(prod.id);
+
+                    return CheckboxListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      activeColor: Colors.orange.shade800,
+                      title: Text(prod.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text("${prod.price?.toStringAsFixed(2) ?? '0.00'} €", style: TextStyle(color: Colors.grey.shade600)),
+                      secondary: Container(
+                        width: 40, height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(8),
+                          image: (prod.photoUrl?.isNotEmpty ?? false)
+                              ? DecorationImage(image: CachedNetworkImageProvider(prod.photoUrl!), fit: BoxFit.cover)
+                              : null,
+                        ),
+                        child: (prod.photoUrl?.isEmpty ?? true) ? const Icon(Icons.fastfood, size: 20, color: Colors.grey) : null,
+                      ),
+                      value: isSelected,
+                      onChanged: (val) {
+                        setState(() {
+                          if (val == true) {
+                            _tempSelectedIds.add(prod.id);
+                          } else {
+                            _tempSelectedIds.remove(prod.id);
+                          }
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            ),
+
+            // --- Bouton Valider ---
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange.shade800,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(context, _tempSelectedIds),
+                child: Text("AJOUTER LA SÉLECTION (${_tempSelectedIds.length})"),
+              ),
+            )
+          ],
+        ),
+      ),
     );
   }
 }

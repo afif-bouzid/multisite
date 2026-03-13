@@ -93,6 +93,7 @@
 ├── devtools_options.yaml
 ├── firebase.json
 ├── generateur.dart
+├── ouiborne.iml
 ├── project_context.txt
 ├── pubspec.lock
 └── pubspec.yaml
@@ -104,7 +105,7 @@ FILE PATH: pubspec.yaml
 name: ouiborne
 description: application de caisse.
 publish_to: 'none'
-version: 1.0.10
+version: 1.0.11+11
 environment:
   sdk: '>=3.2.0 <4.0.0'
 dependencies:
@@ -113,7 +114,8 @@ dependencies:
   pdf: ^3.10.0
   printing: ^5.11.0
   csv: ^6.0.0
-  open_file: ^3.3.2
+  blue_thermal_printer: ^1.2.3  # Vérifiez la dernière version sur pub.dev
+  permission_handler: ^11.0.0   # Pour gérer les permissions Bluetooth au runtime
   universal_html: ^2.2.4
   # --- Firebase ---
   flutter_image_compress: ^2.3.0
@@ -577,7 +579,12 @@ class FranchiseRepository {
             .doc(newUser.uid)
             .collection('config')
             .doc('receipt');
-        final defaultReceiptConfig = ReceiptConfig();
+        final defaultReceiptConfig = ReceiptConfig(
+          headerText: '',
+          footerText: '',
+          showVatDetails: true,
+          printReceiptOnPayment: true,
+        );
         batch.set(receiptConfigRef, defaultReceiptConfig.toMap());
         await batch.commit();
         return null;
@@ -1484,9 +1491,13 @@ class FranchiseRepository {
         .snapshots()
         .map((doc) {
       if (doc.exists && doc.data() != null) {
-        return ReceiptConfig.fromFirestore(doc.data()!);
+        return ReceiptConfig.fromMap(doc.data()!);
       }
-      return ReceiptConfig();
+      return ReceiptConfig(
+          headerText: '',
+          footerText: '',
+          showVatDetails: true,
+          printReceiptOnPayment: true);
     });
   }
   Stream<List<FranchiseUser>> getTeamMembersStream(String storeId) {
@@ -2066,367 +2077,437 @@ Color colorFromHex(String hexColor) {
 ==================================================
 FILE PATH: lib/core/services/printing_service.dart
 ==================================================
+import 'dart:async';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:esc_pos_printer_plus/esc_pos_printer_plus.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../models.dart';
-class PrintJobData {
-  final String ipAddress;
-  final int port;
-  final PaperSize paperSize;
-  final String header;
-  final String identifier;
-  final String time;
-  final List<String> itemLines;
-  PrintJobData({
-    required this.ipAddress,
-    required this.port,
-    required this.paperSize,
-    required this.header,
-    required this.identifier,
-    required this.time,
-    required this.itemLines,
-  });
+import 'local_config_service.dart';
+class _PrintJob {
+  final Future<List<int>> Function() byteGenerator;
+  final Map<String, dynamic> config;
+  _PrintJob(this.byteGenerator, this.config);
 }
-Future<void> _printInIsolate(PrintJobData data) async {
-  final profile = await CapabilityProfile.load();
-  final printer = NetworkPrinter(data.paperSize, profile);
-  final PosPrintResult res = await printer.connect(data.ipAddress,
-      port: data.port, timeout: const Duration(seconds: 5));
-  if (res == PosPrintResult.success) {
-    printer.text(data.header,
-        styles: const PosStyles(
-            align: PosAlign.center, height: PosTextSize.size2, bold: true));
-    if (data.identifier.contains(' - ')) {
-      final parts = data.identifier.split(' - ');
-      final source = parts[0];
-      final name = parts.length > 1 ? parts[1] : '';
-      printer.text(source.toUpperCase(),
-          styles: const PosStyles(align: PosAlign.center, bold: true));
-      printer.text(name.toUpperCase(),
-          styles: const PosStyles(
-              align: PosAlign.center,
-              height: PosTextSize.size3,
-              width: PosTextSize.size3,
-              bold: true));
-    } else {
-      printer.text(data.identifier,
-          styles: const PosStyles(
-              align: PosAlign.center,
-              height: PosTextSize.size3,
-              width: PosTextSize.size2,
-              bold: true));
-    }
-    printer.text(data.time, styles: const PosStyles(align: PosAlign.center));
-    printer.hr();
-    for (final line in data.itemLines) {
-      printer.text(line);
-    }
-    printer.feed(2);
-    printer.cut();
-    printer.disconnect();
+List<int> _generateKitchenBytes(Map<String, dynamic> params) {
+  final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
+  final String header = params['header']?.toString() ?? '';
+  final String identifier = params['identifier']?.toString() ?? '';
+  final String orderType = params['orderType']?.toString() ?? ''; 
+  final List<dynamic> lines = params['lines'] as List? ?? [];
+  final String date = params['date']?.toString() ?? '';
+  final CapabilityProfile profile = params['profile'];
+  final PaperSize paperSize = paperWidthInt == 80 ? PaperSize.mm80 : PaperSize.mm58;
+  final Generator generator = Generator(paperSize, profile);
+  List<int> bytes = [];
+  const PosStyles styleTitre = PosStyles(codeTable: 'CP1252', bold: true, height: PosTextSize.size2, width: PosTextSize.size2);
+  const PosStyles styleNormal = PosStyles(codeTable: 'CP1252', bold: true, width: PosTextSize.size2);
+  if (header.isNotEmpty) {
+    bytes += generator.text(header, styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, codeTable: 'CP1252'));
   }
+  if (orderType.isNotEmpty) {
+    bytes += generator.feed(1);
+    bytes += generator.text(orderType, styles: const PosStyles(align: PosAlign.center, bold: true, reverse: true, width: PosTextSize.size2, height: PosTextSize.size2, codeTable: 'CP1252'));
+    bytes += generator.feed(1);
+  }
+  String idClean = identifier.replaceAll("Table", "TBL").toUpperCase();
+  bytes += generator.text(idClean,
+      styles: const PosStyles(align: PosAlign.center, height: PosTextSize.size3, width: PosTextSize.size3, bold: true, codeTable: 'CP1252'));
+  bytes += generator.text(date, styles: const PosStyles(align: PosAlign.center, codeTable: 'CP1252'));
+  bytes += generator.hr();
+  for (var line in lines) {
+    if (line is Map) {
+      bytes += generator.row([
+        PosColumn(text: "${line['qty']}x", width: 2, styles: styleTitre),
+        PosColumn(text: line['name'].toString(), width: 10, styles: styleTitre),
+      ]);
+      for (var opt in (line['options'] as List? ?? [])) {
+        if (opt.toString() == "___SECTION_SEP___") {
+          bytes += generator.feed(1); 
+          continue;
+        }
+        bytes += generator.row([
+          PosColumn(text: "", width: 2),
+          PosColumn(text: opt.toString(), width: 10, styles: styleNormal),
+        ]);
+      }
+      for (var rem in (line['removed'] as List? ?? [])) {
+        bytes += generator.row([
+          PosColumn(text: "", width: 2),
+          PosColumn(text: "SANS ${rem.toString().toUpperCase()}", width: 10, styles: const PosStyles(codeTable: 'CP1252', bold: true, reverse: true, width: PosTextSize.size2)),
+        ]);
+      }
+      bytes += generator.feed(2);
+      bytes += generator.hr(ch: '_');
+    }
+  }
+  bytes += generator.feed(3);
+  bytes += generator.cut();
+  return bytes;
+}
+List<int> _generateReceiptBytes(Map<String, dynamic> params) {
+  final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
+  final PaperSize paperSize = paperWidthInt == 80 ? PaperSize.mm80 : PaperSize.mm58;
+  final Generator generator = Generator(paperSize, params['profile']);
+  final Map<String, dynamic> tMap = Map<String, dynamic>.from(params['transaction'] ?? {});
+  final Map<String, dynamic> fMap = Map<String, dynamic>.from(params['franchisee'] ?? {});
+  final Map<String, dynamic> cMap = Map<String, dynamic>.from(params['config'] ?? {});
+  List<int> bytes = [];
+  const PosStyles styleNormal = PosStyles(codeTable: 'CP1252');
+  const PosStyles styleGras = PosStyles(codeTable: 'CP1252', bold: true);
+  const PosStyles styleCentre = PosStyles(codeTable: 'CP1252', align: PosAlign.center);
+  if (cMap['headerText'] != null && cMap['headerText'].toString().isNotEmpty) {
+    bytes += generator.text(cMap['headerText'].toString(), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, codeTable: 'CP1252'));
+  } else if (fMap['companyName'] != null) {
+    bytes += generator.text(fMap['companyName'].toString().toUpperCase(), styles: const PosStyles(align: PosAlign.center, height: PosTextSize.size2, bold: true, codeTable: 'CP1252'));
+  }
+  if (fMap['address'] != null && fMap['address'].toString().toLowerCase() != 'adresse local') {
+    bytes += generator.text(fMap['address'].toString(), styles: styleCentre);
+  }
+  if (fMap['phone'] != null) {
+    bytes += generator.text("Tel: ${fMap['phone']}", styles: styleCentre);
+  }
+  bytes += generator.hr();
+  String orderType = tMap['orderType'].toString().toLowerCase().contains('takeaway') ? "A EMPORTER" : "SUR PLACE";
+  bytes += generator.text(orderType, styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, reverse: true, codeTable: 'CP1252'));
+  bytes += generator.feed(1);
+  bytes += generator.row([
+    PosColumn(text: DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()), width: 6, styles: styleNormal),
+    PosColumn(text: "Ticket #${tMap['id']?.toString().substring(0,8).toUpperCase() ?? '---'}", width: 6, styles: const PosStyles(align: PosAlign.right, codeTable: 'CP1252')),
+  ]);
+  bytes += generator.hr(ch: '=');
+  final List items = tMap['items'] as List? ?? [];
+  for (var item in items) {
+    if (item is Map) {
+      bytes += generator.text(item['name'] ?? 'Article', styles: styleGras);
+      bytes += generator.row([
+        PosColumn(text: "${item['qty']} x ${item['price']}", width: 7, styles: styleNormal),
+        PosColumn(text: "${item['total']} EUR", width: 5, styles: const PosStyles(align: PosAlign.right, codeTable: 'CP1252')),
+      ]);
+      for (var opt in (item['options'] as List? ?? [])) {
+        if (opt.toString() != "___SECTION_SEP___") {
+          bytes += generator.text("  > ${opt.toString().replaceAll(' (sup)', '')}", styles: styleNormal);
+        }
+      }
+      for (var rem in (item['removed'] as List? ?? [])) {
+        bytes += generator.text("  - SANS ${rem.toString()}", styles: styleNormal);
+      }
+      bytes += generator.hr(ch: '-', linesAfter: 0);
+    }
+  }
+  double totalAmount = double.tryParse(tMap['total'].toString()) ?? 0.0;
+  bytes += generator.feed(1);
+  bytes += generator.row([
+    PosColumn(text: 'TOTAL TTC', width: 6, styles: const PosStyles(height: PosTextSize.size2, bold: true, codeTable: 'CP1252')),
+    PosColumn(text: "${totalAmount.toStringAsFixed(2)} EUR", width: 6, styles: const PosStyles(align: PosAlign.right, bold: true, height: PosTextSize.size2, codeTable: 'CP1252')),
+  ]);
+  bytes += generator.hr(ch: '=');
+  if (tMap['paymentMethods'] is Map) {
+    (tMap['paymentMethods'] as Map).forEach((key, value) {
+      if ((double.tryParse(value.toString()) ?? 0) > 0) {
+        bytes += generator.row([
+          PosColumn(text: "Réglement $key:", width: 8, styles: styleNormal),
+          PosColumn(text: "${double.parse(value.toString()).toStringAsFixed(2)} EUR", width: 4, styles: const PosStyles(align: PosAlign.right, codeTable: 'CP1252')),
+        ]);
+      }
+    });
+  }
+  if (cMap['showVatDetails'] == true || cMap['showVatDetails'].toString() == 'true') {
+    double vatRate = double.tryParse(tMap['vatRate']?.toString() ?? '10') ?? 10.0;
+    double ht = totalAmount / (1 + (vatRate / 100));
+    bytes += generator.row([
+      PosColumn(text: "H.T.: ${ht.toStringAsFixed(2)}", width: 6, styles: styleCentre),
+      PosColumn(text: "TVA ($vatRate%): ${(totalAmount - ht).toStringAsFixed(2)}", width: 6, styles: styleCentre),
+    ]);
+  }
+  if (cMap['footerText'] != null && cMap['footerText'].toString().isNotEmpty) {
+    bytes += generator.hr();
+    bytes += generator.text(cMap['footerText'].toString(), styles: styleCentre);
+  }
+  bytes += generator.feed(3);
+  bytes += generator.cut();
+  return bytes;
 }
 class PrintingService {
+  final BlueThermalPrinter bluetooth = BlueThermalPrinter.instance;
+  BluetoothDevice? _selectedDevice;
+  BluetoothDevice? get selectedDevice => _selectedDevice;
+  final List<_PrintJob> _queue = [];
+  bool _isPrinting = false;
+  static final PrintingService _instance = PrintingService._internal();
+  factory PrintingService() => _instance;
+  PrintingService._internal();
+  Future<void> selectDevice(BluetoothDevice device) async {
+    _selectedDevice = device;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (device.address != null) {
+        await prefs.setString('printer_mac', device.address!);
+        await prefs.setString('printer_name', device.name ?? 'Imprimante');
+      }
+    } catch (_) {}
+  }
+  Future<void> _tryRestoreSavedDevice() async {
+    if (_selectedDevice != null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? savedMac = prefs.getString('printer_mac');
+      if (savedMac != null && savedMac.isNotEmpty) {
+        final devices = await bluetooth.getBondedDevices().timeout(const Duration(seconds: 2));
+        _selectedDevice = devices.firstWhere((d) => d.address == savedMac);
+      }
+    } catch (_) {}
+  }
+  Future<List<BluetoothDevice>> getBluetoothDevices() async {
+    if (!kIsWeb && Platform.isAndroid) {
+      await [Permission.bluetooth, Permission.bluetoothScan, Permission.bluetoothConnect, Permission.location].request();
+    }
+    try { return await bluetooth.getBondedDevices().timeout(const Duration(seconds: 2)); } catch (_) { return []; }
+  }
+  void _addJob(Future<List<int>> Function() generator, Map<String, dynamic> config) {
+    _queue.add(_PrintJob(generator, config));
+    _processQueue();
+  }
+  Future<void> _processQueue() async {
+    if (_isPrinting || _queue.isEmpty) return;
+    _isPrinting = true;
+    try {
+      final job = _queue.removeAt(0);
+      bool isBle = job.config['isBluetooth'].toString() == 'true';
+      String? mac = job.config['macAddress'] ?? _selectedDevice?.address;
+      if (isBle && mac != null) {
+        if (!(await bluetooth.isConnected ?? false)) {
+          await bluetooth.connect(BluetoothDevice("Printer", mac)).timeout(const Duration(seconds: 4));
+          await Future.delayed(const Duration(milliseconds: 500));
+        }
+        final bytes = await job.byteGenerator();
+        if (bytes.isNotEmpty && (await bluetooth.isConnected ?? false)) {
+          await bluetooth.writeBytes(Uint8List.fromList(bytes));
+        }
+      }
+    } catch (_) {}
+    finally {
+      _isPrinting = false;
+      if (_queue.isNotEmpty) { await Future.delayed(const Duration(milliseconds: 300)); _processQueue(); }
+    }
+  }
+  String _extractName(dynamic item) {
+    if (item == null) return '';
+    if (item is Map) return item['name']?.toString() ?? (item['product']?['name']?.toString() ?? 'Article');
+    try { return (item as dynamic).product.name; } catch (_) {}
+    try { return (item as dynamic).name; } catch (_) {}
+    return 'Article';
+  }
+  Map<String, dynamic> _cleanItemForPrint(dynamic item) {
+    List<String> options = [];
+    void extractOpts(dynamic raw) {
+      if (raw == null) return;
+      if (raw is List) {
+        for (var element in raw) {
+          if (element is Map && element.containsKey('items') && element['items'] is List) {
+            var subItems = element['items'] as List;
+            if (subItems.isNotEmpty) {
+              options.addAll(subItems.map((e) => _formatOptionString(e)));
+              options.add("___SECTION_SEP___");
+            }
+          } else {
+            options.add(_formatOptionString(element));
+          }
+        }
+        if (options.isNotEmpty && options.last == "___SECTION_SEP___") {
+          options.removeLast();
+        }
+      } else if (raw is Map) {
+        raw.forEach((k, v) {
+          if (v is List && v.isNotEmpty) {
+            options.addAll(v.map((e) => _formatOptionString(e)));
+            options.add("___SECTION_SEP___");
+          }
+        });
+        if (options.isNotEmpty && options.last == "___SECTION_SEP___") options.removeLast();
+      }
+    }
+    final String name = _extractName(item);
+    var qtyVal = 1;
+    var priceVal = 0.0;
+    if (item is Map) {
+      qtyVal = int.tryParse(item['quantity']?.toString() ?? '1') ?? 1;
+      priceVal = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
+      extractOpts(item['options'] ?? item['selectedOptions']);
+    } else {
+      try {
+        qtyVal = (item as dynamic).quantity;
+      } catch (_) {}
+      try {
+        priceVal = (item as dynamic).price;
+      } catch (_) {}
+      try {
+        extractOpts((item as dynamic).selectedOptions);
+      } catch (_) {}
+    }
+    final List<String> removed = item is Map
+        ? (item['removedIngredientNames'] as List? ?? []).map((e) => e.toString()).toList()
+        : (item is! Map)
+        ? (item as dynamic).removedIngredientNames ?? []
+        : [];
+    return {
+      'name': name,
+      'qty': qtyVal,
+      'price': priceVal.toStringAsFixed(2),
+      'total': (priceVal * qtyVal).toStringAsFixed(2),
+      'options': options,
+      'removed': removed
+    };
+  }
+  String _formatOptionString(dynamic optionItem) {
+    String name = _extractName(optionItem);
+    double price = 0.0;
+    try {
+      if (optionItem is Map) {
+        price = double.tryParse(optionItem['supplementPrice']?.toString() ?? '0') ?? 0.0;
+      } else {
+        price = (optionItem as dynamic).supplementPrice ?? 0.0;
+      }
+    } catch(_) {}
+    return price > 0 ? "$name (sup)" : name;
+  }
+  List<Map<String, dynamic>> _standardizeItems(dynamic inputItems) {
+    List<Map<String, dynamic>> cleanList = [];
+    if (inputItems is List) {
+      for (var item in inputItems) {
+        cleanList.add(_cleanItemForPrint(item));
+      }
+    }
+    return cleanList;
+  }
   Future<void> printKitchenTicketSafe({
-    required PrinterConfig printerConfig,
-    required List<CartItem> itemsToPrint,
+    required dynamic printerConfig,
+    required List itemsToPrint,
     required String identifier,
     bool isUpdate = false,
     bool isReprint = false,
+    String? orderType 
   }) async {
-    String headerText;
-    if (isReprint) {
-      headerText = '--- RÉIMPRESSION ---';
-    } else if (isUpdate) {
-      headerText = '--- AJOUT ---';
+    await _tryRestoreSavedDevice();
+    final List<Map<String, dynamic>> lines = _standardizeItems(itemsToPrint);
+    _addJob(() async => await compute(_generateKitchenBytes, {
+      'paperWidthInt': 80,
+      'header': isReprint ? "RE-IMPRESSION" : (isUpdate ? "AJOUT" : "NOUVEAU"),
+      'identifier': identifier,
+      'orderType': orderType, 
+      'lines': lines,
+      'date': DateFormat('HH:mm').format(DateTime.now()),
+      'profile': await CapabilityProfile.load()
+    }), _normalizeConfig(printerConfig));
+  }
+  Future<void> printReceipt({required dynamic printerConfig, required dynamic transaction, required dynamic franchisee, dynamic receiptConfig}) async {
+    await _tryRestoreSavedDevice();
+    Map<String, dynamic> tMap = transaction is Map ? Map.from(transaction) : (transaction as dynamic).toMap();
+    tMap['items'] = _standardizeItems(tMap['items'] as List);
+    Map<String, dynamic> cMap = receiptConfig is Map ? Map.from(receiptConfig) : {};
+    try {
+      final localService = LocalConfigService();
+      final savedConfig = await localService.getReceiptConfig();
+      cMap['headerText'] ??= savedConfig.headerText;
+      cMap['footerText'] ??= savedConfig.footerText;
+      cMap['showVatDetails'] ??= savedConfig.showVatDetails;
+    } catch(_) {}
+    _addJob(() async => await compute(_generateReceiptBytes, {'paperWidthInt': 80, 'transaction': tMap, 'franchisee': franchisee is Map ? franchisee : (franchisee as dynamic).toMap(), 'config': cMap, 'profile': await CapabilityProfile.load()}), _normalizeConfig(printerConfig));
+  }
+  Future<void> printOrderAndReceipt({required dynamic printerConfig, required dynamic receiptConfig, required dynamic transaction, required dynamic franchisee}) async {
+    await printReceipt(printerConfig: printerConfig, receiptConfig: receiptConfig, transaction: transaction, franchisee: franchisee);
+    List items = [];
+    if (transaction is Map) {
+      items = transaction['items'] ?? [];
     } else {
-      headerText = '--- NOUVEAU ---';
+      try { items = (transaction as dynamic).items; } catch(_) {}
     }
-    final List<String> formattedLines = [];
-    for (final item in itemsToPrint) {
-      formattedLines.add('1x ${item.product.name}');
-      if (item.selectedOptions.isNotEmpty) {
-        final optionsText = item.selectedOptions.values
-            .expand((x) => x)
-            .map((e) => "  + ${e.product.name}")
-            .toList();
-        formattedLines.addAll(optionsText);
+    String orderTypeStr = "SUR PLACE";
+    try {
+      final tMap = transaction is Map ? transaction : (transaction as dynamic).toMap();
+      String typeRaw = tMap['orderType']?.toString().toLowerCase() ?? '';
+      if (typeRaw.contains('takeaway') || typeRaw.contains('emporter')) {
+        orderTypeStr = "A EMPORTER";
       }
-      if (item.removedIngredientNames.isNotEmpty) {
-        for (var name in item.removedIngredientNames) {
-          formattedLines.add("  - SANS $name");
-        }
-      }
+    } catch(_) {}
+    if (items.isNotEmpty) {
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await printKitchenTicketSafe(
+          printerConfig: printerConfig,
+          itemsToPrint: items,
+          identifier: "CLIENT",
+          orderType: orderTypeStr 
+      );
     }
-    final jobData = PrintJobData(
-      ipAddress: printerConfig.ipAddress,
-      port: 9100,
-      paperSize: printerConfig.paperWidth == PaperWidth.mm80
-          ? PaperSize.mm80
-          : PaperSize.mm58,
-      header: headerText,
-      identifier: identifier,
-      time: DateFormat('HH:mm:ss').format(DateTime.now()),
-      itemLines: formattedLines,
-    );
-    await compute(_printInIsolate, jobData);
   }
-  Future<void> printReceipt({
-    required PrinterConfig printerConfig,
-    required ReceiptConfig receiptConfig,
-    required Transaction transaction,
-    required FranchiseUser franchisee,
-  }) async {
-    final PaperSize paper = printerConfig.paperWidth == PaperWidth.mm80
-        ? PaperSize.mm80
-        : PaperSize.mm58;
-    final profile = await CapabilityProfile.load();
-    final printer = NetworkPrinter(paper, profile);
-    final PosPrintResult res = await printer.connect(printerConfig.ipAddress,
-        port: 9100, timeout: const Duration(seconds: 2));
-    if (res != PosPrintResult.success) {
-      throw Exception('Impossible de se connecter à l\'imprimante: ${res.msg}');
-    }
-    if (franchisee.companyName != null) {
-      printer.text(franchisee.companyName!,
-          styles: const PosStyles(
-              align: PosAlign.center,
-              height: PosTextSize.size2,
-              width: PosTextSize.size2));
-    }
-    if (franchisee.address != null) {
-      printer.text(franchisee.address!,
-          styles: const PosStyles(align: PosAlign.center));
-    }
-    printer.hr();
-    printer.row([
-      PosColumn(
-          text:
-              'Date: ${DateFormat('dd/MM/yy HH:mm').format(transaction.timestamp)}',
-          width: 6),
-      PosColumn(
-          text: 'Ticket #${transaction.id.substring(0, 6)}',
-          width: 6,
-          styles: const PosStyles(align: PosAlign.right)),
-    ]);
-    printer.hr();
-    for (final item in transaction.items) {
-      printer.text(item['name'] as String? ?? 'Article');
-      printer.row([
-        PosColumn(
-            text: '1 x ${(item['price'] as num).toStringAsFixed(2)}', width: 6),
-        PosColumn(
-            text: '${(item['total'] as num).toStringAsFixed(2)} EUR',
-            width: 6,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-    }
-    printer.hr();
-    if (transaction.discountAmount > 0) {
-      printer.row([
-        PosColumn(text: 'Sous-Total', width: 6),
-        PosColumn(
-            text: '${transaction.subTotal.toStringAsFixed(2)} EUR',
-            width: 6,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-      printer.row([
-        PosColumn(text: 'Remise', width: 6),
-        PosColumn(
-            text: '-${transaction.discountAmount.toStringAsFixed(2)} EUR',
-            width: 6,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-      printer.hr(ch: '-');
-    }
-    printer.row([
-      PosColumn(
-          text: 'TOTAL',
-          width: 6,
-          styles: const PosStyles(
-              height: PosTextSize.size2, width: PosTextSize.size2)),
-      PosColumn(
-          text: '${transaction.total.toStringAsFixed(2)} EUR',
-          width: 6,
-          styles: const PosStyles(
-              align: PosAlign.right,
-              height: PosTextSize.size2,
-              width: PosTextSize.size2)),
-    ]);
-    if (receiptConfig.showVatDetails) {
-      printer.row([
-        PosColumn(text: 'Dont TVA', width: 6),
-        PosColumn(
-            text: '${transaction.vatTotal.toStringAsFixed(2)} EUR',
-            width: 6,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-    }
-    printer.hr();
-    printer.text(receiptConfig.footerText,
-        styles: const PosStyles(align: PosAlign.center));
-    printer.feed(2);
-    if (transaction.paymentMethods.containsKey('Cash')) {
-      printer.drawer(pin: PosDrawer.pin2);
-    }
-    printer.cut(mode: PosCutMode.partial);
-    printer.disconnect();
+  Future<void> printTestTicket({required dynamic printerConfig}) async {
+    if (printerConfig is Map && printerConfig['macAddress'] != null) { try { final devices = await bluetooth.getBondedDevices(); final d = devices.firstWhere((x) => x.address == printerConfig['macAddress']); await selectDevice(d); } catch(_) {} }
+    await _tryRestoreSavedDevice();
+    Map<String, dynamic> configMap = _normalizeConfig(printerConfig);
+    _addJob(() async { final gen = Generator(PaperSize.mm80, await CapabilityProfile.load()); List<int> b = []; b += gen.text("TEST SYSTEME", styles: const PosStyles(align: PosAlign.center, bold: true, codeTable: 'CP1252')); b += gen.text("Accents: é à è ê", styles: const PosStyles(align: PosAlign.center, codeTable: 'CP1252')); b += gen.feed(2); b += gen.cut(); return b; }, configMap);
   }
-  Future<void> printTestTicket({required PrinterConfig printerConfig}) async {
-    final PaperSize paper = printerConfig.paperWidth == PaperWidth.mm80
-        ? PaperSize.mm80
-        : PaperSize.mm58;
-    final profile = await CapabilityProfile.load();
-    final printer = NetworkPrinter(paper, profile);
-    final PosPrintResult res = await printer.connect(
-      printerConfig.ipAddress,
-      port: 9100,
-      timeout: const Duration(seconds: 15),
-    );
-    if (res != PosPrintResult.success) {
-      throw Exception('Erreur de connexion: ${res.msg}');
-    }
-    printer.text(
-      '--- TICKET DE TEST ---',
-      styles: const PosStyles(
-        align: PosAlign.center,
-        bold: true,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
-      ),
-    );
-    printer.feed(1);
-    printer.text(
-      "L'imprimante fonctionne correctement.",
-      styles: const PosStyles(align: PosAlign.center),
-    );
-    printer.text(
-      'Imprimante: ${printerConfig.name}',
-      styles: const PosStyles(align: PosAlign.center),
-    );
-    printer.text(
-      'Adresse IP: ${printerConfig.ipAddress}',
-      styles: const PosStyles(align: PosAlign.center),
-    );
-    printer.feed(1);
-    printer.text(
-      DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now()),
-      styles: const PosStyles(align: PosAlign.center),
-    );
-    printer.feed(2);
-    printer.cut(mode: PosCutMode.partial);
-    printer.disconnect();
-  }
-  Future<void> printZTicket({
-    required PrinterConfig printerConfig,
-    required TillSession session,
-    required List<Transaction> transactions,
-    required double declaredCash,
-    required bool isManager,
-    required String userName,
-  }) async {
-    final profile = await CapabilityProfile.load();
-    final PaperSize paper = printerConfig.paperWidth == PaperWidth.mm80
-        ? PaperSize.mm80
-        : PaperSize.mm58;
-    final printer = NetworkPrinter(paper, profile);
-    final PosPrintResult res = await printer.connect(printerConfig.ipAddress,
-        port: 9100, timeout: const Duration(seconds: 15));
-    if (res != PosPrintResult.success) {
-      throw Exception('Imprimante déconnectée : ${res.msg}');
-    }
-    double totalSales = 0.0;
-    double cashSales = 0.0;
-    double cardSales = 0.0;
-    double ticketSales = 0.0;
-    for (var t in transactions) {
-      totalSales += t.total;
-      cashSales += (t.paymentMethods['Cash'] as num?)?.toDouble() ?? 0.0;
-      cardSales += (t.paymentMethods['Card'] as num?)?.toDouble() ?? 0.0;
-      ticketSales += (t.paymentMethods['Ticket'] as num?)?.toDouble() ?? 0.0;
-    }
-    final double theoreticalTotal = session.initialCash + cashSales;
-    final double discrepancy = declaredCash - theoreticalTotal;
-    printer.text('CLOTURE DE CAISSE (Z)',
-        styles: const PosStyles(
-            align: PosAlign.center,
-            height: PosTextSize.size2,
-            width: PosTextSize.size2,
-            bold: true));
-    printer.feed(1);
-    printer.text(
-        'Date : ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}');
-    printer.text('Fermé par : $userName');
-    printer.hr();
-    printer.text('FONDS DE CAISSE', styles: const PosStyles(bold: true));
-    printer.row([
-      PosColumn(text: 'Ouverture :', width: 8),
-      PosColumn(
-          text: '${session.initialCash.toStringAsFixed(2)} EUR',
-          width: 4,
-          styles: const PosStyles(align: PosAlign.right)),
-    ]);
-    printer.row([
-      PosColumn(
-          text: 'DÉCLARÉ (Fermeture) :',
-          width: 8,
-          styles: const PosStyles(bold: true)),
-      PosColumn(
-          text: '${declaredCash.toStringAsFixed(2)} EUR',
-          width: 4,
-          styles: const PosStyles(align: PosAlign.right, bold: true)),
-    ]);
-    printer.hr();
-    if (isManager) {
-      printer.text('VENTILATION VENTES (Manager)',
-          styles: const PosStyles(bold: true, underline: true));
-      printer.row([
-        PosColumn(text: 'Total Ventes :', width: 8),
-        PosColumn(
-            text: '${totalSales.toStringAsFixed(2)} EUR',
-            width: 4,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-      printer.text('Dont Espèces : ${cashSales.toStringAsFixed(2)}');
-      printer.text('Dont CB : ${cardSales.toStringAsFixed(2)}');
-      printer.text('Dont Tickets : ${ticketSales.toStringAsFixed(2)}');
-      printer.hr();
-      printer.text('CONTRÔLE ÉCARTS',
-          styles: const PosStyles(bold: true, underline: true));
-      printer.row([
-        PosColumn(text: 'Théorique Espèces :', width: 8),
-        PosColumn(
-            text: '${theoreticalTotal.toStringAsFixed(2)} EUR',
-            width: 4,
-            styles: const PosStyles(align: PosAlign.right)),
-      ]);
-      printer.feed(1);
-      printer.text(
-          'ECART CAISSE : ${discrepancy > 0 ? '+' : ''}${discrepancy.toStringAsFixed(2)} EUR',
-          styles: const PosStyles(
-              align: PosAlign.center,
-              bold: true,
-              height: PosTextSize.size2,
-              width: PosTextSize.size1));
+  Map<String, dynamic> _normalizeConfig(dynamic config) {
+    Map<String, dynamic> m = {};
+    if (config is Map) {
+      config.forEach((k, v) => m[k.toString()] = v);
     } else {
-      printer.text('*** CLOTURE AVEUGLE ***',
-          styles: const PosStyles(align: PosAlign.center));
-      printer.text('Montants enregistrés.',
-          styles: const PosStyles(align: PosAlign.center));
-      printer.text('Validation manager requise.',
-          styles: const PosStyles(align: PosAlign.center));
+      try { m['isBluetooth'] = config.isBluetooth; m['macAddress'] = config.macAddress; } catch (_) {}
     }
-    printer.feed(2);
-    printer.text('Signature Responsable :',
-        styles: const PosStyles(underline: true));
-    printer.feed(3);
-    printer.cut();
-    printer.disconnect();
+    if (m['macAddress'] == null && _selectedDevice != null) { m['isBluetooth'] = true; m['macAddress'] = _selectedDevice!.address; }
+    return m;
   }
 }
-
+extension PrintingServiceZ on PrintingService {
+  Future<void> printZTicket({required dynamic printerConfig, required dynamic session, required List transactions, required double declaredCash, required bool isManager, required String userName}) async {
+    await _tryRestoreSavedDevice();
+    Map<String, dynamic> configMap = _normalizeConfig(printerConfig);
+    double totalSales = 0;
+    for (var t in transactions) {
+      Map<String, dynamic> tMap = t is Map ? Map.from(t) : (t as dynamic).toMap();
+      totalSales += (tMap['total'] as num? ?? 0).toDouble();
+    }
+    double initialCash = 0;
+    try { initialCash = (session is Map) ? (session['initialCash'] as num).toDouble() : (session as dynamic).initialCash; } catch (_) {}
+    _addJob(() async => await compute(_generateZTicketBytes, {'paperWidthInt': 80, 'sessionInitialCash': initialCash, 'declaredCash': declaredCash, 'userName': userName, 'isManager': isManager, 'totalSales': totalSales.toStringAsFixed(2), 'date': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()), 'profile': await CapabilityProfile.load()}), configMap);
+  }
+}
+List<int> _generateZTicketBytes(Map<String, dynamic> params) {
+  final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
+  final PaperSize paper = paperWidthInt == 80 ? PaperSize.mm80 : PaperSize.mm58;
+  final CapabilityProfile profile = params['profile'];
+  final Generator generator = Generator(paper, profile);
+  List<int> bytes = [];
+  const PosStyles sTitle = PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, codeTable: 'CP1252');
+  const PosStyles sNormal = PosStyles(codeTable: 'CP1252');
+  bytes += generator.text('CLOTURE (Z)', styles: sTitle);
+  bytes += generator.text('Date: ${params['date']}', styles: sNormal);
+  bytes += generator.text('Fermé par: ${params['userName']}', styles: sNormal);
+  bytes += generator.hr();
+  double initCash = double.tryParse(params['sessionInitialCash'].toString()) ?? 0.0;
+  double declared = double.tryParse(params['declaredCash'].toString()) ?? 0.0;
+  bytes += generator.text('FONDS DE CAISSE', styles: const PosStyles(bold: true, codeTable: 'CP1252'));
+  bytes += generator.row([
+    PosColumn(text: 'Ouverture :', width: 8, styles: sNormal),
+    PosColumn(text: '${initCash.toStringAsFixed(2)} EUR', width: 4, styles: const PosStyles(align: PosAlign.right, codeTable: 'CP1252')),
+  ]);
+  bytes += generator.row([
+    PosColumn(text: 'DECLARE :', width: 8, styles: const PosStyles(bold: true, codeTable: 'CP1252')),
+    PosColumn(text: '${declared.toStringAsFixed(2)} EUR', width: 4, styles: const PosStyles(align: PosAlign.right, bold: true, codeTable: 'CP1252')),
+  ]);
+  bytes += generator.hr();
+  if (params['isManager'] == true) {
+    double totalSales = double.tryParse(params['totalSales'].toString()) ?? 0.0;
+    bytes += generator.text('TOTAL VENTES: ${totalSales.toStringAsFixed(2)} EUR', styles: const PosStyles(bold: true, codeTable: 'CP1252'));
+  }
+  bytes += generator.feed(3);
+  bytes += generator.cut();
+  return bytes;
+}
 
 
 ==================================================
@@ -2492,15 +2573,22 @@ class UpdateService {
     try {
       final response = await http.get(Uri.parse(
           'https:
-      if (response.statusCode != 200) return null;
+      if (response.statusCode != 200) {
+        debugPrint("Erreur GitHub API: ${response.statusCode}");
+        return null;
+      }
       final data = jsonDecode(response.body);
       final tagName = data['tag_name'];
-      final apkAsset = (data['assets'] as List)
-          .firstWhere((e) => e['name'].endsWith('.apk'), orElse: () => null);
+      final assets = data['assets'] as List?;
+      if (assets == null || assets.isEmpty) return null;
+      final apkAsset = assets.firstWhere(
+            (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
+        orElse: () => null,
+      );
       if (tagName == null || apkAsset == null) return null;
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
-      final latestVersion = tagName.replaceFirst('v', '');
+      final latestVersion = tagName.toString().replaceAll('v', '');
       if (_isNewer(latestVersion, currentVersion)) {
         return {
           "version": latestVersion,
@@ -2525,28 +2613,35 @@ class UpdateService {
         if (l > c) return true;
         if (l < c) return false;
       }
-    } catch (_) {}
+    } catch (_) {
+      return false;
+    }
     return false;
   }
   static Future<void> downloadAndInstall(String apkUrl) async {
     try {
       final dir = await getTemporaryDirectory();
-      final file = File("${dir.path}/update.apk");
-      final response = await http.get(Uri.parse(apkUrl));
+      final savePath = "${dir.path}/update.apk";
+      final file = File(savePath);
+      if (await file.exists()) {
+        await file.delete();
+      }
+      final request = http.Request('GET', Uri.parse(apkUrl));
+      final response = await http.Client().send(request);
       if (response.statusCode != 200) {
         throw Exception("Échec du téléchargement : ${response.statusCode}");
       }
-      await file.writeAsBytes(response.bodyBytes);
-      await platform.invokeMethod("installApk", {
-        "path": file.path,
-      });
+      final sink = file.openWrite();
+      await response.stream.pipe(sink);
+      await sink.close();
+      debugPrint("Téléchargement terminé : $savePath");
+      await platform.invokeMethod("installApk", { "path": savePath });
     } catch (e) {
-      debugPrint("Erreur install APK: $e");
-      throw Exception("Impossible d'installer l'APK : $e");
+      debugPrint("Erreur lors de la mise à jour : $e");
+      rethrow; 
     }
   }
 }
-
 
 
 ==================================================
@@ -2723,6 +2818,8 @@ FILE PATH: lib/core/services/local_config_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../models.dart';
 class PosLocalConfig {
   String franchiseeId;
   String franchisorId;
@@ -2758,38 +2855,51 @@ class PosLocalConfig {
   }
 }
 class LocalConfigService {
-  static const String _fileName = "pos_config.json";
-  Future<String> _getFilePath() async {
-    final directory = await getApplicationDocumentsDirectory();
-    return '${directory.path}/$_fileName';
-  }
-  Future<PosLocalConfig> loadConfig() async {
-    try {
-      final path = await _getFilePath();
-      final file = File(path);
-      if (await file.exists()) {
-        final content = await file.readAsString();
-        return PosLocalConfig.fromJson(jsonDecode(content));
+  static const String _printerConfigKey = 'printer_config';
+  static const String _receiptConfigKey = 'receipt_config';
+  Future<PrinterConfig> getPrinterConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? jsonString = prefs.getString(_printerConfigKey);
+    if (jsonString != null) {
+      try {
+        return PrinterConfig.fromFirestore(json.decode(jsonString));
+      } catch (e) {
+        return PrinterConfig();
       }
-    } catch (e) {}
-    return PosLocalConfig();
+    }
+    return PrinterConfig();
   }
-  Future<void> saveConfig(PosLocalConfig config) async {
-    final path = await _getFilePath();
-    final file = File(path);
-    await file.writeAsString(jsonEncode(config.toJson()));
+  Future<void> savePrinterConfig(PrinterConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    String jsonString = json.encode(config.toMap());
+    await prefs.setString(_printerConfigKey, jsonString);
   }
-  Future<void> clearConfig() async {
-    try {
-      final path = await _getFilePath();
-      final file = File(path);
-      if (await file.exists()) {
-        await file.delete();
+  Future<ReceiptConfig> getReceiptConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? jsonString = prefs.getString(_receiptConfigKey);
+    if (jsonString != null) {
+      try {
+        return ReceiptConfig.fromMap(json.decode(jsonString));
+      } catch (e) {
+        return ReceiptConfig(
+            headerText: '',
+            footerText: '',
+            showVatDetails: true,
+            printReceiptOnPayment: true);
       }
-    } catch (e) {}
+    }
+    return ReceiptConfig(
+        headerText: '',
+        footerText: '',
+        showVatDetails: true,
+        printReceiptOnPayment: true);
+  }
+  Future<void> saveReceiptConfig(ReceiptConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+    String jsonString = json.encode(config.toMap());
+    await prefs.setString(_receiptConfigKey, jsonString);
   }
 }
-
 
 
 ==================================================
@@ -3063,43 +3173,170 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
 ==================================================
 FILE PATH: lib/back_office/views/franchisor/product_creation_view.dart
 ==================================================
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../models.dart';
 class FranchisorProductCreationView extends StatefulWidget {
   final List<Product> availableProducts;
-  final Function(Product) onSave;
-  const FranchisorProductCreationView({Key? key, required this.availableProducts, required this.onSave}) : super(key: key);
+  final Function(Product, File?) onSave; 
+  const FranchisorProductCreationView({
+    Key? key,
+    required this.availableProducts,
+    required this.onSave
+  }) : super(key: key);
   @override
   State<FranchisorProductCreationView> createState() => _FranchisorProductCreationViewState();
 }
 class _FranchisorProductCreationViewState extends State<FranchisorProductCreationView> {
+  final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _ingredientsTextController = TextEditingController(); 
   bool _isContainer = false;
+  bool _isIngredient = false;
+  XFile? _selectedImageFile;
   final List<String> _selectedChildrenIds = [];
+  Future<void> _pickImage() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    if (image != null) {
+      setState(() {
+        _selectedImageFile = image;
+      });
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Nouveau Produit Master")),
       body: Form(
+        key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            Center(
+              child: Stack(
+                children: [
+                  Container(
+                    width: 120,
+                    height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                      image: _selectedImageFile != null
+                          ? DecorationImage(image: FileImage(File(_selectedImageFile!.path)), fit: BoxFit.cover)
+                          : null,
+                    ),
+                    child: _selectedImageFile == null
+                        ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
+                        : null,
+                  ),
+                  Positioned.fill(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _pickImage,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  if (_selectedImageFile != null)
+                    Positioned(
+                      top: -5,
+                      right: -5,
+                      child: IconButton(
+                        icon: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle,
+                              boxShadow: [BoxShadow(blurRadius: 2, color: Colors.black26)]
+                          ),
+                          child: const Icon(Icons.delete, color: Colors.red, size: 18),
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _selectedImageFile = null;
+                          });
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
             TextFormField(
               controller: _nameController,
-              decoration: const InputDecoration(labelText: "Nom du produit (ex: Frites)"),
+              decoration: const InputDecoration(
+                labelText: "Nom du produit (ex: Frites)",
+                border: OutlineInputBorder(),
+              ),
+              validator: (v) => v == null || v.isEmpty ? "Nom requis" : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _priceController,
+              decoration: const InputDecoration(
+                labelText: "Prix TTC (€)",
+                border: OutlineInputBorder(),
+                suffixIcon: Icon(Icons.euro),
+              ),
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              validator: (v) {
+                if (v == null || v.isEmpty) return null; 
+                if (double.tryParse(v.replaceAll(',', '.')) == null) return "Prix invalide";
+                return null;
+              },
             ),
             const SizedBox(height: 20),
             SwitchListTile(
-              title: const Text("Est-ce un conteneur (Dossier) ?"),
-              subtitle: const Text("Cochez si ce produit sert à regrouper d'autres produits (ex: Frites -> Petite, Grande)"),
-              value: _isContainer,
-              onChanged: (val) => setState(() => _isContainer = val),
+              title: const Text("C'est un ingrédient ?"),
+              subtitle: const Text("Sert aux fiches techniques, non vendu seul."),
+              value: _isIngredient,
+              onChanged: (val) {
+                setState(() {
+                  _isIngredient = val;
+                  if (val) _isContainer = false;
+                });
+              },
             ),
-            if (_isContainer) ...[
-              const Divider(),
-              const Text("Sélectionnez les produits inclus :", style: TextStyle(fontWeight: FontWeight.bold)),
+            if (!_isIngredient) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                decoration: const InputDecoration(
+                  labelText: "Description (Carte)",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _ingredientsTextController,
+                decoration: const InputDecoration(
+                  labelText: "Ingrédients (Texte technique)",
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 2,
+              ),
+            ],
+            const SizedBox(height: 20),
+            if (!_isIngredient) 
+              SwitchListTile(
+                title: const Text("Est-ce un conteneur (Dossier) ?"),
+                subtitle: const Text("Regroupe d'autres produits (ex: Nos Burgers)"),
+                value: _isContainer,
+                onChanged: (val) => setState(() => _isContainer = val),
+              ),
+            if (_isContainer && !_isIngredient) ...[
+              const SizedBox(height: 10),
+              const Text("Sélectionnez les produits contenus :", style: TextStyle(fontWeight: FontWeight.bold)),
               Container(
-                height: 300,
+                height: 200,
+                margin: const EdgeInsets.only(top: 8),
                 decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
                 child: ListView.builder(
                   itemCount: widget.availableProducts.length,
@@ -3124,21 +3361,33 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 30),
             ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 50),
+                backgroundColor: Colors.blue,
+                foregroundColor: Colors.white,
+              ),
               onPressed: () {
-                final newProduct = Product(
-                  id: DateTime.now().millisecondsSinceEpoch.toString(), 
-                  name: _nameController.text,
-                  price: 0.0, 
-                  isContainer: _isContainer,
-                  containerProductIds: _isContainer ? _selectedChildrenIds : [],
-                );
-                widget.onSave(newProduct);
-                Navigator.pop(context);
+                if (_formKey.currentState!.validate()) {
+                  final double price = _priceController.text.isNotEmpty
+                      ? double.parse(_priceController.text.replaceAll(',', '.'))
+                      : 0.0;
+                  final newProduct = Product(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    name: _nameController.text,
+                    price: price,
+                    description: !_isIngredient ? _descriptionController.text : null,
+                    isContainer: _isContainer,
+                    containerProductIds: _isContainer ? _selectedChildrenIds : [],
+                  );
+                  widget.onSave(newProduct, _selectedImageFile != null ? File(_selectedImageFile!.path) : null);
+                  Navigator.pop(context);
+                }
               },
-              child: const Text("Sauvegarder le Master"),
-            )
+              child: const Text("Sauvegarder le Produit", style: TextStyle(fontSize: 16)),
+            ),
+            const SizedBox(height: 30),
           ],
         ),
       ),
@@ -5327,7 +5576,6 @@ import '../../../core/auth_provider.dart';
 import '../../../core/constants.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-import 'image_input_card.dart';
 enum ProductTypeFilter { sellable, ingredients }
 enum SellableTypeFilter { all, simple, composite }
 class CatalogueView extends StatefulWidget {
@@ -5352,6 +5600,7 @@ class _CatalogueViewState extends State<CatalogueView> {
   String? _selectedSubFilterId;
   String? _selectedBackOfficeFilterId;
   bool _isLoading = true;
+  bool _areSectionsLoaded = false;
   final List<StreamSubscription> _subscriptions = [];
   @override
   void initState() {
@@ -5376,6 +5625,7 @@ class _CatalogueViewState extends State<CatalogueView> {
         setState(() {
           _cachedSectionsList = sections;
           _sectionNames = map;
+          _areSectionsLoaded = true;
         });
       }
     }));
@@ -5408,6 +5658,17 @@ class _CatalogueViewState extends State<CatalogueView> {
     _searchController.dispose();
     for (var sub in _subscriptions) sub.cancel();
     super.dispose();
+  }
+  Color _getColorFromHex(String hexColor) {
+    try {
+      hexColor = hexColor.toUpperCase().replaceAll("#", "");
+      if (hexColor.length == 6) {
+        hexColor = "FF$hexColor";
+      }
+      return Color(int.parse(hexColor, radix: 16));
+    } catch (e) {
+      return Colors.grey;
+    }
   }
   List<MasterProduct> _getFilteredProducts() {
     return _allProducts.where((product) {
@@ -5443,7 +5704,7 @@ class _CatalogueViewState extends State<CatalogueView> {
       case SellableTypeFilter.all:
         return true;
       case SellableTypeFilter.simple:
-        return !product.isComposite; 
+        return !product.isComposite;
       case SellableTypeFilter.composite:
         return product.isComposite;
     }
@@ -5740,7 +6001,7 @@ class _CatalogueViewState extends State<CatalogueView> {
       return ListView.builder(
         padding: const EdgeInsets.fromLTRB(0, 10, 0, 100),
         itemCount: list.length,
-        itemBuilder: (ctx, i) => _buildProductCard(list[i], repo, enableDrag: false),
+        itemBuilder: (ctx, i) => _buildProductCard(list[i], repo, enableDrag: false, index: i),
       );
     }
     return ReorderableListView.builder(
@@ -5756,7 +6017,7 @@ class _CatalogueViewState extends State<CatalogueView> {
           children: [
             if (_selectedSubFilterId == null)
               _buildSubCategoryHeaderIfNeeded(product, i, list),
-            _buildProductCard(product, repo, enableDrag: true, key: ValueKey(product.id)),
+            _buildProductCard(product, repo, enableDrag: true, key: ValueKey("card_${product.id}"), index: i),
           ],
         );
       },
@@ -5821,10 +6082,13 @@ class _CatalogueViewState extends State<CatalogueView> {
     }
     return const SizedBox.shrink();
   }
-  Widget _buildProductCard(MasterProduct product, FranchiseRepository repo, {required bool enableDrag, Key? key}) {
+  Widget _buildProductCard(MasterProduct product, FranchiseRepository repo, {required bool enableDrag, Key? key, required int index}) {
     final bool isIngredient = product.isIngredient;
     final bool isContainer = product.isContainer;
     String? kioskLabel;
+    final productFilters = _cachedFilters
+        .where((f) => product.filterIds.contains(f.id))
+        .toList();
     if (product.kioskFilterIds.isNotEmpty) {
       for (var id in product.kioskFilterIds) {
         if (_kioskFilterNames.containsKey(id)) {
@@ -5839,9 +6103,10 @@ class _CatalogueViewState extends State<CatalogueView> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12, offset: const Offset(0, 5))
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 8)),
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4, offset: const Offset(0, 2))
         ],
       ),
       child: Material(
@@ -5894,11 +6159,40 @@ class _CatalogueViewState extends State<CatalogueView> {
                       Text(
                           product.name,
                           style: const TextStyle(
-                              fontWeight: FontWeight.w900,
+                              fontWeight: FontWeight.w800,
                               fontSize: 19,
-                              color: Color(0xFF2D3436)
+                              color: Color(0xFF2D3436),
+                              letterSpacing: -0.5
                           )
                       ),
+                      if (productFilters.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6.0, bottom: 6.0),
+                          child: Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: productFilters.map((filter) {
+                              final color = _getColorFromHex(filter.color ?? '#9E9E9E');
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: color.withOpacity(0.4), width: 1),
+                                ),
+                                child: Text(
+                                  filter.name.toUpperCase(),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.w700,
+                                    color: color.withOpacity(1.0),
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ),
                       const SizedBox(height: 8),
                       if (kioskLabel != null)
                         Container(
@@ -5908,6 +6202,16 @@ class _CatalogueViewState extends State<CatalogueView> {
                           child: Text(
                               kioskLabel,
                               style: TextStyle(fontSize: 12, color: Colors.purple.shade800, fontWeight: FontWeight.bold)
+                          ),
+                        ),
+                      if (!product.isContainer && product.description != null && product.description!.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8.0),
+                          child: Text(
+                              product.description!,
+                              style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis
                           ),
                         ),
                       if (product.isContainer)
@@ -5925,65 +6229,82 @@ class _CatalogueViewState extends State<CatalogueView> {
                             children: [
                               Row(
                                 children: [
-                                  const Icon(Icons.list_alt_rounded, size: 16, color: Colors.black54),
+                                  Icon(Icons.folder_open_rounded, size: 16, color: Colors.orange.shade800),
                                   const SizedBox(width: 8),
                                   Text(
-                                      "${product.containerProductIds.length} produit(s) lié(s)",
-                                      style: const TextStyle(
-                                          fontSize: 14,
+                                      "Contenu du dossier :",
+                                      style: TextStyle(
+                                          fontSize: 12,
                                           fontWeight: FontWeight.bold,
-                                          color: Colors.black87
+                                          color: Colors.orange.shade900
                                       )
                                   ),
                                 ],
                               ),
+                              const SizedBox(height: 8),
+                              if (product.containerProductIds.isEmpty)
+                                const Text("Vide", style: TextStyle(fontStyle: FontStyle.italic, fontSize: 12, color: Colors.grey))
+                              else
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: product.containerProductIds.map((id) {
+                                    final childProduct = _allProducts.firstWhere(
+                                            (p) => p.id == id,
+                                        orElse: () => MasterProduct(id: '', name: 'Inconnu', productId: '', createdBy: '')
+                                    );
+                                    return Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white,
+                                        border: Border.all(color: Colors.grey.shade300),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        childProduct.name,
+                                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.black87),
+                                      ),
+                                    );
+                                  }).toList(),
+                                )
                             ],
                           ),
                         )
                       else if (product.sectionIds.isNotEmpty)
                         Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0F7FF),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.blue.shade100),
-                          ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Row(
+                              Row(
                                 children: [
-                                  Icon(Icons.layers_rounded, size: 16, color: Colors.blueGrey),
-                                  SizedBox(width: 8),
-                                  Text(
-                                    "Configuration du produit :",
-                                    style: TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w700,
-                                        color: Colors.blueGrey
-                                    ),
-                                  ),
+                                  Icon(Icons.hub_rounded, size: 14, color: Colors.grey.shade500),
+                                  const SizedBox(width: 6),
+                                  Text("PERSONNALISATION :", style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade500, letterSpacing: 1)),
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              const Divider(height: 1, color: Colors.white),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: product.sectionIds.map((sId) => _buildSectionBadge(sId)).toList(),
-                              ),
+                              if (!_areSectionsLoaded)
+                                const Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 8.0),
+                                  child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                )
+                              else
+                                Wrap(
+                                  spacing: -12, 
+                                  runSpacing: 8,
+                                  children: List.generate(product.sectionIds.length, (idx) {
+                                    return _buildStepArrow(product.sectionIds[idx], idx, product.sectionIds.length);
+                                  }),
+                                ),
                             ],
                           ),
-                        )
-                      else
+                        ),
+                      if (!isIngredient && (product.price ?? 0) > 0)
                         Text(
-                            product.description ?? "Aucune description disponible.",
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 14, height: 1.4),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis
+                            "${product.price!.toStringAsFixed(2)} €",
+                            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF00B894))
                         ),
                     ],
                   ),
@@ -6007,7 +6328,7 @@ class _CatalogueViewState extends State<CatalogueView> {
                 ),
                 if (enableDrag)
                   ReorderableDragStartListener(
-                    index: _allProducts.indexOf(product),
+                    index: index,
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
                       child: Icon(Icons.drag_indicator_rounded, color: Colors.grey.shade400, size: 30),
@@ -6020,76 +6341,98 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-  Widget _buildSectionBadge(String sectionId) {
+  Widget _buildStepArrow(String sectionId, int index, int total) {
     ProductSection section;
     try {
       section = _cachedSectionsList.firstWhere((s) => s.sectionId == sectionId);
     } catch (e) {
-      section = ProductSection(id: '0', sectionId: sectionId, title: 'Section introuvable ($sectionId)', selectionMin: 0, selectionMax: 0, type: 'checkbox', items: [], filterIds: []);
+      section = ProductSection(id: '0', sectionId: sectionId, title: '?', selectionMin: 0, selectionMax: 0, type: 'checkbox', items: [], filterIds: []);
     }
-    IconData icon;
-    Color color;
-    String typeLabel;
-    final typeLower = section.type.toString().toLowerCase().trim();
-    if (typeLower.contains('radio') || typeLower.contains('unique')) {
-      icon = Icons.radio_button_checked_rounded;
-      color = Colors.deepOrange;
-      typeLabel = 'Choix Unique';
-    } else if (typeLower.contains('increment') || typeLower.contains('quantity')) {
-      icon = Icons.exposure_plus_1_rounded;
-      color = Colors.green;
-      typeLabel = 'Incrémental';
-    } else {
-      icon = Icons.check_box_rounded;
-      color = Colors.blue.shade700;
-      typeLabel = 'Choix Multiple';
-    }
-    return Container(
-      margin: const EdgeInsets.only(top: 4, bottom: 4, right: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        boxShadow: [BoxShadow(color: color.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-            child: Icon(icon, size: 16, color: color),
-          ),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                section.title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black87,
-                  height: 1.1,
+    final bool isFirst = index == 0;
+    final bool isLast = index == total - 1;
+    Color sectionColor = _getSectionTypeColor(section.type);
+    Color textColor = Colors.white;
+    return ClipPath(
+      clipper: ArrowClipper(isFirst: isFirst, isLast: isLast),
+      child: Container(
+        padding: EdgeInsets.only(
+            left: isFirst ? 14 : 26,
+            right: isLast ? 14 : 26,
+            top: 7,
+            bottom: 7
+        ),
+        decoration: BoxDecoration(
+            color: sectionColor,
+            gradient: LinearGradient(
+                colors: [sectionColor, sectionColor.withOpacity(0.85)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight
+            ),
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 2, offset: const Offset(0, 1))
+            ]
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              _getSectionIcon(section.type),
+              color: textColor.withOpacity(0.95),
+              size: 14,
+            ),
+            const SizedBox(width: 6),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  section.title.toUpperCase(),
+                  style: TextStyle(
+                      color: textColor,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.5,
+                      height: 1.0
+                  ),
                 ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                "$typeLabel • Min: ${section.selectionMin} / Max: ${section.selectionMax}",
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.grey.shade600,
+                const SizedBox(height: 2),
+                Text(
+                  "${_getTypeLabel(section.type)} • ${section.selectionMin}-${section.selectionMax}",
+                  style: TextStyle(
+                      color: textColor.withOpacity(0.9),
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      height: 1.0
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ],
+              ],
+            ),
+          ],
+        ),
       ),
     );
+  }
+  IconData _getSectionIcon(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) {
+      return Icons.radio_button_checked;
+    }
+    if (t.contains('increment') || t.contains('quantity')) {
+      return Icons.exposure_plus_1;
+    }
+    return Icons.check_box;
+  }
+  String _getTypeLabel(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) return "Unique";
+    if (t.contains('quantity')) return "Qté";
+    return "Checkbox";
+  }
+  Color _getSectionTypeColor(String? type) {
+    final t = type?.toLowerCase() ?? '';
+    if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE67E22);
+    if (t.contains('quantity')) return const Color(0xFF27AE60);
+    return const Color(0xFF2980B9);
   }
   Widget _buildEmptyState() {
     return Center(
@@ -6122,6 +6465,38 @@ class _CatalogueViewState extends State<CatalogueView> {
       await repo.deleteMasterProduct(product);
     }
   }
+}
+class ArrowClipper extends CustomClipper<Path> {
+  final bool isFirst;
+  final bool isLast;
+  final double arrowWidth = 14.0;
+  ArrowClipper({required this.isFirst, required this.isLast});
+  @override
+  Path getClip(Size size) {
+    Path path = Path();
+    final w = size.width;
+    final h = size.height;
+    if (isFirst) {
+      path.moveTo(0, 0);
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(arrowWidth, h / 2); 
+      path.lineTo(0, h);
+    }
+    path.lineTo(0, h);
+    if (isLast) {
+      path.lineTo(w, h);
+      path.lineTo(w, 0);
+    } else {
+      path.lineTo(w - arrowWidth, h);
+      path.lineTo(w, h / 2); 
+      path.lineTo(w - arrowWidth, 0);
+    }
+    path.close();
+    return path;
+  }
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
 class ProductFormView extends StatefulWidget {
   final MasterProduct? productToEdit;
@@ -6157,7 +6532,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   List<String> _selectedKioskFilterIds = [];
   bool _isLoading = false;
   List<ProductSection> _allAvailableSections = [];
-  late TabController _tabController;
   List<ProductFilter> _loadedFilters = [];
   List<KioskCategory> _loadedKioskCategories = [];
   final List<StreamSubscription> _subscriptions = [];
@@ -6165,7 +6539,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
     _allAvailableSections = List.from(widget.preloadedSections);
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
     final repository = FranchiseRepository();
@@ -6209,7 +6582,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    _tabController.dispose();
     for(var s in _subscriptions) s.cancel();
     super.dispose();
   }
@@ -6322,54 +6694,55 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   }
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF5F7FA),
-      appBar: AppBar(
-        title: Text(widget.productToEdit == null ? "Nouveau Produit" : (widget.isDuplicating ? "Dupliquer" : "Modifier")),
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0, top: 8, bottom: 8),
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _saveProduct,
-              icon: _isLoading
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                  : const Icon(Icons.check, size: 18),
-              label: const Text(
-                "Enregistrer",
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                elevation: 2,
+    List<Widget> tabs = [ const Tab(text: "Détails") ];
+    List<Widget> views = [ _buildDetailsTab() ];
+    if (!_isIngredient) {
+      tabs.add(const Tab(text: "Contenu & Étapes"));
+      views.add(_buildContentTab());
+      tabs.add(const Tab(text: "Borne"));
+      views.add(_buildKioskTab());
+    }
+    return DefaultTabController(
+      length: tabs.length,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF5F7FA),
+        appBar: AppBar(
+          title: Text(widget.productToEdit == null ? "Nouveau Produit" : (widget.isDuplicating ? "Dupliquer" : "Modifier")),
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 12.0, top: 8, bottom: 8),
+              child: ElevatedButton.icon(
+                onPressed: _isLoading ? null : _saveProduct,
+                icon: _isLoading
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check, size: 18),
+                label: const Text(
+                  "Enregistrer",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blue,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  elevation: 2,
+                ),
               ),
             ),
+          ],
+          bottom: TabBar(
+            labelColor: Colors.black,
+            unselectedLabelColor: Colors.grey,
+            indicatorColor: Colors.black,
+            tabs: tabs,
           ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          labelColor: Colors.black,
-          unselectedLabelColor: Colors.grey,
-          indicatorColor: Colors.black,
-          tabs: const [
-            Tab(text: "Détails"),
-            Tab(text: "Contenu & Étapes"),
-            Tab(text: "Borne"),
-          ],
         ),
-      ),
-      body: Form(
-        key: _formKey,
-        child: TabBarView(
-          controller: _tabController,
-          physics: const NeverScrollableScrollPhysics(),
-          children: [
-            _buildDetailsTab(),
-            _buildContentTab(),
-            _buildKioskTab(),
-          ],
+        body: Form(
+          key: _formKey,
+          child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
+            children: views,
+          ),
         ),
       ),
     );
@@ -6381,25 +6754,47 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: _pickImage,
-              child: Container(
-                width: 120, height: 120,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
-                    image: _imageFile != null
-                        ? DecorationImage(
-                        image: kIsWeb
-                            ? NetworkImage(_imageFile!.path)                   
-                            : FileImage(File(_imageFile!.path)) as ImageProvider, 
-                        fit: BoxFit.cover)
-                        : (_displayUrl != null
-                        ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
-                        : null),
-                    border: Border.all(color: Colors.grey.shade300),
+            Stack(
+              children: [
+                GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    width: 120, height: 120,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
+                      image: _imageFile != null
+                          ? DecorationImage(
+                          image: kIsWeb
+                              ? NetworkImage(_imageFile!.path)
+                              : FileImage(File(_imageFile!.path)) as ImageProvider,
+                          fit: BoxFit.cover)
+                          : (_displayUrl != null
+                          ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
+                          : null),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
                   ),
-                child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
-              ),
+                ),
+                if (_imageFile != null || _displayUrl != null)
+                  Positioned(
+                    right: -5,
+                    top: -5,
+                    child: InkWell(
+                      onTap: () {
+                        setState(() {
+                          _imageFile = null;
+                          _displayUrl = null;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        child: const Icon(Icons.cancel, color: Colors.red, size: 20),
+                      ),
+                    ),
+                  )
+              ],
             ),
             const SizedBox(width: 24),
             Expanded(
@@ -6455,60 +6850,62 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         const SizedBox(height: 24),
         TextFormField(controller: _descriptionController, maxLines: 3, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
         const SizedBox(height: 24),
-        const Text(
-          "Ingrédients (pour la fiche technique)",
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-        ),
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            border: Border.all(color: Colors.grey.shade300),
-            borderRadius: BorderRadius.circular(12),
+        if (!_isIngredient && !_isContainer) ...[
+          const Text(
+            "Ingrédients (pour la fiche technique)",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ..._ingredientProductIds.map((id) {
-                    final ingName = widget.allProducts
-                        .firstWhere((p) => p.productId == id,
-                        orElse: () => MasterProduct.empty())
-                        .name;
-                    return Chip(
-                      label: Text(ingName),
-                      onDeleted: () {
-                        setState(() {
-                          _ingredientProductIds.remove(id);
-                        });
-                      },
-                      backgroundColor: Colors.orange.shade50,
-                      deleteIconColor: Colors.red,
-                    );
-                  }),
-                  ActionChip(
-                    avatar: const Icon(Icons.add, size: 18),
-                    label: const Text("Ajouter"),
-                    onPressed: _showIngredientPicker,
-                  ),
-                ],
-              ),
-              if (_ingredientProductIds.isEmpty)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    "Aucun ingrédient sélectionné.",
-                    style: TextStyle(color: Colors.grey, fontSize: 12),
-                  ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    ..._ingredientProductIds.map((id) {
+                      final ingName = widget.allProducts
+                          .firstWhere((p) => p.productId == id,
+                          orElse: () => MasterProduct.empty())
+                          .name;
+                      return Chip(
+                        label: Text(ingName),
+                        onDeleted: () {
+                          setState(() {
+                            _ingredientProductIds.remove(id);
+                          });
+                        },
+                        backgroundColor: Colors.orange.shade50,
+                        deleteIconColor: Colors.red,
+                      );
+                    }),
+                    ActionChip(
+                      avatar: const Icon(Icons.add, size: 18),
+                      label: const Text("Ajouter"),
+                      onPressed: _showIngredientPicker,
+                    ),
+                  ],
                 ),
-            ],
+                if (_ingredientProductIds.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      "Aucun ingrédient sélectionné.",
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 24),
+          const SizedBox(height: 24),
+        ],
         const Text("Filtres Back-Office", style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
@@ -6619,7 +7016,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
             icon: Icons.layers_rounded,
             color: Colors.blue.shade800,
             action: ElevatedButton.icon(
-              onPressed: _showStepPicker, 
+              onPressed: _showStepPicker,
               icon: const Icon(Icons.add_rounded),
               label: const Text("Ajouter une étape"),
               style: ElevatedButton.styleFrom(
@@ -12348,11 +12745,10 @@ class _DetailChip extends StatelessWidget {
 ==================================================
 FILE PATH: lib/back_office/views/franchisee/franchisee_settings_view.dart
 ==================================================
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../../core/auth_provider.dart';
-import '../../../core/repository/repository.dart';
 import '../../../core/services/local_config_service.dart';
+import '../../../core/services/printing_service.dart';
 import '../../../models.dart';
 class FranchiseeSettingsView extends StatelessWidget {
   const FranchiseeSettingsView({super.key});
@@ -12362,6 +12758,7 @@ class FranchiseeSettingsView extends StatelessWidget {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
+          title: const Text("Paramètres"),
           bottom: const TabBar(
             tabs: [
               Tab(icon: Icon(Icons.print_outlined), text: "Imprimantes"),
@@ -12387,83 +12784,250 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   final _formKey = GlobalKey<FormState>();
   final _receiptIpController = TextEditingController();
   final _kitchenIpController = TextEditingController();
-  bool _isAutoPrint = false;
+  bool _useBluetooth = false;
+  List<BluetoothDevice> _devices = [];
+  BluetoothDevice? _selectedDevice;
+  bool _isScanning = false;
   final LocalConfigService _localService = LocalConfigService();
+  final PrintingService _printingService = PrintingService();
+  bool _isLoading = true;
   @override
   void initState() {
     super.initState();
     _loadSettings();
   }
   Future<void> _loadSettings() async {
-    final config = await _localService.loadConfig();
+    setState(() => _isLoading = true);
+    final config = await _localService.getPrinterConfig();
+    if (mounted) {
+      setState(() {
+        _receiptIpController.text = config.ipAddress;
+        _useBluetooth = config.isBluetooth;
+        _kitchenIpController.text = "192.168.1.100"; 
+      });
+      if (_useBluetooth) {
+        await _scanBluetoothDevices();
+        if (config.macAddress != null && _devices.isNotEmpty) {
+          try {
+            final device = _devices.firstWhere(
+                  (d) => d.address == config.macAddress,
+            );
+            setState(() {
+              _selectedDevice = device;
+            });
+            _printingService.selectDevice(device);
+          } catch (e) {
+            _selectedDevice = null;
+          }
+        }
+      }
+    }
+    setState(() => _isLoading = false);
+  }
+  Future<void> _scanBluetoothDevices() async {
     setState(() {
-      _receiptIpController.text = config.receiptPrinterIp;
-      _kitchenIpController.text = config.kitchenPrinterIp;
-      _isAutoPrint = config.isAutoPrintEnabled;
+      _isScanning = true;
+      _devices = [];
     });
+    try {
+      final devices = await _printingService.getBluetoothDevices();
+      if (mounted) {
+        setState(() {
+          _devices = devices;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Erreur scan Bluetooth: $e")),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isScanning = false);
+      }
+    }
   }
   Future<void> _saveSettings() async {
-    if (!_formKey.currentState!.validate()) return;
-    final currentConfig = await _localService.loadConfig();
-    currentConfig.receiptPrinterIp = _receiptIpController.text;
-    currentConfig.kitchenPrinterIp = _kitchenIpController.text;
-    currentConfig.isAutoPrintEnabled = _isAutoPrint;
-    await _localService.saveConfig(currentConfig);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Configuration locale enregistrée !"),
-          backgroundColor: Colors.green));
+    if (_formKey.currentState!.validate()) {
+      setState(() => _isLoading = true);
+      final newConfig = PrinterConfig(
+        name: _useBluetooth
+            ? (_selectedDevice?.name ?? 'Imprimante BT')
+            : 'Imprimante Principale',
+        ipAddress: _receiptIpController.text,
+        isBluetooth: _useBluetooth,
+        macAddress: _useBluetooth ? _selectedDevice?.address : null,
+      );
+      await _localService.savePrinterConfig(newConfig);
+      if (_useBluetooth && _selectedDevice != null) {
+        await _printingService.selectDevice(_selectedDevice!);
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Configuration enregistrée et appliquée !'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+  Future<void> _testPrint() async {
+    setState(() => _isLoading = true);
+    try {
+      if (_useBluetooth && _selectedDevice != null) {
+        _printingService.selectDevice(_selectedDevice!);
+      }
+      final testConfig = PrinterConfig(
+        ipAddress: _receiptIpController.text,
+        isBluetooth: _useBluetooth,
+        macAddress: _selectedDevice?.address,
+      );
+      await _printingService.printTestTicket(printerConfig: testConfig);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ticket de test envoyé')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
   @override
   Widget build(BuildContext context) {
-    return Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          const Text("Configuration Réseau (Local)",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _receiptIpController,
-            decoration: const InputDecoration(
-              labelText: "IP Imprimante CAISSE (Ticket Client)",
-              hintText: "ex: 192.168.1.100",
-              prefixIcon: Icon(Icons.receipt),
-              border: OutlineInputBorder(),
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Imprimante Principale",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-          ),
-          const SizedBox(height: 20),
-          TextFormField(
-            controller: _kitchenIpController,
-            decoration: const InputDecoration(
-              labelText: "IP Imprimante CUISINE (Fabrication)",
-              hintText: "ex: 192.168.1.101",
-              prefixIcon: Icon(Icons.soup_kitchen),
-              border: OutlineInputBorder(),
+            const SizedBox(height: 10),
+            SwitchListTile(
+              title: const Text("Utiliser Bluetooth"),
+              subtitle: Text(_useBluetooth ? "Bluetooth" : "Réseau (IP)"),
+              value: _useBluetooth,
+              onChanged: (val) {
+                setState(() {
+                  _useBluetooth = val;
+                  if (val && _devices.isEmpty) {
+                    _scanBluetoothDevices();
+                  }
+                });
+              },
             ),
-          ),
-          const Divider(height: 40),
-          SwitchListTile(
-            title: const Text("Mode Automatique Borne"),
-            subtitle: const Text(
-                "Si activé, la caisse détecte les paiements borne et imprime automatiquement en cuisine."),
-            value: _isAutoPrint,
-            onChanged: (val) => setState(() => _isAutoPrint = val),
-            secondary: const Icon(Icons.autorenew, color: Colors.blue),
-          ),
-          const SizedBox(height: 30),
-          ElevatedButton.icon(
-            onPressed: _saveSettings,
-            icon: const Icon(Icons.save),
-            label: const Text("Enregistrer la configuration"),
-            style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.all(20),
-                backgroundColor: Colors.blueGrey.shade800,
-                foregroundColor: Colors.white),
-          )
-        ],
+            const Divider(),
+            if (_useBluetooth) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<BluetoothDevice>(
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: "Choisir l'appareil",
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.bluetooth),
+                      ),
+                      value: _selectedDevice,
+                      items: _devices.map((d) {
+                        return DropdownMenuItem(
+                          value: d,
+                          child: Text(d.name ?? d.address ?? "Inconnu"),
+                        );
+                      }).toList(),
+                      onChanged: (device) {
+                        setState(() => _selectedDevice = device);
+                      },
+                      validator: (value) =>
+                      value == null ? "Sélectionnez une imprimante" : null,
+                    ),
+                  ),
+                  IconButton(
+                    icon: _isScanning
+                        ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh),
+                    onPressed: _isScanning ? null : _scanBluetoothDevices,
+                  )
+                ],
+              ),
+            ] else ...[
+              TextFormField(
+                controller: _receiptIpController,
+                decoration: const InputDecoration(
+                  labelText: "Adresse IP",
+                  hintText: "192.168.1.200",
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lan),
+                ),
+                keyboardType: TextInputType.datetime,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'IP requise';
+                  return null;
+                },
+              ),
+            ],
+            const SizedBox(height: 24),
+            const Text(
+              "Imprimante Cuisine",
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            TextFormField(
+              controller: _kitchenIpController,
+              decoration: const InputDecoration(
+                labelText: "Adresse IP Cuisine",
+                hintText: "192.168.1.100",
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.kitchen),
+              ),
+              keyboardType: TextInputType.datetime,
+            ),
+            const SizedBox(height: 32),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.print),
+                    label: const Text("Tester"),
+                    onPressed: _testPrint,
+                    style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16)),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.save),
+                    label: const Text("Enregistrer"),
+                    onPressed: _saveSettings,
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16)),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -12474,91 +13038,100 @@ class ReceiptSettingsForm extends StatefulWidget {
   State<ReceiptSettingsForm> createState() => _ReceiptSettingsFormState();
 }
 class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
-  bool _isLoading = false;
-  late String _franchiseeId;
-  final _repository = FranchiseRepository();
+  final headerController = TextEditingController();
+  final footerController = TextEditingController();
+  final LocalConfigService _localService = LocalConfigService();
+  ReceiptConfig _config = ReceiptConfig(
+      headerText: '',
+      footerText: '',
+      showVatDetails: true,
+      printReceiptOnPayment: true);
+  bool _isLoading = true;
   @override
   void initState() {
     super.initState();
-    _franchiseeId =
-        Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+    _loadReceiptSettings();
+  }
+  Future<void> _loadReceiptSettings() async {
+    setState(() => _isLoading = true);
+    final config = await _localService.getReceiptConfig();
+    setState(() {
+      _config = config;
+      headerController.text = config.headerText;
+      footerController.text = config.footerText;
+      _isLoading = false;
+    });
   }
   Future<void> _saveSettings(
-    ReceiptConfig currentConfig, {
-    String? headerText,
-    String? footerText,
-    bool? showVatDetails,
-    bool? printReceiptOnPayment,
-  }) async {
-    if (_isLoading) return;
+      {String? headerText,
+        String? footerText,
+        bool? showVatDetails,
+        bool? printReceiptOnPayment}) async {
     setState(() => _isLoading = true);
     final newConfig = ReceiptConfig(
-      headerText: headerText ?? currentConfig.headerText,
-      footerText: footerText ?? currentConfig.footerText,
-      showVatDetails: showVatDetails ?? currentConfig.showVatDetails,
+      headerText: headerText ?? headerController.text,
+      footerText: footerText ?? footerController.text,
+      showVatDetails: showVatDetails ?? _config.showVatDetails,
       printReceiptOnPayment:
-          printReceiptOnPayment ?? currentConfig.printReceiptOnPayment,
+      printReceiptOnPayment ?? _config.printReceiptOnPayment,
     );
-    try {
-      await _repository.saveReceiptConfig(_franchiseeId, newConfig);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.red));
-      }
+    await _localService.saveReceiptConfig(newConfig);
+    setState(() {
+      _config = newConfig;
+      _isLoading = false;
+    });
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Préférences sauvegardées')),
+      );
     }
-    if (mounted) setState(() => _isLoading = false);
   }
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<ReceiptConfig>(
-      stream: _repository.getReceiptConfigStream(_franchiseeId),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        final config = snapshot.data!;
-        final headerController = TextEditingController(text: config.headerText);
-        final footerController = TextEditingController(text: config.footerText);
-        return ListView(
-          padding: const EdgeInsets.all(24.0),
-          children: [
-            TextFormField(
-                controller: headerController,
-                decoration: const InputDecoration(labelText: "Texte d'en-tête"),
-                onEditingComplete: () =>
-                    _saveSettings(config, headerText: headerController.text),
-                maxLines: 3),
-            const SizedBox(height: 16),
-            TextFormField(
-                controller: footerController,
-                decoration:
-                    const InputDecoration(labelText: "Texte de pied de page"),
-                onEditingComplete: () =>
-                    _saveSettings(config, footerText: footerController.text),
-                maxLines: 3),
-            const SizedBox(height: 16),
-            SwitchListTile(
-                title: const Text("Impression automatique après paiement"),
-                subtitle: const Text(
-                    "Désactivez si vousne voulez pas de ticket client."),
-                value: config.printReceiptOnPayment,
-                onChanged: (value) =>
-                    _saveSettings(config, printReceiptOnPayment: value)),
-            SwitchListTile(
-                title: const Text("Afficher le détail de la TVA"),
-                value: config.showVatDetails,
-                onChanged: (value) =>
-                    _saveSettings(config, showVatDetails: value)),
-            const Divider(height: 40),
-            if (_isLoading) const Center(child: CircularProgressIndicator()),
-          ],
-        );
-      },
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        const Text("Personnalisation",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: headerController,
+          decoration: const InputDecoration(
+            labelText: "En-tête du ticket",
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          onEditingComplete: () => _saveSettings(),
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: footerController,
+          decoration: const InputDecoration(
+            labelText: "Pied de page",
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+          onEditingComplete: () => _saveSettings(),
+        ),
+        const SizedBox(height: 16),
+        SwitchListTile(
+          title: const Text("Imprimer auto. après paiement"),
+          value: _config.printReceiptOnPayment,
+          onChanged: (value) => _saveSettings(printReceiptOnPayment: value),
+        ),
+        SwitchListTile(
+          title: const Text("Détail TVA"),
+          value: _config.showVatDetails,
+          onChanged: (value) => _saveSettings(showVatDetails: value),
+        ),
+        const SizedBox(height: 24),
+        ElevatedButton(
+            onPressed: () => _saveSettings(), child: const Text("Enregistrer"))
+      ],
     );
   }
 }
-
 
 
 ==================================================
@@ -13779,8 +14352,12 @@ FILE PATH: lib/back_office/views/franchisee/shared/transaction_dialogs.dart
 ==================================================
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../../../../core/repository/repository.dart';
 import '../../../../models.dart';
+import '../../../../../core/services/printing_service.dart';
+import '../../../../../core/services/local_config_service.dart';
+import '../../../../../core/auth_provider.dart';
 class SessionTransactionsDialog extends StatelessWidget {
   final List<Transaction> transactions;
   const SessionTransactionsDialog({super.key, required this.transactions});
@@ -13804,36 +14381,43 @@ class SessionTransactionsDialog extends StatelessWidget {
         width: 600,
         child: transactions.isEmpty
             ? const Center(
-                child: Text("Aucune transaction pour cette session."))
+            child: Text("Aucune transaction pour cette session."))
             : ListView.builder(
-                itemCount: transactions.length,
-                itemBuilder: (context, index) {
-                  final transaction = transactions[index];
-                  final time = DateFormat('HH:mm')
-                      .format(transaction.timestamp.toLocal());
-                  return Card(
-                    margin: const EdgeInsets.symmetric(vertical: 4),
-                    child: ExpansionTile(
-                      leading: _getPaymentIcon(transaction.paymentMethods),
-                      title: Text("Commande à $time"),
-                      trailing: Text(
-                        "${transaction.total.toStringAsFixed(2)} €",
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      children: transaction.items.map((item) {
-                        return ListTile(
-                          dense: true,
-                          title: Text(
-                              item['name'] as String? ?? 'Article inconnu'),
-                          trailing: Text(
-                              '${(item['total'] as num? ?? 0.0).toStringAsFixed(2)} €'),
-                        );
-                      }).toList(),
-                    ),
+          itemCount: transactions.length,
+          itemBuilder: (context, index) {
+            final transaction = transactions[index];
+            final time = DateFormat('HH:mm')
+                .format(transaction.timestamp.toLocal());
+            final double totalVal = (transaction as dynamic).total ??
+                (transaction as dynamic).totalAmount ?? 0.0;
+            final String idShort = transaction.id.length > 4
+                ? transaction.id.substring(0, 4)
+                : transaction.id;
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: ExpansionTile(
+                leading: _getPaymentIcon(transaction.paymentMethods),
+                title: Text("Commande #$idShort à $time"),
+                trailing: Text(
+                  "${totalVal.toStringAsFixed(2)} €",
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold, fontSize: 16),
+                ),
+                children: transaction.items.map((item) {
+                  final name = item is Map ? item['name'] : (item as dynamic).name;
+                  final price = item is Map ? (item['price'] ?? 0.0) : (item as dynamic).price;
+                  final qty = item is Map ? (item['quantity'] ?? 1) : (item as dynamic).quantity;
+                  final double itemTotal = (double.parse(price.toString()) * int.parse(qty.toString()));
+                  return ListTile(
+                    dense: true,
+                    title: Text("${qty}x $name"),
+                    trailing: Text('${itemTotal.toStringAsFixed(2)} €'),
                   );
-                },
+                }).toList(),
               ),
+            );
+          },
+        ),
       ),
       actions: [
         TextButton(
@@ -13853,15 +14437,73 @@ class TransactionDetailDialog extends StatefulWidget {
 }
 class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
   bool _isReprinting = false;
-  final _repository = FranchiseRepository();
+  Map<String, dynamic> _safeItemToMap(dynamic item) {
+    if (item is Map) {
+      return Map<String, dynamic>.from(item);
+    }
+    try {
+      return (item as dynamic).toMap();
+    } catch (_) {
+      return {
+        'name': (item as dynamic).name,
+        'quantity': (item as dynamic).quantity,
+        'price': (item as dynamic).price,
+        'options': (item as dynamic).selectedOptions, 
+        'removedIngredientNames': (item as dynamic).removedIngredientNames,
+      };
+    }
+  }
   Future<void> _handleReprint(BuildContext context,
       {required bool isKitchen}) async {
     setState(() => _isReprinting = true);
     try {
+      final localConfig = await LocalConfigService().getPrinterConfig();
       if (isKitchen) {
-        await _repository.reprintKitchenTicket(widget.transaction.id);
+        final String safeId = widget.transaction.id.length >= 4
+            ? widget.transaction.id.substring(0, 4)
+            : widget.transaction.id;
+        final List<Map<String, dynamic>> cleanItems = widget.transaction.items
+            .map((item) => _safeItemToMap(item))
+            .toList();
+        debugPrint("Envoi Cuisine: ${cleanItems.length} articles (ID: $safeId)");
+        if (cleanItems.isEmpty) throw Exception("Liste articles vide");
+        await PrintingService().printKitchenTicketSafe(
+          printerConfig: localConfig,
+          itemsToPrint: cleanItems, 
+          identifier: safeId,
+          isReprint: true,
+        );
       } else {
-        await _repository.reprintReceipt(widget.transaction.id);
+        final receiptConfig = await LocalConfigService().getReceiptConfig();
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        dynamic user;
+        try { user = (authProvider as dynamic).franchiseUser; } catch(_) {}
+        if (user == null) try { user = (authProvider as dynamic).user; } catch(_) {}
+        if (user == null) try { user = (authProvider as dynamic).currentUser; } catch(_) {}
+        if (user == null) try { user = (authProvider as dynamic).franchisee; } catch(_) {}
+        Map<String, dynamic> transactionMap = {};
+        try {
+          transactionMap = (widget.transaction as dynamic).toMap();
+        } catch (_) {
+          transactionMap = {
+            'id': widget.transaction.id,
+            'total': (widget.transaction as dynamic).total ?? 0.0,
+            'paymentMethods': widget.transaction.paymentMethods,
+            'timestamp': widget.transaction.timestamp.toIso8601String(),
+            'orderType': (widget.transaction as dynamic).orderType,
+            'items': widget.transaction.items.map((item) => _safeItemToMap(item)).toList(),
+          };
+        }
+        if (transactionMap['id'] != null && transactionMap['id'].toString().length < 8) {
+          transactionMap['id'] = transactionMap['id'].toString().padRight(8, ' ');
+        }
+        debugPrint("Envoi Caisse: ID ${transactionMap['id']}");
+        await PrintingService().printReceipt(
+          printerConfig: localConfig,
+          transaction: transactionMap,
+          franchisee: user ?? {},
+          receiptConfig: receiptConfig,
+        );
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -13875,10 +14517,11 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
         );
       }
     } catch (e) {
+      debugPrint("Erreur impression: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text("Erreur d'impression : $e"),
+            content: Text("Erreur : ${e.toString().replaceAll('Exception:', '')}"),
             backgroundColor: Colors.red,
             behavior: SnackBarBehavior.floating,
           ),
@@ -13890,13 +14533,16 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
   }
   @override
   Widget build(BuildContext context) {
-    const primaryColor = Color(0xFF5E35B1); 
-    final shortId = widget.transaction.id.substring(0, 6);
-    final orderTypeLabel = (widget.transaction.orderType == 'takeaway')
-        ? 'À Emporter'
-        : 'Sur Place';
-    final paymentLabel =
-        _getPaymentMethodLabel(widget.transaction.paymentMethods);
+    const primaryColor = Color(0xFF5E35B1);
+    final shortId = widget.transaction.id.length > 6
+        ? widget.transaction.id.substring(0, 6)
+        : widget.transaction.id;
+    final bool isTakeaway = (widget.transaction as dynamic).orderType.toString().toLowerCase().contains('takeaway');
+    final orderTypeLabel = isTakeaway ? 'À Emporter' : 'Sur Place';
+    final paymentLabel = _getPaymentMethodLabel(widget.transaction.paymentMethods);
+    final double totalVal = (widget.transaction as dynamic).total ??
+        (widget.transaction as dynamic).totalAmount ?? 0.0;
+    final double subTotalVal = (widget.transaction as dynamic).subTotal ?? (totalVal / 1.1);
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -13936,13 +14582,11 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                         Icons.access_time,
                         "Date",
                         DateFormat('dd/MM/yyyy HH:mm')
-                            .format(widget.transaction.timestamp),
+                            .format(widget.transaction.timestamp.toLocal()),
                         Colors.black87),
                     const SizedBox(height: 6),
                     _buildInfoRow(
-                        (widget.transaction.orderType == 'takeaway')
-                            ? Icons.shopping_bag
-                            : Icons.restaurant,
+                        isTakeaway ? Icons.shopping_bag : Icons.restaurant,
                         "Type",
                         orderTypeLabel,
                         Colors.black87),
@@ -13954,15 +14598,19 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                             color: primaryColor)),
                     const SizedBox(height: 10),
                     ...widget.transaction.items.map((item) {
-                      final name = item['name'] ?? 'Inconnu';
-                      final quantity = item['quantity'] ?? 1;
-                      final totalItem =
-                          (item['total'] as num?)?.toDouble() ?? 0.0;
-                      final optionsGroups =
-                          item['options'] as List<dynamic>? ?? [];
-                      final removedIngredients =
-                          item['removedIngredientNames'] as List<dynamic>? ??
-                              [];
+                      final name = item is Map ? item['name'] : (item as dynamic).name;
+                      final quantity = item is Map ? (item['quantity'] ?? 1) : (item as dynamic).quantity;
+                      final price = item is Map ? (item['price'] ?? 0.0) : (item as dynamic).price;
+                      final double itemTotal = (double.parse(price.toString()) * int.parse(quantity.toString()));
+                      List<dynamic> optionsGroups = [];
+                      List<dynamic> removedIngredients = [];
+                      if (item is Map) {
+                        optionsGroups = item['options'] as List<dynamic>? ?? [];
+                        removedIngredients = item['removedIngredientNames'] as List<dynamic>? ?? [];
+                      } else {
+                        try { optionsGroups = (item as dynamic).selectedOptions ?? []; } catch (_) {}
+                        try { removedIngredients = (item as dynamic).removedIngredientNames ?? []; } catch (_) {}
+                      }
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: Column(
@@ -13974,7 +14622,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                                 Text(quantity > 1 ? "${quantity}x $name" : name,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700)),
-                                Text("${totalItem.toStringAsFixed(2)} €",
+                                Text("${itemTotal.toStringAsFixed(2)} €",
                                     style: const TextStyle(
                                         fontWeight: FontWeight.w700)),
                               ],
@@ -13990,29 +14638,24 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                                         fontStyle: FontStyle.italic)),
                               ),
                             if (optionsGroups.isNotEmpty)
-                              ...optionsGroups.expand((g) =>
-                                  (g['items'] as List).map((opt) => Padding(
-                                        padding:
-                                            const EdgeInsets.only(left: 10),
-                                        child: Row(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.spaceBetween,
-                                          children: [
-                                            Text("• ${opt['name']}",
-                                                style: TextStyle(
-                                                    color: Colors.grey.shade600,
-                                                    fontSize: 13)),
-                                            if ((opt['supplementPrice'] ?? 0) >
-                                                0)
-                                              Text(
-                                                  "+${opt['supplementPrice']} €",
-                                                  style: TextStyle(
-                                                      color:
-                                                          Colors.grey.shade600,
-                                                      fontSize: 13)),
-                                          ],
-                                        ),
-                                      ))),
+                              ...optionsGroups.expand((g) {
+                                if (g is! Map) return [Container()];
+                                final items = g['items'] as List?;
+                                if (items == null) return [Container()];
+                                return items.map((opt) => Padding(
+                                  padding: const EdgeInsets.only(left: 10),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text("• ${opt['name']}",
+                                          style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                      if ((opt['supplementPrice'] ?? 0) > 0)
+                                        Text("+${opt['supplementPrice']} €",
+                                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13)),
+                                    ],
+                                  ),
+                                ));
+                              }),
                             const Divider(color: Color(0xFFEEEEEE)),
                           ],
                         ),
@@ -14023,11 +14666,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
               ),
             ),
             const SizedBox(height: 10),
-            _buildSummaryRow("Sous-total", widget.transaction.subTotal, false),
-            if (widget.transaction.discountAmount > 0.01)
-              _buildSummaryRow(
-                  "Remise", -widget.transaction.discountAmount, false,
-                  color: Colors.red),
+            _buildSummaryRow("Sous-total", subTotalVal, false),
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -14037,7 +14676,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
                         color: primaryColor)),
-                Text("${widget.transaction.total.toStringAsFixed(2)} €",
+                Text("${totalVal.toStringAsFixed(2)} €",
                     style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.w900,
@@ -14097,7 +14736,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                       ),
                       onPressed: () => _handleReprint(context, isKitchen: true),
                       icon:
-                          const Icon(Icons.soup_kitchen, color: Colors.orange),
+                      const Icon(Icons.soup_kitchen, color: Colors.orange),
                       label: const Text("Ticket Cuisine"),
                     ),
                   ),
@@ -14148,7 +14787,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
 }
 
 
-
 ==================================================
 FILE PATH: lib/back_office/views/franchisee/franchisee_composite_overrides_dialog.dart
 ==================================================
@@ -14185,7 +14823,6 @@ class _FranchiseeCompositeOverridesDialogState
     extends State<FranchiseeCompositeOverridesDialog> {
   late Future<List<SectionOverrideData>> _dataFuture;
   final Map<String, TextEditingController> _priceControllers = {};
-  final Map<String, List<SectionItem>> _orderedItems = {};
   bool _isLoading = false;
   late final DocumentReference _menuProductRef;
   @override
@@ -14203,25 +14840,18 @@ class _FranchiseeCompositeOverridesDialogState
     final baseSections = await repository.getSectionsForProduct(
         widget.franchisorId, widget.product.sectionIds);
     final priceOverridesSnapshot =
-        await _menuProductRef.collection('supplement_overrides').get();
+    await _menuProductRef.collection('supplement_overrides').get();
     final priceOverrides = {
       for (var doc in priceOverridesSnapshot.docs)
         doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
     };
-    final orderOverridesSnapshot =
-        await _menuProductRef.collection('section_overrides').get();
-    final orderOverrides = {
-      for (var doc in orderOverridesSnapshot.docs)
-        doc.id: List<String>.from(doc.data()['itemOrder'] ?? [])
-    };
     List<SectionOverrideData> finalData = [];
     for (var section in baseSections) {
       List<SectionItem> items = List.from(section.items);
-      final order = orderOverrides[section.sectionId];
-      if (order != null && order.isNotEmpty) {
+      if (widget.product.ingredientProductIds.isNotEmpty) {
         items.sort((a, b) {
-          int indexA = order.indexOf(a.product.productId);
-          int indexB = order.indexOf(b.product.productId);
+          int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
+          int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
           if (indexA == -1) indexA = 999;
           if (indexB == -1) indexB = 999;
           return indexA.compareTo(indexB);
@@ -14230,10 +14860,9 @@ class _FranchiseeCompositeOverridesDialogState
       for (var item in items) {
         final overridePrice = priceOverrides[item.product.productId];
         _priceControllers[item.product.productId] = TextEditingController(
-          text: overridePrice?.toStringAsFixed(2),
+          text: overridePrice != null ? overridePrice.toStringAsFixed(2) : "",
         );
       }
-      _orderedItems[section.sectionId] = items;
       finalData.add(SectionOverrideData(
         section: section,
         items: items,
@@ -14252,26 +14881,23 @@ class _FranchiseeCompositeOverridesDialogState
     final batch = FirebaseFirestore.instance.batch();
     _priceControllers.forEach((productId, controller) {
       final priceRef =
-          _menuProductRef.collection('supplement_overrides').doc(productId);
-      final priceValue = double.tryParse(controller.text.replaceAll(',', '.'));
-      if (priceValue != null && priceValue >= 0) {
-        batch.set(priceRef, {'price': priceValue});
+      _menuProductRef.collection('supplement_overrides').doc(productId);
+      final textVal = controller.text.replaceAll(',', '.').trim();
+      if (textVal.isNotEmpty) {
+        final priceValue = double.tryParse(textVal);
+        if (priceValue != null && priceValue >= 0) {
+          batch.set(priceRef, {'price': priceValue}, SetOptions(merge: true));
+        }
       } else {
         batch.delete(priceRef);
       }
-    });
-    _orderedItems.forEach((sectionId, items) {
-      final orderRef =
-          _menuProductRef.collection('section_overrides').doc(sectionId);
-      final itemOrder = items.map((item) => item.product.productId).toList();
-      batch.set(orderRef, {'itemOrder': itemOrder});
     });
     try {
       await batch.commit();
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Options et prix des suppléments mis à jour."),
+          content: Text("Prix mis à jour ! Visible immédiatement en caisse."),
           backgroundColor: Colors.green,
         ));
       }
@@ -14283,9 +14909,7 @@ class _FranchiseeCompositeOverridesDialogState
         ));
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
   @override
@@ -14295,41 +14919,119 @@ class _FranchiseeCompositeOverridesDialogState
     }
     super.dispose();
   }
+  Widget _getSectionIcon(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('increment') || t.contains('quantity') || t.contains('compteur')) {
+      return const Icon(Icons.add_circle_outline, color: Colors.blue);
+    } else if (t.contains('unique') || t.contains('radio')) {
+      return const Icon(Icons.radio_button_checked, color: Colors.orange);
+    } else {
+      return const Icon(Icons.check_box, color: Colors.green);
+    }
+  }
+  String _getSectionTypeText(String type) {
+    final t = type.toLowerCase();
+    if (t.contains('increment')) return "INCRÉMENTATION";
+    if (t.contains('unique') || t.contains('radio')) return "CHOIX UNIQUE (RADIO)";
+    return "CHOIX MULTIPLE (CHECKBOX)";
+  }
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text("Gérer les options de '${widget.product.name}'"),
+      title: Row(
+        children: [
+          const Icon(Icons.settings_suggest, size: 28),
+          const SizedBox(width: 12),
+          Expanded(child: Text("Options de '${widget.product.name}'")),
+        ],
+      ),
       content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.6, 
-        height: MediaQuery.of(context).size.height * 0.7, 
+        width: MediaQuery.of(context).size.width * 0.7,
+        height: MediaQuery.of(context).size.height * 0.8,
         child: FutureBuilder<List<SectionOverrideData>>(
           future: _dataFuture,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting ||
-                _isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) {
-              return Center(child: Text("Erreur: ${snapshot.error}"));
-            }
-            if (!snapshot.hasData || snapshot.data!.isEmpty) {
-              return const Center(child: Text("Aucune section trouvée."));
-            }
-            final sectionDataList = snapshot.data!;
+            if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
+            if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucune section trouvée."));
             return ListView.builder(
-              itemCount: sectionDataList.length,
+              itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
-                final sectionData = sectionDataList[index];
+                final data = snapshot.data![index];
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),
-                  clipBehavior: Clip.antiAlias,
-                  child: ExpansionTile(
-                    title: Text(sectionData.section.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: Text("${sectionData.items.length} options"),
-                    initiallyExpanded: index == 0,
+                  elevation: 3,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Column(
                     children: [
-                      _buildReorderableList(sectionData.section.sectionId)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade100,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                        ),
+                        child: Row(
+                          children: [
+                            _getSectionIcon(data.section.type),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(data.section.title.toUpperCase(),
+                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                                  Text(_getSectionTypeText(data.section.type),
+                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                                ],
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: Colors.grey.shade300)
+                              ),
+                              child: Text(
+                                "MIN: ${data.section.selectionMin} / MAX: ${data.section.selectionMax == 0 ? '∞' : data.section.selectionMax}",
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      ListView.separated(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: data.items.length,
+                        separatorBuilder: (context, i) => const Divider(height: 1),
+                        itemBuilder: (context, idx) {
+                          final item = data.items[idx];
+                          final controller = _priceControllers[item.product.productId];
+                          return ListTile(
+                            title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text("Prix base: ${item.supplementPrice.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 12)),
+                            trailing: SizedBox(
+                              width: 140,
+                              child: TextField(
+                                controller: controller,
+                                textAlign: TextAlign.right,
+                                decoration: const InputDecoration(
+                                    labelText: "Prix perso (€)",
+                                    hintText: "Défaut",
+                                    isDense: true,
+                                    border: OutlineInputBorder(),
+                                    suffixText: "€"
+                                ),
+                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*([.,]?\d{0,2})'))],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
                     ],
                   ),
                 );
@@ -14339,71 +15041,21 @@ class _FranchiseeCompositeOverridesDialogState
         ),
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text("Annuler"),
-        ),
-        ElevatedButton(
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          ),
           onPressed: _isLoading ? null : _saveChanges,
-          child: const Text("Sauvegarder"),
+          icon: const Icon(Icons.save),
+          label: const Text("Sauvegarder les prix"),
         ),
       ],
     );
   }
-  Widget _buildReorderableList(String sectionId) {
-    final items = _orderedItems[sectionId] ?? [];
-    return ReorderableListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final controller = _priceControllers[item.product.productId];
-        return Container(
-          key: ValueKey(item.product.id),
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
-            color: index % 2 == 0 ? Colors.white : Colors.grey.shade50,
-          ),
-          child: ListTile(
-            leading: ReorderableDragStartListener(
-              index: index,
-              child: const Icon(Icons.drag_handle),
-            ),
-            title: Text(item.product.name),
-            subtitle: Text(
-                "Prix de base: ${item.supplementPrice.toStringAsFixed(2)} €"),
-            trailing: SizedBox(
-              width: 150,
-              child: TextFormField(
-                controller: controller,
-                decoration: const InputDecoration(
-                  labelText: "Prix personnalisé (€)",
-                  hintText: "Aucun (base)",
-                  isDense: true,
-                ),
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d*([.,]?\d{0,2})')),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-      onReorder: (oldIndex, newIndex) {
-        setState(() {
-          if (newIndex > oldIndex) newIndex -= 1;
-          final item = _orderedItems[sectionId]!.removeAt(oldIndex);
-          _orderedItems[sectionId]!.insert(newIndex, item);
-        });
-      },
-    );
-  }
 }
-
 
 
 ==================================================
@@ -14416,6 +15068,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../../core/repository/repository.dart';
 import '../../../../../core/theme/app_colors.dart';
+import '../../../../core/services/printing_service.dart';
 import '/models.dart';
 class PosData {
   final List<MasterProduct> products;
@@ -15330,14 +15983,30 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
   final FranchiseRepository _repository = FranchiseRepository();
   bool _isReprinting = false;
   static const Color primaryColor = AppColors.bkBlack;
-  Future<void> _handleReprint(BuildContext context,
-      {required bool isKitchen}) async {
-    setState(() => _isReprinting = true);
+  Future<void> _handleReprint(BuildContext context, {required bool isKitchen}) async {
+    if (mounted) setState(() => _isReprinting = true);
     try {
+      final printingService = PrintingService();
+      final Map<String, dynamic> printerConfig = {
+        'isBluetooth': true, 
+        'paperWidth': '80',
+      };
       if (isKitchen) {
-        await _repository.reprintKitchenTicket(widget.transaction.id);
+        await printingService.printKitchenTicketSafe(
+          printerConfig: printerConfig,
+          itemsToPrint: widget.transaction.items, 
+          identifier: widget.transaction.identifier.isNotEmpty
+              ? widget.transaction.identifier
+              : "TICKET",
+          isReprint: true,
+        );
       } else {
-        await _repository.reprintReceipt(widget.transaction.id);
+        await printingService.printReceipt(
+          printerConfig: printerConfig,
+          transaction: widget.transaction, 
+          franchisee: {}, 
+          receiptConfig: {}, 
+        );
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -15345,12 +16014,15 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
             backgroundColor: Colors.green));
       }
     } catch (e) {
+      debugPrint("Erreur impression: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text("Erreur: $e"), backgroundColor: Colors.red));
       }
     } finally {
-      if (mounted) setState(() => _isReprinting = false);
+      if (mounted) {
+        setState(() => _isReprinting = false);
+      }
     }
   }
   Widget _buildInfoRow(
@@ -17726,8 +18398,9 @@ class _ProductViewContentState extends State<ProductViewContent> {
     final cart = Provider.of<CartProvider>(context, listen: false);
     bool hasOptions = product.sectionIds.isNotEmpty || product.isComposite || product.ingredientProductIds.isNotEmpty;
     if (hasOptions) {
-      final sections = widget.posData.allSections
-          .where((s) => product.sectionIds.contains(s.sectionId))
+      final sections = product.sectionIds
+          .map((id) => widget.posData.allSections.firstWhereOrNull((s) => s.sectionId == id))
+          .whereType<ProductSection>()
           .toList();
       final CartItem? configuredItem = await Navigator.of(context).push(
         MaterialPageRoute(
@@ -18020,12 +18693,28 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
   @override
   void initState() {
     super.initState();
-    _sortedSections = List.from(widget.sections);
+    _sortedSections = widget.sections.map((section) {
+      final itemsCopy = List<SectionItem>.from(section.items);
+      itemsCopy.sort((a, b) {
+        int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
+        int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
+        if (indexA == -1) indexA = 999;
+        if (indexB == -1) indexB = 999;
+        return indexA.compareTo(indexB);
+      });
+      return ProductSection(
+        id: section.id, 
+        sectionId: section.sectionId,
+        title: section.title,
+        type: section.type,
+        selectionMin: section.selectionMin,
+        selectionMax: section.selectionMax,
+        items: itemsCopy,
+      );
+    }).toList();
     _sortedSections.sort((a, b) {
       int indexA = widget.product.sectionIds.indexOf(a.sectionId);
       int indexB = widget.product.sectionIds.indexOf(b.sectionId);
-      if (indexA == -1) indexA = 999;
-      if (indexB == -1) indexB = 999;
       return indexA.compareTo(indexB);
     });
     for (var section in _sortedSections) {
@@ -18337,8 +19026,8 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 280, 
-            mainAxisExtent: 105,      
+            maxCrossAxisExtent: 280,
+            mainAxisExtent: 105,
             crossAxisSpacing: 20,
             mainAxisSpacing: 20,
           ),
@@ -18368,7 +19057,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                         onTap: () => _updateQuantity(section, item, -1),
                         borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
                         child: Container(
-                          width: 65, 
+                          width: 65,
                           height: double.infinity,
                           decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.horizontal(left: Radius.circular(16))),
                           child: Icon(Icons.remove, color: Colors.red.shade800, size: 32),
@@ -23659,12 +24348,16 @@ class PrinterConfig {
   final PrinterType type;
   final PaperWidth paperWidth;
   final bool isKitchenPrintingEnabled;
+  final bool isBluetooth;
+  final String? macAddress;
   PrinterConfig({
     this.name = 'Imprimante Cuisine',
     this.ipAddress = '192.168.1.100',
     this.type = PrinterType.escpos,
     this.paperWidth = PaperWidth.mm80,
     this.isKitchenPrintingEnabled = true,
+    this.isBluetooth = false,
+    this.macAddress,
   });
   factory PrinterConfig.fromFirestore(Map<String, dynamic> data) {
     return PrinterConfig(
@@ -23679,6 +24372,8 @@ class PrinterConfig {
         orElse: () => PaperWidth.mm80,
       ),
       isKitchenPrintingEnabled: data['isKitchenPrintingEnabled'] ?? true,
+      isBluetooth: data['isBluetooth'] ?? false,
+      macAddress: data['macAddress'],
     );
   }
   Map<String, dynamic> toMap() {
@@ -23688,39 +24383,37 @@ class PrinterConfig {
       'type': type.toString(),
       'paperWidth': paperWidth.toString(),
       'isKitchenPrintingEnabled': isKitchenPrintingEnabled,
+      'isBluetooth': isBluetooth,
+      'macAddress': macAddress,
     };
   }
 }
 class ReceiptConfig {
-  final String? logoUrl;
   final String headerText;
   final String footerText;
   final bool showVatDetails;
   final bool printReceiptOnPayment;
   ReceiptConfig({
-    this.logoUrl,
-    this.headerText = 'Merci de votre visite !',
-    this.footerText = 'À bientôt !',
-    this.showVatDetails = true,
-    this.printReceiptOnPayment = true,
+    required this.headerText,
+    required this.footerText,
+    required this.showVatDetails,
+    required this.printReceiptOnPayment,
   });
-  factory ReceiptConfig.fromFirestore(Map<String, dynamic> data) {
-    return ReceiptConfig(
-      logoUrl: data['logoUrl'],
-      headerText: data['headerText'] ?? 'Merci de votre visite !',
-      footerText: data['footerText'] ?? 'À bientôt !',
-      showVatDetails: data['showVatDetails'] ?? true,
-      printReceiptOnPayment: data['printReceiptOnPayment'] ?? true,
-    );
-  }
   Map<String, dynamic> toMap() {
     return {
-      'logoUrl': logoUrl,
       'headerText': headerText,
       'footerText': footerText,
       'showVatDetails': showVatDetails,
       'printReceiptOnPayment': printReceiptOnPayment,
     };
+  }
+  factory ReceiptConfig.fromMap(Map<String, dynamic> map) {
+    return ReceiptConfig(
+      headerText: map['headerText'] ?? '',
+      footerText: map['footerText'] ?? '',
+      showVatDetails: map['showVatDetails'] ?? true,
+      printReceiptOnPayment: map['printReceiptOnPayment'] ?? true,
+    );
   }
 }
 class AvailabilitySchedule {

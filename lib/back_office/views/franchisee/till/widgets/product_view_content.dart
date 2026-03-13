@@ -155,8 +155,10 @@ class _ProductViewContentState extends State<ProductViewContent> {
     bool hasOptions = product.sectionIds.isNotEmpty || product.isComposite || product.ingredientProductIds.isNotEmpty;
 
     if (hasOptions) {
-      final sections = widget.posData.allSections
-          .where((s) => product.sectionIds.contains(s.sectionId))
+      // Respect de l'ordre des IDs de sections stockés dans le produit
+      final sections = product.sectionIds
+          .map((id) => widget.posData.allSections.firstWhereOrNull((s) => s.sectionId == id))
+          .whereType<ProductSection>()
           .toList();
 
       final CartItem? configuredItem = await Navigator.of(context).push(
@@ -479,12 +481,35 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
   @override
   void initState() {
     super.initState();
-    _sortedSections = List.from(widget.sections);
+
+    // CORRECTION FINALE : On trie les items de la section en utilisant product.ingredientProductIds
+    _sortedSections = widget.sections.map((section) {
+      final itemsCopy = List<SectionItem>.from(section.items);
+
+      itemsCopy.sort((a, b) {
+        int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
+        int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
+        if (indexA == -1) indexA = 999;
+        if (indexB == -1) indexB = 999;
+        return indexA.compareTo(indexB);
+      });
+
+      // On recrée l'objet Section avec l'ID requis
+      return ProductSection(
+        id: section.id, // Correction de l'argument manquant
+        sectionId: section.sectionId,
+        title: section.title,
+        type: section.type,
+        selectionMin: section.selectionMin,
+        selectionMax: section.selectionMax,
+        items: itemsCopy,
+      );
+    }).toList();
+
+    // Tri des sections par rapport à l'ordre défini dans le produit
     _sortedSections.sort((a, b) {
       int indexA = widget.product.sectionIds.indexOf(a.sectionId);
       int indexB = widget.product.sectionIds.indexOf(b.sectionId);
-      if (indexA == -1) indexA = 999;
-      if (indexB == -1) indexB = 999;
       return indexA.compareTo(indexB);
     });
 
@@ -493,6 +518,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         _itemLookup[item.product.id] = item;
       }
     }
+
     if (widget.initialOptions != null) {
       widget.initialOptions!.forEach((sectionId, itemsList) {
         final Map<String, int> sectionMap = {};
@@ -787,9 +813,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     );
   }
 
-  // ===========================================================================
-  // MODIFICATION ICI : SECTION COMPOSITE (OPTIONS) AVEC POLICE XL
-  // ===========================================================================
   Widget _buildSectionBlock(ProductSection section) {
     final String typeLower = section.type.toLowerCase();
     final bool isRadio = typeLower.contains('unique') || typeLower.contains('radio');
@@ -825,8 +848,8 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 280, // Légèrement plus large
-            mainAxisExtent: 105,      // Plus haut pour accommoder le texte XL
+            maxCrossAxisExtent: 280,
+            mainAxisExtent: 105,
             crossAxisSpacing: 20,
             mainAxisSpacing: 20,
           ),
@@ -857,7 +880,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                         onTap: () => _updateQuantity(section, item, -1),
                         borderRadius: const BorderRadius.horizontal(left: Radius.circular(16)),
                         child: Container(
-                          width: 65, // Plus large
+                          width: 65,
                           height: double.infinity,
                           decoration: BoxDecoration(color: Colors.red.shade50, borderRadius: const BorderRadius.horizontal(left: Radius.circular(16))),
                           child: Icon(Icons.remove, color: Colors.red.shade800, size: 32),

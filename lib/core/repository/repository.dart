@@ -458,7 +458,12 @@ class FranchiseRepository {
             .doc(newUser.uid)
             .collection('config')
             .doc('receipt');
-        final defaultReceiptConfig = ReceiptConfig();
+        final defaultReceiptConfig = ReceiptConfig(
+          headerText: '',
+          footerText: '',
+          showVatDetails: true,
+          printReceiptOnPayment: true,
+        );
         batch.set(receiptConfigRef, defaultReceiptConfig.toMap());
 
         await batch.commit();
@@ -830,11 +835,9 @@ class FranchiseRepository {
 
         final itemDocs = itemsSnapshot.docs.toList();
 
-        // --- CORRECTION : TRI INVERSÉ (DESCENDING) ---
         itemDocs.sort((a, b) {
           final posA = (a.data()['position'] as num?)?.toInt() ?? 999;
           final posB = (b.data()['position'] as num?)?.toInt() ?? 999;
-          // Inversion ici : posB.compareTo(posA)
           return posB.compareTo(posA);
         });
 
@@ -900,11 +903,9 @@ class FranchiseRepository {
 
       final itemDocs = itemsSnapshot.docs.toList();
 
-      // --- CORRECTION : TRI INVERSÉ (DESCENDING) ---
       itemDocs.sort((a, b) {
         final posA = (a.data()['position'] as num?)?.toInt() ?? 999;
         final posB = (b.data()['position'] as num?)?.toInt() ?? 999;
-        // Inversion ici : posB.compareTo(posA)
         return posB.compareTo(posA);
       });
 
@@ -1000,7 +1001,6 @@ class FranchiseRepository {
     await batch.commit();
   }
 
-  // ... (reste du fichier inchangé)
   Future<void> deleteSection(String sectionId) async {
     final batch = _firestore.batch();
     final sectionQuery = await _firestore
@@ -1495,9 +1495,14 @@ class FranchiseRepository {
         .snapshots()
         .map((doc) {
       if (doc.exists && doc.data() != null) {
-        return ReceiptConfig.fromFirestore(doc.data()!);
+        // CORRECTION: Utilisation de fromMap (compatible avec Map<String, dynamic>)
+        return ReceiptConfig.fromMap(doc.data()!);
       }
-      return ReceiptConfig();
+      return ReceiptConfig(
+          headerText: '',
+          footerText: '',
+          showVatDetails: true,
+          printReceiptOnPayment: true);
     });
   }
 

@@ -1,7 +1,7 @@
 name: ouiborne
 description: application de caisse.
 publish_to: 'none'
-version: 1.0.10
+version: 1.0.11+11
 environment:
   sdk: '>=3.2.0 <4.0.0'
 
@@ -10,12 +10,13 @@ dependencies:
     sdk: flutter
 
 
-
-
   pdf: ^3.10.0
   printing: ^5.11.0
   csv: ^6.0.0
-  open_file: ^3.3.2
+  blue_thermal_printer: ^1.2.3  # Vérifiez la dernière version sur pub.dev
+  permission_handler: ^11.0.0   # Pour gérer les permissions Bluetooth au runtime
+
+
   universal_html: ^2.2.4
   # --- Firebase ---
   flutter_image_compress: ^2.3.0
