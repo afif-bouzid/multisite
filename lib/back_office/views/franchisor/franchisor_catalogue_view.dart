@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,7 +13,6 @@ import '../../../core/constants.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
 
-// MODIFICATION : Simplification de l'enum pour les 3 onglets principaux
 enum ProductTypeFilter { simple, container, ingredients }
 
 class CatalogueView extends StatefulWidget {
@@ -31,17 +32,13 @@ class _CatalogueViewState extends State<CatalogueView> {
   Map<String, String> _filterToCategoryMap = {};
 
   String _searchQuery = '';
-
-  // MODIFICATION : On utilise uniquement ce filtre principal
   ProductTypeFilter _productTypeFilter = ProductTypeFilter.simple;
-
   String? _selectedKioskCategoryId;
   String? _selectedSubFilterId;
   String? _selectedBackOfficeFilterId;
 
   bool _isLoading = true;
   bool _areSectionsLoaded = false;
-
   final List<StreamSubscription> _subscriptions = [];
 
   @override
@@ -122,22 +119,15 @@ class _CatalogueViewState extends State<CatalogueView> {
 
   List<MasterProduct> _getFilteredProducts() {
     return _allProducts.where((product) {
-      // 1. Recherche texte
       if (_searchQuery.isNotEmpty) {
         if (!product.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
           return false;
         }
       }
-
-      // 2. Filtre par Onglet Principal (Produit / Dossier / Ingrédient)
       if (!_matchesProductType(product)) return false;
-
-      // 3. Filtres Back-Office (Tags)
       if (_selectedBackOfficeFilterId != null) {
         if (!product.filterIds.contains(_selectedBackOfficeFilterId)) return false;
       }
-
-      // 4. Filtres Borne (Kiosk)
       if (_selectedKioskCategoryId != null) {
         if (!_matchesKioskCategory(product)) return false;
       }
@@ -145,19 +135,13 @@ class _CatalogueViewState extends State<CatalogueView> {
     }).toList();
   }
 
-  // MODIFICATION : Logique stricte des 3 onglets
   bool _matchesProductType(MasterProduct product) {
     switch (_productTypeFilter) {
       case ProductTypeFilter.simple:
-      // Onglet "Produits" : Tout ce qui est vendable et NON conteneur
         return !product.isIngredient && !product.isContainer;
-
       case ProductTypeFilter.container:
-      // Onglet "Dossiers" : Uniquement les conteneurs
         return product.isContainer;
-
       case ProductTypeFilter.ingredients:
-      // Onglet "Ingrédients"
         return product.isIngredient;
     }
   }
@@ -192,14 +176,9 @@ class _CatalogueViewState extends State<CatalogueView> {
       body: Column(
         children: [
           _buildTopHeader(),
-
-          // On affiche les catégories bornes uniquement pour les produits vendables (Simples ou Conteneurs)
-          // On masque pour les ingrédients
           if (_productTypeFilter != ProductTypeFilter.ingredients)
             _buildCategoryTabs(),
-
           if (_selectedKioskCategoryId != null) _buildSubCategoryBar(),
-
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -228,18 +207,15 @@ class _CatalogueViewState extends State<CatalogueView> {
     );
   }
 
-  // --- WIDGETS D'INTERFACE PRINCIPALE ---
-
   Widget _buildTopHeader() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16), // Padding ajusté en bas car plus de 2ème ligne
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(
           color: Colors.white,
           boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), offset: const Offset(0, 4), blurRadius: 10)]
       ),
       child: Column(
         children: [
-          // Ligne 1 : Recherche + Étiquettes
           Row(
             children: [
               Expanded(
@@ -286,8 +262,6 @@ class _CatalogueViewState extends State<CatalogueView> {
             ],
           ),
           const SizedBox(height: 16),
-
-          // Ligne 2 : Les 3 Onglets Principaux (MODIFIÉ)
           Row(
             children: [
               Expanded(child: _buildBigFilterBtn("Produits", Icons.storefront, ProductTypeFilter.simple)),
@@ -297,8 +271,6 @@ class _CatalogueViewState extends State<CatalogueView> {
               Expanded(child: _buildBigFilterBtn("Ingrédients", Icons.kitchen, ProductTypeFilter.ingredients)),
             ],
           ),
-
-          // Suppression de la ligne des sous-filtres ici (gain de place)
         ],
       ),
     );
@@ -328,7 +300,6 @@ class _CatalogueViewState extends State<CatalogueView> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, color: isSelected ? Colors.white : Colors.grey[700], size: 18),
-            // Petit ajustement : si l'écran est petit, on peut masquer le texte ou réduire la taille
             Flexible(
               child: Padding(
                 padding: const EdgeInsets.only(left: 6.0),
@@ -558,11 +529,17 @@ class _CatalogueViewState extends State<CatalogueView> {
                   child: Container(
                     width: 90, height: 90,
                     decoration: BoxDecoration(
-                      color: Colors.grey[50],
+                      color: Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.grey.shade200),
+                      // SOLUTION WEB : NetworkImage classique si on est sur Chrome
                       image: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
-                          ? DecorationImage(image: CachedNetworkImageProvider(product.photoUrl!), fit: BoxFit.cover)
+                          ? DecorationImage(
+                          image: kIsWeb
+                              ? NetworkImage(product.photoUrl!) as ImageProvider
+                              : CachedNetworkImageProvider(product.photoUrl!),
+                          fit: BoxFit.contain
+                      )
                           : null,
                     ),
                     child: Stack(
@@ -732,7 +709,7 @@ class _CatalogueViewState extends State<CatalogueView> {
                                 )
                               else
                                 Wrap(
-                                  spacing: -12, // Chevauchement "puzzle"
+                                  spacing: -12,
                                   runSpacing: 8,
                                   children: List.generate(product.sectionIds.length, (idx) {
                                     return _buildStepArrow(product.sectionIds[idx], idx, product.sectionIds.length);
@@ -783,7 +760,6 @@ class _CatalogueViewState extends State<CatalogueView> {
     );
   }
 
-  // --- FLÈCHES STEP-BY-STEP PREMIUM ---
   Widget _buildStepArrow(String sectionId, int index, int total) {
     ProductSection section;
     try {
@@ -979,9 +955,11 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+
   XFile? _imageFile;
+  Uint8List? _imageBytes;
   String? _displayUrl;
-  final ImagePicker _picker = ImagePicker();
+
   bool _isComposite = false;
   bool _isIngredient = false;
   bool _isContainer = false;
@@ -1035,9 +1013,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
           if(match != null) _associatedSections.add(match);
         }
       }
-
       _ingredientProductIds = List.from(p.ingredientProductIds);
-
     } else {
       if (widget.preselectedFilterId != null) {
         _selectedKioskFilterIds.add(widget.preselectedFilterId!);
@@ -1055,8 +1031,21 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   }
 
   Future<void> _pickImage() async {
-    final XFile? image = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
-    if (image != null) setState(() { _imageFile = image; _displayUrl = null; });
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['png', 'jpg', 'jpeg'],
+      withData: true,
+    );
+
+    if (result != null && result.files.single.bytes != null) {
+      final file = result.files.single;
+
+      setState(() {
+        _imageBytes = file.bytes;
+        _imageFile = XFile.fromData(file.bytes!, name: file.name, mimeType: 'image/png');
+        _displayUrl = null;
+      });
+    }
   }
 
   void _showStepPicker() async {
@@ -1104,20 +1093,17 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 
-  // --- MISE À JOUR : MODAL AVEC FILTRES ---
   void _showProductLinkPicker() async {
-    // On ouvre le nouveau modal de sélection avancé en passant les filtres disponibles
     final List<String>? resultIds = await showDialog<List<String>>(
       context: context,
       builder: (ctx) => ContainerSelectionDialog(
         allProducts: widget.allProducts,
         alreadyLinkedIds: _linkedProductIds,
         currentProductId: widget.productToEdit?.id,
-        availableFilters: _loadedFilters, // Passage des filtres ici
+        availableFilters: _loadedFilters,
       ),
     );
 
-    // On ajoute les produits sélectionnés à la liste
     if (resultIds != null && resultIds.isNotEmpty) {
       setState(() {
         for (var id in resultIds) {
@@ -1178,10 +1164,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 icon: _isLoading
                     ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                     : const Icon(Icons.check, size: 18),
-                label: const Text(
-                  "Enregistrer",
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                ),
+                label: const Text("Enregistrer", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.blue,
                   foregroundColor: Colors.white,
@@ -1224,22 +1207,28 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                   child: Container(
                     width: 120, height: 120,
                     decoration: BoxDecoration(
-                      color: Colors.grey[200], borderRadius: BorderRadius.circular(16),
-                      image: _imageFile != null
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      // SOLUTION WEB : kIsWeb gère NetworkImage pour la transparence parfaite
+                      image: _imageBytes != null
+                          ? DecorationImage(
+                          image: MemoryImage(_imageBytes!),
+                          fit: BoxFit.contain)
+                          : (_displayUrl != null && _displayUrl!.isNotEmpty
                           ? DecorationImage(
                           image: kIsWeb
-                              ? NetworkImage(_imageFile!.path)
-                              : FileImage(File(_imageFile!.path)) as ImageProvider,
-                          fit: BoxFit.cover)
-                          : (_displayUrl != null
-                          ? DecorationImage(image: CachedNetworkImageProvider(_displayUrl!), fit: BoxFit.cover)
+                              ? NetworkImage(_displayUrl!) as ImageProvider
+                              : CachedNetworkImageProvider(_displayUrl!),
+                          fit: BoxFit.contain)
                           : null),
                       border: Border.all(color: Colors.grey.shade300),
                     ),
-                    child: (_imageFile == null && _displayUrl == null) ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40) : null,
+                    child: (_imageBytes == null && (_displayUrl == null || _displayUrl!.isEmpty))
+                        ? const Icon(Icons.add_a_photo, color: Colors.grey, size: 40)
+                        : null,
                   ),
                 ),
-                if (_imageFile != null || _displayUrl != null)
+                if (_imageBytes != null || (_displayUrl != null && _displayUrl!.isNotEmpty))
                   Positioned(
                     right: -5,
                     top: -5,
@@ -1247,12 +1236,13 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                       onTap: () {
                         setState(() {
                           _imageFile = null;
+                          _imageBytes = null;
                           _displayUrl = null;
                         });
                       },
                       child: Container(
                         padding: const EdgeInsets.all(4),
-                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                        decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle, boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4)]),
                         child: const Icon(Icons.cancel, color: Colors.red, size: 20),
                       ),
                     ),
@@ -1269,18 +1259,18 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                     validator: (v) => v!.isEmpty ? "Requis" : null,
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(labelText: "Prix (€)", border: OutlineInputBorder(), suffixText: "€"),
-                  ),
+                  if (!_isContainer)
+                    TextFormField(
+                      controller: _priceController,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: "Prix (€)", border: OutlineInputBorder(), suffixText: "€"),
+                    ),
                 ],
               ),
             )
           ],
         ),
         const SizedBox(height: 16),
-
         SwitchListTile(
           title: const Text("Est un Conteneur ?"),
           subtitle: const Text("Permet de regrouper plusieurs produits (ex: Frites -> Petite, Grande)."),
@@ -1291,12 +1281,14 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
               : (val) {
             setState(() {
               _isContainer = val;
-              if(val) _isComposite = false;
+              if(val) {
+                _isComposite = false;
+                _priceController.clear();
+              }
             });
           },
           contentPadding: EdgeInsets.zero,
         ),
-
         SwitchListTile(
           title: const Text("Est un ingrédient ?"),
           subtitle: const Text("Pour les fiches techniques uniquement"),
@@ -1312,69 +1304,40 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
           },
           contentPadding: EdgeInsets.zero,
         ),
-
         const SizedBox(height: 24),
         TextFormField(controller: _descriptionController, maxLines: 3, decoration: const InputDecoration(labelText: "Description", border: OutlineInputBorder())),
-
         const SizedBox(height: 24),
-
         if (!_isIngredient && !_isContainer) ...[
-          const Text(
-            "Ingrédients (pour la fiche technique)",
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-          ),
+          const Text("Ingrédients (pour la fiche technique)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(12),
-            ),
+            decoration: BoxDecoration(color: Colors.white, border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 8, runSpacing: 8,
                   children: [
                     ..._ingredientProductIds.map((id) {
-                      final ingName = widget.allProducts
-                          .firstWhere((p) => p.productId == id,
-                          orElse: () => MasterProduct.empty())
-                          .name;
+                      final ingName = widget.allProducts.firstWhere((p) => p.productId == id, orElse: () => MasterProduct.empty()).name;
                       return Chip(
                         label: Text(ingName),
-                        onDeleted: () {
-                          setState(() {
-                            _ingredientProductIds.remove(id);
-                          });
-                        },
+                        onDeleted: () => setState(() => _ingredientProductIds.remove(id)),
                         backgroundColor: Colors.orange.shade50,
                         deleteIconColor: Colors.red,
                       );
                     }),
-                    ActionChip(
-                      avatar: const Icon(Icons.add, size: 18),
-                      label: const Text("Ajouter"),
-                      onPressed: _showIngredientPicker,
-                    ),
+                    ActionChip(avatar: const Icon(Icons.add, size: 18), label: const Text("Ajouter"), onPressed: _showIngredientPicker),
                   ],
                 ),
                 if (_ingredientProductIds.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      "Aucun ingrédient sélectionné.",
-                      style: TextStyle(color: Colors.grey, fontSize: 12),
-                    ),
-                  ),
+                  const Padding(padding: EdgeInsets.only(top: 8.0), child: Text("Aucun ingrédient sélectionné.", style: TextStyle(color: Colors.grey, fontSize: 12))),
               ],
             ),
           ),
           const SizedBox(height: 24),
         ],
-
         const Text("Filtres Back-Office", style: TextStyle(fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
         Wrap(
@@ -1384,9 +1347,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
             return FilterChip(
               label: Text(filter.name),
               selected: isSelected,
-              onSelected: (selected) {
-                setState(() { selected ? _selectedFilterIds.add(filter.id) : _selectedFilterIds.remove(filter.id); });
-              },
+              onSelected: (selected) => setState(() => selected ? _selectedFilterIds.add(filter.id) : _selectedFilterIds.remove(filter.id)),
             );
           }).toList(),
         ),
@@ -1395,9 +1356,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   }
 
   Widget _buildContentTab() {
-    if (_isContainer) {
-      return _buildContainerManager();
-    }
+    if (_isContainer) return _buildContainerManager();
     return _buildSectionsManager();
   }
 
@@ -1409,7 +1368,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         children: [
           _buildSectionHeader(
             title: "Produits liés au conteneur",
-            subtitle: "Ajoutez ici les produits qui apparaîtront dans ce dossier (ex: Petite Frite, Grande Frite).",
+            subtitle: "Ajoutez ici les produits qui apparaîtront dans ce dossier.",
             icon: Icons.folder_copy_rounded,
             color: Colors.orange.shade800,
             action: ElevatedButton.icon(
@@ -1420,7 +1379,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 backgroundColor: Colors.orange.shade800,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -1441,30 +1399,30 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
               itemBuilder: (context, index) {
                 final prodId = _linkedProductIds[index];
                 final product = widget.allProducts.firstWhere((p) => p.id == prodId, orElse: () => MasterProduct(id: prodId, productId: prodId, name: "Produit Introuvable", createdBy: ''));
-
                 return Padding(
                   key: ValueKey("link_$prodId"),
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black12,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       leading: Container(
                         width: 50, height: 50,
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
-                          color: Colors.grey.shade200,
-                          image: (product.photoUrl != null && product.photoUrl!.isNotEmpty) ? DecorationImage(image: CachedNetworkImageProvider(product.photoUrl!), fit: BoxFit.cover) : null,
+                          color: Colors.transparent,
+                          // SOLUTION WEB
+                          image: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
+                              ? DecorationImage(
+                              image: kIsWeb
+                                  ? NetworkImage(product.photoUrl!) as ImageProvider
+                                  : CachedNetworkImageProvider(product.photoUrl!),
+                              fit: BoxFit.contain)
+                              : null,
                         ),
                         child: (product.photoUrl == null || product.photoUrl!.isEmpty) ? const Icon(Icons.fastfood, color: Colors.grey) : null,
                       ),
-                      title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.link_off_rounded, color: Colors.red),
-                        onPressed: () => setState(() => _linkedProductIds.removeAt(index)),
-                      ),
+                      title: Text(product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      trailing: IconButton(icon: const Icon(Icons.link_off_rounded, color: Colors.red), onPressed: () => setState(() => _linkedProductIds.removeAt(index))),
                     ),
                   ),
                 );
@@ -1496,7 +1454,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 backgroundColor: Colors.blue.shade800,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
@@ -1520,35 +1477,12 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                   key: ValueKey("g_sec_${section.sectionId}"),
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Card(
-                    elevation: 2,
-                    shadowColor: Colors.black12,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     child: ListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      leading: Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(Icons.drag_handle_rounded, color: Colors.blue.shade700),
-                      ),
-                      title: Text(
-                        section.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                      ),
-                      subtitle: Text(
-                        "${section.selectionMin} à ${section.selectionMax} choix",
-                        style: TextStyle(color: Colors.grey.shade600),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline_rounded, color: Colors.red),
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.red.shade50,
-                          padding: const EdgeInsets.all(12),
-                        ),
-                        onPressed: () => setState(() => _associatedSections.removeAt(index)),
-                      ),
+                      leading: Icon(Icons.drag_handle_rounded, color: Colors.blue.shade700),
+                      title: Text(section.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      subtitle: Text("${section.selectionMin} à ${section.selectionMax} choix"),
+                      trailing: IconButton(icon: const Icon(Icons.delete_outline_rounded, color: Colors.red), onPressed: () => setState(() => _associatedSections.removeAt(index))),
                     ),
                   ),
                 );
@@ -1561,33 +1495,15 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     );
   }
 
-  Widget _buildSectionHeader({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color color,
-    required Widget action,
-  }) {
+  Widget _buildSectionHeader({required String title, required String subtitle, required IconData icon, required Color color, required Widget action}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-              child: Icon(icon, color: color, size: 28),
-            ),
+            Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle), child: Icon(icon, color: color, size: 28)),
             const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black87)),
-                  Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600, height: 1.2)),
-                ],
-              ),
-            ),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)), Text(subtitle, style: TextStyle(fontSize: 12, color: Colors.grey.shade600))])),
           ],
         ),
         const SizedBox(height: 16),
@@ -1600,18 +1516,8 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     return Container(
       padding: const EdgeInsets.all(32),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200, style: BorderStyle.solid),
-      ),
-      child: Column(
-        children: [
-          Icon(Icons.inbox_rounded, size: 48, color: Colors.grey.shade300),
-          const SizedBox(height: 12),
-          Text(message, style: TextStyle(color: Colors.grey.shade500, fontWeight: FontWeight.w500)),
-        ],
-      ),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
+      child: Column(children: [Icon(Icons.inbox_rounded, size: 48, color: Colors.grey.shade300), const SizedBox(height: 12), Text(message, style: TextStyle(color: Colors.grey.shade500))]),
     );
   }
 
@@ -1631,15 +1537,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                 title: Text(filter.name),
                 value: isSelected,
                 activeColor: Colors.black,
-                onChanged: (val) {
-                  setState(() {
-                    if (val == true) {
-                      _selectedKioskFilterIds.add(filter.id);
-                    } else {
-                      _selectedKioskFilterIds.remove(filter.id);
-                    }
-                  });
-                },
+                onChanged: (val) => setState(() => val == true ? _selectedKioskFilterIds.add(filter.id) : _selectedKioskFilterIds.remove(filter.id)),
               );
             }).toList(),
           );
@@ -1652,23 +1550,15 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     final repo = FranchiseRepository();
-
-    List<String> finalIngredientsIds = [];
-    if (!_isContainer && !_isIngredient) {
-      finalIngredientsIds = _ingredientProductIds;
-    }
-
-    List<String> finalSectionIds = [];
-    if (!_isContainer && !_isIngredient) {
-      finalSectionIds = _associatedSections.map((s) => s.sectionId).toList();
-    }
+    List<String> finalIngredientsIds = (!_isContainer && !_isIngredient) ? _ingredientProductIds : [];
+    List<String> finalSectionIds = (!_isContainer && !_isIngredient) ? _associatedSections.map((s) => s.sectionId).toList() : [];
 
     try {
       await repo.saveProduct(
         product: widget.isDuplicating ? null : widget.productToEdit,
         name: _nameController.text.trim(),
         description: _descriptionController.text.trim(),
-        price: double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0.0,
+        price: _isContainer ? 0.0 : (double.tryParse(_priceController.text.replaceAll(',', '.')) ?? 0.0),
         isComposite: _isComposite,
         isIngredient: _isIngredient,
         isContainer: _isContainer,
@@ -1736,7 +1626,12 @@ class _IngredientSearchDialogState extends State<_IngredientSearchDialog> {
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.grey.shade100,
-                      backgroundImage: (ing.photoUrl?.isNotEmpty ?? false) ? CachedNetworkImageProvider(ing.photoUrl!) : null,
+                      // SOLUTION WEB
+                      backgroundImage: (ing.photoUrl?.isNotEmpty ?? false)
+                          ? (kIsWeb
+                          ? NetworkImage(ing.photoUrl!) as ImageProvider
+                          : CachedNetworkImageProvider(ing.photoUrl!))
+                          : null,
                       child: (ing.photoUrl?.isEmpty ?? true) ? const Icon(Icons.kitchen, size: 16) : null,
                     ),
                     title: Text(ing.name),
@@ -1859,14 +1754,11 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
   }
 }
 
-// ==============================================================================
-// MODAL AVANCÉ : SÉLECTION AVEC RECHERCHE ET FILTRES (TAGS)
-// ==============================================================================
 class ContainerSelectionDialog extends StatefulWidget {
   final List<MasterProduct> allProducts;
   final List<String> alreadyLinkedIds;
   final String? currentProductId;
-  final List<ProductFilter> availableFilters; // NOUVEAU
+  final List<ProductFilter> availableFilters;
 
   const ContainerSelectionDialog({
     super.key,
@@ -1882,36 +1774,22 @@ class ContainerSelectionDialog extends StatefulWidget {
 
 class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
   String _searchQuery = '';
-  // _showOnlySellable supprimé car forcé à true
-  String? _selectedFilterId; // Pour stocker le filtre (tag) sélectionné
+  String? _selectedFilterId;
   final List<String> _tempSelectedIds = [];
 
   @override
   Widget build(BuildContext context) {
-    // Filtrage des produits
     final filteredProducts = widget.allProducts.where((p) {
-      // 1. Exclure le produit lui-même
       if (p.id == widget.currentProductId) return false;
-
-      // 2. Exclure les produits déjà liés
       if (widget.alreadyLinkedIds.contains(p.id)) return false;
-
-      // 3. Exclure les conteneurs (on évite les boucles)
       if (p.isContainer) return false;
-
-      // 4. Filtre Recherche (Texte)
       if (_searchQuery.isNotEmpty && !p.name.toLowerCase().contains(_searchQuery.toLowerCase())) {
         return false;
       }
-
-      // 5. Filtre "Vendable" forcé (toujours exclure les ingrédients)
       if (p.isIngredient) return false;
-
-      // 6. Filtre par Tag (Étiquette) - NOUVEAU
       if (_selectedFilterId != null) {
         if (!p.filterIds.contains(_selectedFilterId)) return false;
       }
-
       return true;
     }).toList();
 
@@ -1923,7 +1801,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
         height: 700,
         child: Column(
           children: [
-            // --- En-tête ---
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1932,8 +1809,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
               ],
             ),
             const Divider(),
-
-            // --- Barre de Recherche ---
             TextField(
               decoration: InputDecoration(
                 hintText: "Rechercher un produit...",
@@ -1945,13 +1820,10 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
               onChanged: (val) => setState(() => _searchQuery = val),
             ),
             const SizedBox(height: 10),
-
-            // --- Zone de Filtres (Tags) ---
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
-                  // Liste des filtres Back-Office (Tags)
                   ...widget.availableFilters.map((filter) {
                     final isSelected = _selectedFilterId == filter.id;
                     return Padding(
@@ -1961,7 +1833,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                         selected: isSelected,
                         onSelected: (val) {
                           setState(() {
-                            // Toggle : si on reclique dessus, on désélectionne
                             _selectedFilterId = val ? filter.id : null;
                           });
                         },
@@ -1976,7 +1847,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
               child: Row(
@@ -1986,8 +1856,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                 ],
               ),
             ),
-
-            // --- Liste des Résultats ---
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -2013,8 +1881,13 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
+                          // SOLUTION WEB
                           image: (prod.photoUrl?.isNotEmpty ?? false)
-                              ? DecorationImage(image: CachedNetworkImageProvider(prod.photoUrl!), fit: BoxFit.cover)
+                              ? DecorationImage(
+                              image: kIsWeb
+                                  ? NetworkImage(prod.photoUrl!) as ImageProvider
+                                  : CachedNetworkImageProvider(prod.photoUrl!),
+                              fit: BoxFit.contain)
                               : null,
                         ),
                         child: (prod.photoUrl?.isEmpty ?? true) ? const Icon(Icons.fastfood, size: 20, color: Colors.grey) : null,
@@ -2034,8 +1907,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                 ),
               ),
             ),
-
-            // --- Bouton Valider ---
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,

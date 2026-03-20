@@ -974,6 +974,8 @@ class FranchiseRepository {
           'selectionMax': section.selectionMax,
           'createdBy': _currentUserId,
           'filterIds': section.filterIds,
+          // 👇 LA LIGNE MAGIQUE QUI FORCE L'ÉCRAN À SE RAFRAÎCHIR 👇
+          'updatedAt': FieldValue.serverTimestamp(),
         },
         SetOptions(merge: true));
 
@@ -993,7 +995,7 @@ class FranchiseRepository {
         'belongsToSection': section.sectionId,
         'productId': item.product.productId,
         'price': item.supplementPrice,
-        'position': i,
+        'position': i, // Ton Drag & Drop fonctionne grâce à ce "i" !
         'createdBy': _currentUserId
       });
     }
@@ -1114,15 +1116,17 @@ class FranchiseRepository {
 
     String? finalPhotoUrl = photoUrl;
     if (imageFile != null) {
-      final String path =
-          'products/${productId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      final String path = 'products/${productId}_${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
       if (existingPhotoUrl != null && existingPhotoUrl.isNotEmpty) {
         await _deleteFileFromUrl(existingPhotoUrl);
       }
-      final uploadedUrl = await uploadImage(imageFile, path);
-      if (uploadedUrl != null) {
-        finalPhotoUrl = uploadedUrl;
-      }
+      final ref = _storage.ref(path);
+      final Uint8List bytes = await imageFile.readAsBytes();
+      final metadata = SettableMetadata(contentType: 'image/png');
+
+      await ref.putData(bytes, metadata);
+      finalPhotoUrl = await ref.getDownloadURL();
+      // ----------------------------------------------------------------------
     } else {
       if ((photoUrl.isEmpty) &&
           existingPhotoUrl != null &&
