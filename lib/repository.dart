@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,8 +21,6 @@ class FranchiseRepository {
   factory FranchiseRepository() => _instance;
 
   FranchiseRepository._internal();
-
-  // --- GESTION MENU FRANCHISÉ (Les fonctions manquantes) ---
 
   Future<void> updateFranchiseeMenuItem({
     required String franchiseeId,
@@ -55,8 +54,6 @@ class FranchiseRepository {
         .toList());
   }
 
-  // --- FIN GESTION MENU FRANCHISÉ ---
-
   Future<void> saveProduct({
     MasterProduct? product,
     required String name,
@@ -81,10 +78,22 @@ class FranchiseRepository {
     final productId = product?.productId ?? const Uuid().v4();
 
     String? finalPhotoUrl = photoUrl;
+
     if (imageFile != null) {
-      // Logique upload image simplifiée pour l'exemple
-      final ref = _storage.ref('product_images/$productId/${imageFile.name}');
-      await ref.putData(await imageFile.readAsBytes());
+      // 1. On force une extension PNG pour Firebase
+      final ref = _storage.ref('product_images/$productId/${DateTime.now().millisecondsSinceEpoch}.png');
+
+      // 2. On convertit en bytes
+      final Uint8List bytes = await imageFile.readAsBytes();
+
+      // 3. ON FORCE LE TYPE MIME (Crucial pour la transparence)
+      final metadata = SettableMetadata(
+        contentType: 'image/png',
+        cacheControl: 'public,max-age=3600',
+      );
+
+      // 4. On upload avec les métadonnées
+      await ref.putData(bytes, metadata);
       finalPhotoUrl = await ref.getDownloadURL();
     }
 
@@ -110,8 +119,6 @@ class FranchiseRepository {
     }, SetOptions(merge: true));
   }
 
-  // ... (Je garde le reste des méthodes standard pour la concision)
-
   Stream<List<MasterProduct>> getMasterProductsStream(String franchisorId) {
     return _firestore
         .collection('master_products')
@@ -131,8 +138,6 @@ class FranchiseRepository {
         .asyncMap((snapshot) async {
       List<KioskCategory> categories = [];
       for (var doc in snapshot.docs) {
-        // Simplification : on ne charge pas les filtres imbriqués ici pour éviter la complexité
-        // dans ce correctif, mais la logique reste la même.
         categories.add(KioskCategory(
             id: doc.id,
             name: doc['name'],
@@ -147,15 +152,12 @@ class FranchiseRepository {
 
   Future<List<ProductSection>> getSectionsForProduct(String franchisorId, List<String> sectionIds) async {
     if (sectionIds.isEmpty) return [];
-    // Récupération simplifiée
     final snapshot = await _firestore.collection('product_sections')
-        .where('sectionId', whereIn: sectionIds.take(10).toList()) // Firestore limite à 10 pour 'whereIn'
+        .where('sectionId', whereIn: sectionIds.take(10).toList())
         .get();
 
     List<ProductSection> sections = [];
     for(var doc in snapshot.docs) {
-      // Il faut normalement charger les items, ici on retourne une structure vide pour que ça compile
-      // Le code complet a été donné précédemment.
       sections.add(ProductSection(
           id: doc.id,
           sectionId: doc['sectionId'],

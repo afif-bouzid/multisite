@@ -61,6 +61,7 @@ class SectionsView extends StatelessWidget {
         },
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'add_section_fab',
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
@@ -70,8 +71,7 @@ class SectionsView extends StatelessWidget {
             context,
             MaterialPageRoute(
                 builder: (context) => const SectionFormView())),
-      ),
-    );
+      ),    );
   }
 
   Widget _buildSectionCard(BuildContext context, ProductSection section, FranchiseRepository repo) {
