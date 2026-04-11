@@ -1,20 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
-
-// Import des vues vers lesquelles on veut naviguer
 import 'franchisee_menu_view.dart';
 import 'pos_view.dart';
-
 class FranchiseeDashboardView extends StatelessWidget {
   const FranchiseeDashboardView({super.key});
-
   @override
   Widget build(BuildContext context) {
-    // CORRECTION ICI : On utilise franchiseUser au lieu de firebaseUser
     final user = Provider.of<AuthProvider>(context).franchiseUser;
     final companyName = user?.companyName ?? "Mon Magasin";
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
@@ -43,7 +37,6 @@ class FranchiseeDashboardView extends StatelessWidget {
           children: [
             const Text("Accès Rapide", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-
             Expanded(
               child: GridView.count(
                 crossAxisCount: 2,
@@ -51,8 +44,6 @@ class FranchiseeDashboardView extends StatelessWidget {
                 mainAxisSpacing: 16,
                 childAspectRatio: 1.1,
                 children: [
-
-                  // --- BOUTON 1 : OUVRIR LA CAISSE ---
                   _buildDashboardCard(
                     context,
                     title: "Ouvrir la Caisse",
@@ -66,8 +57,6 @@ class FranchiseeDashboardView extends StatelessWidget {
                       );
                     },
                   ),
-
-                  // --- BOUTON 2 : GÉRER LE MENU ---
                   _buildDashboardCard(
                     context,
                     title: "Mon Menu & Prix",
@@ -81,8 +70,6 @@ class FranchiseeDashboardView extends StatelessWidget {
                       );
                     },
                   ),
-
-                  // --- BOUTON 3 : STOCKS ---
                   _buildDashboardCard(
                     context,
                     title: "Stocks",
@@ -95,8 +82,6 @@ class FranchiseeDashboardView extends StatelessWidget {
                       );
                     },
                   ),
-
-                  // --- BOUTON 4 : STATISTIQUES ---
                   _buildDashboardCard(
                     context,
                     title: "Statistiques",
@@ -117,7 +102,6 @@ class FranchiseeDashboardView extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildDashboardCard(BuildContext context, {
     required String title,
     required String subtitle,

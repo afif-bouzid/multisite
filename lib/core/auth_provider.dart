@@ -1,35 +1,25 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models.dart';
-
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
   User? _firebaseUser;
   FranchiseUser? _franchiseUser;
   bool _isLoading = true;
-
-  // --- C'EST ICI QUE TOUT SE JOUE ---
-  // Vérifiez bien que ces lignes existent dans votre fichier
   User? get firebaseUser => _firebaseUser;
   FranchiseUser? get franchiseUser => _franchiseUser;
   bool get isLoading => _isLoading;
-  // ----------------------------------
-
   bool get isAuthenticated => _firebaseUser != null;
-
   AuthProvider() {
     _auth.authStateChanges().listen(_onAuthStateChanged);
   }
-
   Future<void> _onAuthStateChanged(User? user) async {
     _firebaseUser = user;
     _franchiseUser = null;
     _isLoading = true;
     notifyListeners();
-
     if (user != null) {
       try {
         DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
@@ -43,7 +33,6 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
-
   Future<String?> signIn(String email, String password) async {
     try {
       _isLoading = true;
@@ -60,7 +49,6 @@ class AuthProvider extends ChangeNotifier {
       return e.toString();
     }
   }
-
   Future<void> signOut() async {
     await _auth.signOut();
   }

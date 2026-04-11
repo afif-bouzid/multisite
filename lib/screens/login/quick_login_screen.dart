@@ -1,52 +1,40 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../core/auth_provider.dart';
-
 class CachedUser {
   final String uid;
   final String name;
   final String email;
   final String role;
-
   CachedUser(
       {required this.uid,
       required this.name,
       required this.email,
       required this.role});
-
   Map<String, dynamic> toJson() =>
       {'uid': uid, 'name': name, 'email': email, 'role': role};
-
   factory CachedUser.fromJson(Map<String, dynamic> json) => CachedUser(
       uid: json['uid'] ?? '',
       name: json['name'] ?? 'Utilisateur',
       email: json['email'] ?? '',
       role: json['role'] ?? 'employee');
 }
-
 class QuickLoginScreen extends StatefulWidget {
   const QuickLoginScreen({super.key});
-
   @override
   State<QuickLoginScreen> createState() => _QuickLoginScreenState();
 }
-
 class _QuickLoginScreenState extends State<QuickLoginScreen> {
   List<CachedUser> _savedUsers = [];
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
     _loadUsers();
   }
-
-  // --- PERSISTANCE : CHARGEMENT ---
   Future<void> _loadUsers() async {
     final prefs = await SharedPreferences.getInstance();
     final String? data = prefs.getString('flame_secure_cache_v6');
@@ -57,26 +45,18 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
     }
     setState(() => _isLoading = false);
   }
-
-  // --- PERSISTANCE : SAUVEGARDE ---
   Future<void> _saveToCache(CachedUser user) async {
     final prefs = await SharedPreferences.getInstance();
-    // On évite les doublons
     _savedUsers.removeWhere((u) => u.email == user.email);
-    // On ajoute en haut de liste
     _savedUsers.insert(0, user);
     await prefs.setString('flame_secure_cache_v6', jsonEncode(_savedUsers));
-    setState(() {}); // Rafraîchit l'UI
+    setState(() {}); 
   }
-
-  // --- LOGIQUE D'AUTH ET MISE EN CACHE ---
   Future<void> _handleAuth(String email, String password,
       {bool isDeleting = false}) async {
     final auth = context.read<AuthProvider>();
     setState(() => _isLoading = true);
-
     final error = await auth.signIn(email, password);
-
     if (error == null) {
       if (isDeleting) {
         await auth.signOut();
@@ -85,13 +65,11 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
         await prefs.setString('flame_secure_cache_v6', jsonEncode(_savedUsers));
         _showNotify("PROFIL EFFACÉ", isError: true);
       } else {
-        // Attendre que les données utilisateur Firebase soient injectées dans le provider
         int retry = 0;
         while (auth.franchiseUser == null && retry < 40) {
           await Future.delayed(const Duration(milliseconds: 100));
           retry++;
         }
-
         if (auth.franchiseUser != null) {
           final p = auth.franchiseUser!;
           final newUser = CachedUser(
@@ -100,10 +78,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
             email: email,
             role: p.role ?? 'employee',
           );
-
-          // --- CORRECTION : Sauvegarde systématique lors d'un succès ---
           await _saveToCache(newUser);
-
           _redirect(newUser.role);
         }
       }
@@ -112,12 +87,10 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
     }
     setState(() => _isLoading = false);
   }
-
   void _redirect(String role) {
     Navigator.pushReplacementNamed(
         context, role == 'franchisor' ? '/franchisor_dashboard' : '/home');
   }
-
   void _showNotify(String m, {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(m,
@@ -128,7 +101,6 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
     ));
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -140,7 +112,6 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
           : Column(
               children: [
                 const SizedBox(height: 80),
-                // LOGO OUIBORNE
                 Container(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 60, vertical: 25),
@@ -176,7 +147,6 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                         letterSpacing: 8,
                         color: Colors.black26,
                         fontWeight: FontWeight.w700)),
-
                 Expanded(
                   child: Center(
                     child: SingleChildScrollView(
@@ -200,7 +170,6 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
             ),
     );
   }
-
   void _openSecureModal(CachedUser user, bool isDelete) {
     final pc = TextEditingController();
     showGeneralDialog(
@@ -268,7 +237,6 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
       ),
     );
   }
-
   void _openNewLoginModal() {
     final ec = TextEditingController();
     final pc = TextEditingController();
@@ -321,15 +289,12 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
             ));
   }
 }
-
 class _TactileCard extends StatelessWidget {
   final CachedUser user;
   final VoidCallback onTap;
   final VoidCallback onDelete;
-
   const _TactileCard(
       {required this.user, required this.onTap, required this.onDelete});
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -377,12 +342,9 @@ class _TactileCard extends StatelessWidget {
     );
   }
 }
-
 class _AddTactileCard extends StatelessWidget {
   final VoidCallback onTap;
-
   const _AddTactileCard({required this.onTap});
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(

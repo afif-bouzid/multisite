@@ -728,6 +728,10 @@ class PendingOrder {
   final String source;
   final String orderType;
 
+  // NOUVEAUX CHAMPS À AJOUTER :
+  final bool isPaid;
+  final String paymentMethod;
+
   PendingOrder({
     required this.id,
     required this.franchiseeId,
@@ -737,8 +741,11 @@ class PendingOrder {
     required this.total,
     this.source = 'pos',
     this.orderType = 'onSite',
+    this.isPaid = false,      // <-- AJOUT
+    this.paymentMethod = '',  // <-- AJOUT
   });
 
+  // Met à jour ta méthode de conversion depuis Firestore :
   factory PendingOrder.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return PendingOrder(
@@ -750,6 +757,10 @@ class PendingOrder {
       total: (data['total'] as num?)?.toDouble() ?? 0.0,
       source: data['source'] ?? 'pos',
       orderType: data['orderType'] ?? 'onSite',
+
+      // RÉCUPÉRATION DES NOUVEAUX CHAMPS :
+      isPaid: data['isPaid'] ?? false,
+      paymentMethod: data['paymentMethod'] ?? '',
     );
   }
 }

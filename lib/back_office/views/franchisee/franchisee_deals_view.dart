@@ -2,14 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
-
 import '../../../core/auth_provider.dart';
 import '../../../core/repository/repository.dart';
 import '../../../models.dart';
-
 class FranchiseeDealsView extends StatelessWidget {
   const FranchiseeDealsView({super.key});
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -17,12 +14,10 @@ class FranchiseeDealsView extends StatelessWidget {
       return const Center(child: Text("Erreur : Utilisateur non trouvé."));
     }
     final franchiseeId = authProvider.firebaseUser!.uid;
-
     final dealsRef = FirebaseFirestore.instance
         .collection('users')
         .doc(franchiseeId)
         .collection('deals');
-
     return Scaffold(
       body: StreamBuilder<QuerySnapshot>(
         stream: dealsRef.snapshots(),
@@ -34,11 +29,9 @@ class FranchiseeDealsView extends StatelessWidget {
             return const Center(
                 child: Text("Créez votre première offre promotionnelle !"));
           }
-
           final deals = snapshot.data!.docs
               .map((doc) => Deal.fromFirestore(doc))
               .toList();
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: deals.length,
@@ -83,23 +76,18 @@ class FranchiseeDealsView extends StatelessWidget {
     );
   }
 }
-
 class FranchiseeDealFormView extends StatefulWidget {
   final Deal? dealToEdit;
-
   const FranchiseeDealFormView({super.key, this.dealToEdit});
-
   @override
   State<FranchiseeDealFormView> createState() => _FranchiseeDealFormViewState();
 }
-
 class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   List<String> _selectedSectionIds = [];
   bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
@@ -109,14 +97,12 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       _selectedSectionIds = List.from(widget.dealToEdit!.sectionIds);
     }
   }
-
   @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
     super.dispose();
   }
-
   Future<void> _saveDeal() async {
     if (!_formKey.currentState!.validate()) return;
     final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
@@ -127,7 +113,6 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       return;
     }
     setState(() => _isLoading = true);
-
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.firebaseUser == null) {
       if (mounted) setState(() => _isLoading = false);
@@ -138,14 +123,12 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
         .collection('users')
         .doc(franchiseeId)
         .collection('deals');
-
     final deal = Deal(
       id: widget.dealToEdit?.id ?? const Uuid().v4(),
       name: _nameController.text,
       price: price,
       sectionIds: _selectedSectionIds,
     );
-
     try {
       await dealsRef.doc(deal.id).set(deal.toMap());
       if (context.mounted) Navigator.pop(context);
@@ -158,7 +141,6 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -169,7 +151,6 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
     }
     final franchisorId = authProvider.franchiseUser!.franchisorId!;
     final repository = FranchiseRepository();
-
     return Scaffold(
       appBar: AppBar(
           title: Text(widget.dealToEdit == null
@@ -214,7 +195,6 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
                         return const Text(
                             "Le franchiseur doit d'abord créer des sections.");
                       }
-
                       return Column(
                         children: allSections.map((section) {
                           final isSelected =

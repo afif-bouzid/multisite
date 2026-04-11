@@ -8,12 +8,9 @@ import 'package:printing/printing.dart';
 import 'package:csv/csv.dart';
 import 'package:universal_html/html.dart' as html;
 import '../../models.dart';
-
 class AccountingExportService {
   final dateFormatter = DateFormat('dd/MM/yyyy HH:mm');
   final currencyFormatter = NumberFormat.currency(locale: 'fr_FR', symbol: '€');
-
-  // --- CSV (Excel) ---
   String generateCSV(List<dynamic> transactions) {
     List<List<dynamic>> rows = [];
     rows.add(["Date", "Heure", "ID Transaction", "Type", "Moyen de Paiement", "Total TTC"]);
@@ -29,12 +26,10 @@ class AccountingExportService {
     }
     return const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
   }
-
   String _formatPaymentMethods(Map<String, dynamic> methods) {
     if (methods.isEmpty) return "Inconnu";
     return methods.keys.join(" + ");
   }
-
   Future<void> shareCsvFile(String csvData) async {
     final fileName = 'export_comptable_${DateFormat('yyyyMMdd_HHmm').format(DateTime.now())}.csv';
     if (kIsWeb) {
@@ -51,39 +46,30 @@ class AccountingExportService {
       await Printing.sharePdf(bytes: bytes, filename: fileName);
     }
   }
-
-  // --- PDF (Z de Caisse) ---
   Future<void> generateAccountingPdf(
       TillSession session,
       List<dynamic> transactions,
       Map<String, double> vatBreakdown,
       String operatorName, {
-        // Ces variables reçoivent les infos de la base de données
         String? companyName,
         String? companyAddress,
         String? companySiret,
       }) async {
-
     final pdf = pw.Document();
-
-    // Calculs
     double totalCA = transactions.fold(0, (sum, item) => sum + (item.total as num).toDouble());
     double totalTVA = vatBreakdown.values.fold(0, (sum, val) => sum + val);
     double totalHT = totalCA - totalTVA;
-
     Map<String, double> payments = {};
     for (var tx in transactions) {
       (tx.paymentMethods as Map<String, dynamic>).forEach((key, value) {
         payments[key] = (payments[key] ?? 0) + (value as num).toDouble();
       });
     }
-
     pdf.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         build: (pw.Context context) {
           return [
-            // C'est ici qu'on dessine l'en-tête avec les infos entreprise
             _buildHeader(session, operatorName, companyName, companyAddress, companySiret),
             pw.Divider(),
             _buildSummarySection(totalHT, totalTVA, totalCA),
@@ -97,14 +83,11 @@ class AccountingExportService {
         },
       ),
     );
-
     await Printing.layoutPdf(
         onLayout: (PdfPageFormat format) async => pdf.save(),
         name: 'Z_Caisse_${DateFormat('yyyyMMdd').format(session.openingTime)}'
     );
   }
-
-  // --- CONSTRUCTION DE L'EN-TÊTE ---
   pw.Widget _buildHeader(
       TillSession session,
       String operatorName,
@@ -115,7 +98,6 @@ class AccountingExportService {
         mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          // INFO ENTREPRISE (Gauche)
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
@@ -126,7 +108,6 @@ class AccountingExportService {
                 pw.Text("SIRET: $companySiret", style: const pw.TextStyle(fontSize: 10)),
             ],
           ),
-          // INFO TICKET (Droite)
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.end,
             children: [
@@ -139,8 +120,6 @@ class AccountingExportService {
         ]
     );
   }
-
-  // ... Reste des widgets inchangés ...
   pw.Widget _buildSummarySection(double ht, double tva, double ttc) {
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),

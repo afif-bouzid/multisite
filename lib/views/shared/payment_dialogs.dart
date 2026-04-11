@@ -1,34 +1,26 @@
-﻿import 'package:flutter/material.dart';
-
+import 'package:flutter/material.dart';
 class CashPaymentDialog extends StatefulWidget {
   final double totalDue;
-
   const CashPaymentDialog({super.key, required this.totalDue});
-
   @override
   State<CashPaymentDialog> createState() => _CashPaymentDialogState();
 }
-
 class _CashPaymentDialogState extends State<CashPaymentDialog> {
   final _amountController = TextEditingController();
   double _amountReceived = 0.0;
-
   @override
   void initState() {
     super.initState();
     _amountController.addListener(_calculateChange);
   }
-
   @override
   void dispose() {
     _amountController.removeListener(_calculateChange);
     _amountController.dispose();
     super.dispose();
   }
-
   void _calculateChange() => setState(() => _amountReceived =
       double.tryParse(_amountController.text.replaceAll(',', '.')) ?? 0.0);
-
   @override
   Widget build(BuildContext context) {
     final changeDue = _amountReceived - widget.totalDue;
@@ -65,31 +57,24 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
     );
   }
 }
-
 class TicketPaymentDialog extends StatefulWidget {
   final double totalDue;
-
   const TicketPaymentDialog({super.key, required this.totalDue});
-
   @override
   State<TicketPaymentDialog> createState() => _TicketPaymentDialogState();
 }
-
 class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
   final _amountController = TextEditingController();
-
   @override
   void initState() {
     super.initState();
     _amountController.text = widget.totalDue.toStringAsFixed(2);
   }
-
   @override
   void dispose() {
     _amountController.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -131,16 +116,12 @@ class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
     );
   }
 }
-
 class MixedPaymentDialog extends StatefulWidget {
   final double totalDue;
-
   const MixedPaymentDialog({super.key, required this.totalDue});
-
   @override
   State<MixedPaymentDialog> createState() => _MixedPaymentDialogState();
 }
-
 class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
   final _cashController = TextEditingController();
   final _cardController = TextEditingController();
@@ -148,29 +129,24 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
   final FocusNode _cashFocus = FocusNode();
   final FocusNode _cardFocus = FocusNode();
   final FocusNode _ticketFocus = FocusNode();
-
   @override
   void initState() {
     super.initState();
     _cardController.text = widget.totalDue.toStringAsFixed(2);
     _cashController.text = '0.00';
     _ticketController.text = '0.00';
-
     _cashController.addListener(_recalculate);
     _cardController.addListener(_recalculate);
     _ticketController.addListener(_recalculate);
   }
-
   void _recalculate() {
     if (!mounted) return;
-
     final cashAmount =
         double.tryParse(_cashController.text.replaceAll(',', '.')) ?? 0.0;
     final cardAmount =
         double.tryParse(_cardController.text.replaceAll(',', '.')) ?? 0.0;
     final ticketAmount =
         double.tryParse(_ticketController.text.replaceAll(',', '.')) ?? 0.0;
-
     if (_cardFocus.hasFocus) {
       final remaining = widget.totalDue - cardAmount - ticketAmount;
       _updateText(_cashController, remaining > 0 ? remaining : 0.0);
@@ -178,23 +154,18 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       final remaining = widget.totalDue - cashAmount - ticketAmount;
       _updateText(_cardController, remaining > 0 ? remaining : 0.0);
     } else {
-      // cash focus or no focus
       final remaining = widget.totalDue - cashAmount - ticketAmount;
       _updateText(_cardController, remaining > 0 ? remaining : 0.0);
     }
     setState(() {});
   }
-
   void _updateText(TextEditingController controller, double value) {
-    // A listener is temporarily removed to prevent an infinite loop of updates.
     controller.removeListener(_recalculate);
     controller.text = value.toStringAsFixed(2);
-    // Move cursor to the end of the text
     controller.selection = TextSelection.fromPosition(
         TextPosition(offset: controller.text.length));
     controller.addListener(_recalculate);
   }
-
   @override
   void dispose() {
     _cashController.dispose();
@@ -205,7 +176,6 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
     _ticketFocus.dispose();
     super.dispose();
   }
-
   @override
   Widget build(BuildContext context) {
     final cashAmount =
@@ -216,7 +186,6 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
         double.tryParse(_ticketController.text.replaceAll(',', '.')) ?? 0.0;
     final sum = cashAmount + cardAmount + ticketAmount;
     final isValid = (sum - widget.totalDue).abs() < 0.01;
-
     return AlertDialog(
       title: const Text('Paiement Mixte'),
       content: Column(

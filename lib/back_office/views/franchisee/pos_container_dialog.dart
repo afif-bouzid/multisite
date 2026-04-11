@@ -1,28 +1,24 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '/models.dart';
-
 class PosContainerDialog extends StatelessWidget {
   final MasterProduct container;
   final List<MasterProduct> allProducts;
   final Function(MasterProduct) onProductSelected;
-
   const PosContainerDialog({
     super.key,
     required this.container,
     required this.allProducts,
     required this.onProductSelected,
   });
-
   @override
   Widget build(BuildContext context) {
     final List<MasterProduct> children = _getContainerChildren();
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         padding: const EdgeInsets.all(16),
-        width: 600, // Largeur adaptée pour la caisse
+        width: 600, 
         height: 500,
         child: Column(
           children: [
@@ -43,8 +39,6 @@ class PosContainerDialog extends StatelessWidget {
               ],
             ),
             const Divider(),
-
-            // Grille des produits contenus
             Expanded(
               child: children.isEmpty
                   ? const Center(
@@ -56,7 +50,7 @@ class PosContainerDialog extends StatelessWidget {
                   : GridView.builder(
                 padding: const EdgeInsets.all(8),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3, // 3 produits par ligne
+                  crossAxisCount: 3, 
                   childAspectRatio: 0.8,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
@@ -73,7 +67,6 @@ class PosContainerDialog extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildProductCard(BuildContext context, MasterProduct product) {
     return InkWell(
       onTap: () {
@@ -92,7 +85,6 @@ class PosContainerDialog extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Image du produit
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
@@ -109,7 +101,6 @@ class PosContainerDialog extends StatelessWidget {
                 ),
               ),
             ),
-            // Nom du produit
             Padding(
               padding: const EdgeInsets.all(8.0),
               child: Text(
@@ -125,10 +116,8 @@ class PosContainerDialog extends StatelessWidget {
       ),
     );
   }
-
   List<MasterProduct> _getContainerChildren() {
     if (container.containerProductIds.isEmpty) return [];
-
     return container.containerProductIds.map((childId) {
       try {
         return allProducts.firstWhere((p) => p.id == childId);

@@ -2,31 +2,26 @@ import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/accounting_export_service.dart';
-
 class AccountingView extends StatelessWidget {
   final String franchiseeId;
   final DateTime? startDate;
   final DateTime? endDate;
-
   const AccountingView({
     super.key,
     required this.franchiseeId,
     this.startDate,
     this.endDate,
   });
-
   @override
   Widget build(BuildContext context) {
     final start =
         startDate ?? DateTime.now().subtract(const Duration(days: 30));
     final end = endDate ?? DateTime.now();
     final repository = FranchiseRepository();
-
     return StreamBuilder<List<Transaction>>(
       stream: repository.getTransactionsInDateRange(
         franchiseeId,
@@ -42,46 +37,28 @@ class AccountingView extends StatelessWidget {
           return const Center(
               child: Text("Aucune donnée comptable sur cette période."));
         }
-
         return _buildAccountingReport(context, snapshot.data!);
       },
     );
   }
-
   Widget _buildAccountingReport(
       BuildContext context, List<Transaction> transactions) {
-    // --- 1. CALCULS COMPTABLES ---
     double totalTTC = 0;
     double totalHT = 0;
-
-    // Map: Taux TVA -> { 'baseHT': 0.0, 'amountTVA': 0.0 }
     Map<double, Map<String, double>> vatBreakdown = {};
-
-    // Map: Mode Paiement -> Montant
     Map<String, double> paymentBreakdown = {};
-
     for (var t in transactions) {
       totalTTC += t.total;
-
-      // Ventilation Paiements
       t.paymentMethods.forEach((method, amount) {
         paymentBreakdown[method] =
             (paymentBreakdown[method] ?? 0) + (amount as num).toDouble();
       });
-
-      // Ventilation TVA (Ligne par ligne pour précision)
       for (var item in t.items) {
-        // Prix TTC de la ligne (Base + Options) * Quantité
-        // Note: Dans Transaction, 'total' est le prix total de la ligne TTC
         double lineTotalTTC = (item['total'] as num).toDouble();
         double vatRate = (item['vatRate'] as num).toDouble();
-
-        // Formule: HT = TTC / (1 + Taux/100)
         double lineTotalHT = lineTotalTTC / (1 + (vatRate / 100));
         double lineVatAmount = lineTotalTTC - lineTotalHT;
-
         totalHT += lineTotalHT;
-
         vatBreakdown.putIfAbsent(
             vatRate, () => {'baseHT': 0.0, 'amountTVA': 0.0});
         vatBreakdown[vatRate]!['baseHT'] =
@@ -90,9 +67,7 @@ class AccountingView extends StatelessWidget {
             vatBreakdown[vatRate]!['amountTVA']! + lineVatAmount;
       }
     }
-
     final sortedRates = vatBreakdown.keys.toList()..sort();
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -110,15 +85,11 @@ class AccountingView extends StatelessWidget {
                 label: const Text("Exporter (Excel/CSV)"),
                 onPressed: () async {
                   final exportService = AccountingExportService();
-
-                  // Préparation des données TVA pour le PDF
                   Map<String, double> pdfVatMap = {};
                   vatBreakdown.forEach((rate, data) {
                     pdfVatMap["${rate.toStringAsFixed(1)}%"] =
                         (data['amountTVA'] as num).toDouble();
                   });
-
-                  // Récupération du nom de l'opérateur connecté
                   String operatorName = "Utilisateur";
                   try {
                     final authProvider =
@@ -126,49 +97,35 @@ class AccountingView extends StatelessWidget {
                     operatorName =
                         authProvider.franchiseUser?.companyName ?? "Utilisateur";
                   } catch (e) {
-                    /* on ignore */
                   }
-
-                  // --- MODIFICATION : Récupération des infos société depuis 'users' ---
                   String cName = "Société Inconnue";
                   String cAddress = "";
                   String cSiret = "";
-
                   try {
-                    // On cible la collection 'users' où sont vos données franchisé
                     final docSnap = await FirebaseFirestore.instance
                         .collection('users')
                         .doc(franchiseeId)
                         .get();
-
                     if (docSnap.exists) {
                       final data = docSnap.data() as Map<String, dynamic>;
-
-                      // Récupération souple des champs (gère différents noms de clés possibles)
                       cName = data['companyName'] ??
                           data['name'] ??
                           data['societe'] ??
                           data['enseigne'] ??
                           operatorName;
-
                       cSiret = data['siret'] ??
                           data['siren'] ??
                           data['tvaIntra'] ??
                           "SIRET non renseigné";
-
-                      // Construction de l'adresse complète
                       String rue = data['address'] ?? data['rue'] ?? data['street'] ?? data['adresse'] ?? '';
                       String cp = data['zipCode'] ?? data['cp'] ?? data['codePostal'] ?? '';
                       String ville = data['city'] ?? data['ville'] ?? '';
-
                       List<String> addressParts = [rue, cp, ville];
                       cAddress = addressParts.where((s) => s.isNotEmpty).join(" ");
                     }
                   } catch (e) {
                     debugPrint("Erreur récupération infos franchisé: $e");
                   }
-
-                  // Affichage du choix du format
                   await showModalBottomSheet(
                     context: context,
                     builder: (ctx) => Column(
@@ -180,7 +137,6 @@ class AccountingView extends StatelessWidget {
                           subtitle: Text('Société : $cName'),
                           onTap: () async {
                             Navigator.pop(ctx);
-                            // Création d'une session fictive pour l'entête du PDF global
                             final dummySession = TillSession(
                               id: "Export_${DateFormat('yyyyMMdd').format(DateTime.now())}",
                               franchiseeId: franchiseeId,
@@ -190,15 +146,14 @@ class AccountingView extends StatelessWidget {
                               closingTime: endDate ?? DateTime.now(),
                               finalCash: 0.0,
                             );
-
                             await exportService.generateAccountingPdf(
                               dummySession,
                               transactions,
                               pdfVatMap,
                               operatorName,
-                              companyName: cName,      // Info récupérée injectée ici
-                              companyAddress: cAddress, // Info récupérée injectée ici
-                              companySiret: cSiret,     // Info récupérée injectée ici
+                              companyName: cName,      
+                              companyAddress: cAddress, 
+                              companySiret: cSiret,     
                             );
                           },
                         ),
@@ -208,11 +163,7 @@ class AccountingView extends StatelessWidget {
                           subtitle: const Text("Compatible Excel, Numbers, Google Sheets"),
                           onTap: () async {
                             Navigator.pop(ctx);
-
-                            // 1. Générer les données brutes des transactions
                             final rawCsvData = exportService.generateCSV(transactions);
-
-                            // 2. Créer l'en-tête personnalisé pour l'Excel (NOUVEAU)
                             final String headerInfo =
                                 "Rapport Comptable;;;\n"
                                 "Société:;$cName;;\n"
@@ -220,12 +171,8 @@ class AccountingView extends StatelessWidget {
                                 "SIRET:;$cSiret;;\n"
                                 "Période:;${startDate != null ? DateFormat('dd/MM/yyyy').format(startDate!) : 'Début'} au ${endDate != null ? DateFormat('dd/MM/yyyy').format(endDate!) : 'Fin'};\n"
                                 "Date export:;${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())};;\n"
-                                "\n"; // Saut de ligne avant le tableau de données
-
-                            // 3. Concaténer l'en-tête et les données
+                                "\n"; 
                             final fullCsvContent = headerInfo + rawCsvData;
-
-                            // 4. Partager le fichier final
                             await exportService.shareCsvFile(fullCsvContent);
                           },
                         ),
@@ -237,8 +184,6 @@ class AccountingView extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 24),
-
-          // --- SYNTHÈSE GLOBALE ---
           Row(
             children: [
               _buildSummaryBox("Chiffre d'Affaires TTC", totalTTC, Colors.blue),
@@ -249,10 +194,7 @@ class AccountingView extends StatelessWidget {
                   "Total TVA Collectée", totalTTC - totalHT, Colors.orange),
             ],
           ),
-
           const SizedBox(height: 32),
-
-          // --- TABLEAU DE TVA ---
           const Text("Ventilation TVA",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -301,10 +243,7 @@ class AccountingView extends StatelessWidget {
               }).toList(),
             ),
           ),
-
           const SizedBox(height: 32),
-
-          // --- TABLEAU ENCAISSEMENTS ---
           const Text("Détail des Encaissements",
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 12),
@@ -349,7 +288,6 @@ class AccountingView extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildSummaryBox(String label, double value, Color color) {
     return Expanded(
       child: Container(
@@ -379,7 +317,6 @@ class AccountingView extends StatelessWidget {
       ),
     );
   }
-
   IconData _getIconForMethod(String method) {
     switch (method) {
       case 'Cash':

@@ -1,25 +1,19 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/providers/update_provider.dart';
-
 class FranchiseeAboutView extends StatefulWidget {
   const FranchiseeAboutView({super.key});
-
   @override
   State<FranchiseeAboutView> createState() => _FranchiseeAboutViewState();
 }
-
 class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
   String _version = '...';
-
   @override
   void initState() {
     super.initState();
     _loadVersion();
   }
-
   Future<void> _loadVersion() async {
     final packageInfo = await PackageInfo.fromPlatform();
     if (mounted) {
@@ -28,7 +22,6 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
       });
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -77,7 +70,6 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
                               ),
                             );
                           }
-
                           if (updateProvider.hasUpdate) {
                             return ElevatedButton.icon(
                               icon: const Icon(Icons.download_for_offline),
@@ -91,7 +83,6 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
                               ),
                             );
                           }
-
                           return ElevatedButton.icon(
                             icon: const Icon(Icons.system_update),
                             label: const Text("Vérifier les mises à jour"),

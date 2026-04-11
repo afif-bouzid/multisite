@@ -4,41 +4,28 @@ import 'package:flutter/material.dart';
 import 'package:ouiborne/back_office/views/franchisee/pos_container_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:collection/collection.dart';
-
-// Import des fichiers core
 import '../../../../core/auth_provider.dart';
 import '../../../../models.dart';
 import '../../../../core/repository/repository.dart';
-
-
 class POSView extends StatefulWidget {
   const POSView({super.key});
-
   @override
   State<POSView> createState() => _POSViewState();
 }
-
 class _POSViewState extends State<POSView> {
-  // --- Données ---
   List<MasterProduct> _allProducts = [];
   Map<String, FranchiseeMenuItem> _menuConfig = {};
   List<KioskCategory> _categories = [];
-
-  // --- État Local ---
   final List<CartItem> _cart = [];
   String? _selectedCategoryId;
   final String _searchQuery = "";
   bool _isLoading = true;
-
-  // --- Streams ---
   final List<StreamSubscription> _subs = [];
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initData());
   }
-
   @override
   void dispose() {
     for (var s in _subs) {
@@ -46,31 +33,23 @@ class _POSViewState extends State<POSView> {
     }
     super.dispose();
   }
-
   void _initData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.franchiseUser;
-
     if (user == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
     if (user.franchisorId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
     final repo = FranchiseRepository();
     final String franchisorId = user.franchisorId!;
     final String myStoreId = user.role == 'employee' ? (user.storeId ?? user.uid) : user.uid;
-
-    // 1. Charger le catalogue Master
     _subs.add(repo.getMasterProductsStream(franchisorId).listen((products) {
       if (mounted) setState(() => _allProducts = products);
     }));
-
-    // 2. Charger les prix et la dispo spécifiques au magasin
     _subs.add(repo.getFranchiseeMenuStream(myStoreId).listen((items) {
       final map = <String, FranchiseeMenuItem>{};
       for (var item in items) {
@@ -78,8 +57,6 @@ class _POSViewState extends State<POSView> {
       }
       if (mounted) setState(() => _menuConfig = map);
     }));
-
-    // 3. Charger les catégories
     _subs.add(repo.getKioskCategoriesStream(franchisorId).listen((cats) {
       if (mounted) {
         setState(() {
@@ -89,15 +66,11 @@ class _POSViewState extends State<POSView> {
       }
     }));
   }
-
-  // --- LOGIQUE METIER ---
-
   List<MasterProduct> _getVisibleProducts() {
     var visibleList = _allProducts.where((p) {
       final config = _menuConfig[p.productId];
       return config != null && config.isVisible;
     }).toList();
-
     if (_selectedCategoryId != null) {
       final category = _categories.firstWhereOrNull((c) => c.id == _selectedCategoryId);
       if (category != null) {
@@ -107,30 +80,23 @@ class _POSViewState extends State<POSView> {
         }).toList();
       }
     }
-
     if (_searchQuery.isNotEmpty) {
       visibleList = visibleList.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
     }
-
     visibleList.sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
-
     return visibleList;
   }
-
   double _getFranchiseePrice(String productId) {
     return _menuConfig[productId]?.price ?? 0.0;
   }
-
   void _onProductTap(MasterProduct product) {
     if (product.isContainer) {
-      // --- MODIFICATION ICI : Utilisation de PosContainerDialog ---
       showDialog(
         context: context,
         builder: (_) => PosContainerDialog(
           container: product,
-          allProducts: _allProducts, // On passe la liste brute (active ou pas)
+          allProducts: _allProducts, 
           onProductSelected: (selectedSubProduct) {
-            // Une fois sélectionné dans la modale, on lance le processus normal
             _processProductSelection(selectedSubProduct);
           },
         ),
@@ -139,30 +105,21 @@ class _POSViewState extends State<POSView> {
       _processProductSelection(product);
     }
   }
-
-  // L'ancienne méthode _showContainerModal a été supprimée car remplacée par le fichier externe.
-
   void _processProductSelection(MasterProduct product) {
     final hasSections = product.sectionIds.isNotEmpty;
-
     if (hasSections) {
       _showOptionsModal(product);
     } else {
       _addToCart(product);
     }
   }
-
   void _showOptionsModal(MasterProduct product) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.franchiseUser;
-
     if (user == null || user.franchisorId == null) return;
-
     final repo = FranchiseRepository();
     final sections = await repo.getSectionsForProduct(user.franchisorId!, product.sectionIds);
-
     if (!mounted) return;
-
     showDialog(
       context: context,
       builder: (ctx) => _ProductOptionsDialog(
@@ -179,12 +136,10 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
-
   void _addToCart(MasterProduct product) {
     final menuItem = _menuConfig[product.productId];
     final price = menuItem?.price ?? 0.0;
     final vat = menuItem?.vatRate ?? 10.0;
-
     setState(() {
       _cart.add(CartItem(
         product: product,
@@ -194,9 +149,6 @@ class _POSViewState extends State<POSView> {
       ));
     });
   }
-
-  // --- UI ---
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -216,7 +168,6 @@ class _POSViewState extends State<POSView> {
               ],
             ),
           ),
-
           Container(
             width: 380,
             decoration: BoxDecoration(
@@ -240,7 +191,6 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
-
   Widget _buildCategoryTabs() {
     return Container(
       color: Colors.white,
@@ -255,7 +205,6 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
-
   Widget _buildTabChip(String label, String? id) {
     final isSelected = _selectedCategoryId == id;
     return Padding(
@@ -273,14 +222,11 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
-
   Widget _buildProductGrid() {
     final visibleProducts = _getVisibleProducts();
-
     if (visibleProducts.isEmpty) {
       return const Center(child: Text("Aucun produit disponible"));
     }
-
     return GridView.builder(
       padding: const EdgeInsets.all(16),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -293,7 +239,6 @@ class _POSViewState extends State<POSView> {
       itemBuilder: (context, index) {
         final product = visibleProducts[index];
         final price = _getFranchiseePrice(product.productId);
-
         return InkWell(
           onTap: () => _onProductTap(product),
           child: _buildProductCardDesign(product, price),
@@ -301,17 +246,12 @@ class _POSViewState extends State<POSView> {
       },
     );
   }
-
   Widget _buildProductCardDesign(MasterProduct product, double price, {bool isInsideModal = false}) {
-    // Si la donnée est corrigée (Étape 2), cette variable sera 'true'
     final bool isContainer = product.isContainer;
-
-    // Couleurs : Orange pour les dossiers, Blanc/Gris pour les produits
     final Color borderColor = isContainer ? Colors.orange.shade300 : Colors.transparent;
     final Color footerColor = isContainer ? Colors.orange.shade50 : Colors.grey.shade50;
     final IconData icon = isContainer ? Icons.folder_copy_rounded : Icons.fastfood_rounded;
     final Color iconColor = isContainer ? Colors.orange.shade300 : Colors.grey.shade300;
-
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -359,8 +299,6 @@ class _POSViewState extends State<POSView> {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2D3436)),
                 ),
                 const SizedBox(height: 6),
-
-                // Affiche "MENU / DOSSIER" au lieu du prix pour les conteneurs
                 if (isContainer)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -418,7 +356,6 @@ class _POSViewState extends State<POSView> {
       },
     );
   }
-
   Widget _buildCartTotal() {
     double total = _cart.fold(0, (sum, item) => sum + item.total);
     return Container(
@@ -450,14 +387,12 @@ class _POSViewState extends State<POSView> {
     );
   }
 }
-
 class _ProductOptionsDialog extends StatefulWidget {
   final MasterProduct product;
   final List<ProductSection> sections;
   final double basePrice;
   final double vatRate;
   final Function(CartItem) onConfirm;
-
   const _ProductOptionsDialog({
     required this.product,
     required this.sections,
@@ -465,21 +400,17 @@ class _ProductOptionsDialog extends StatefulWidget {
     required this.vatRate,
     required this.onConfirm
   });
-
   @override
   State<_ProductOptionsDialog> createState() => _ProductOptionsDialogState();
 }
-
 class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
   final Map<String, List<SectionItem>> _selections = {};
-
   double get _currentTotal {
     double total = widget.basePrice;
     _selections.forEach((key, items) {
     });
     return total;
   }
-
   @override
   Widget build(BuildContext context) {
     return Dialog(

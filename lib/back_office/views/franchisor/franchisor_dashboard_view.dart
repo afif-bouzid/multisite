@@ -12,21 +12,16 @@ import 'franchisor_franchisees_view.dart';
 import 'franchisor_groups_view.dart';
 import 'franchisor_kiosk_view.dart' hide CategoryEditorDialog;
 import 'franchisor_sections_view.dart';
-
 class FranchisorDashboardView extends StatefulWidget {
   const FranchisorDashboardView({super.key});
-
   @override
   State<FranchisorDashboardView> createState() => _FranchisorDashboardViewState();
 }
-
 class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-
   final Color _bgGradientStart = const Color(0xFF1c2e4a);
   final Color _bgGradientEnd = const Color(0xFF000000);
-
   @override
   void initState() {
     super.initState();
@@ -35,17 +30,14 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       if (_tabController.indexIsChanging) setState(() {});
     });
   }
-
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
-
   void _navigateToFranchisees(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        // J'ai retiré le textScaler 1.2 pour garder de l'espace
         builder: (context) => Scaffold(
           appBar: AppBar(
             title: const Text("GESTION DU RÉSEAU"),
@@ -61,26 +53,22 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
             backgroundColor: Colors.transparent,
             foregroundColor: Colors.white,
             centerTitle: true,
-            toolbarHeight: 60, // Réduit légèrement
+            toolbarHeight: 60, 
           ),
           body: const FranchiseesView(),
         ),
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final userEmail = authProvider.firebaseUser?.email ?? "Non connecté";
-
-    // SUPPRESSION du MediaQuery textScaler 1.2 ici pour gagner beaucoup d'espace
     return PopScope(
       canPop: false,
       child: Scaffold(
         backgroundColor: const Color(0xFFF5F7FA),
         appBar: PreferredSize(
-          // MODIFICATION : Hauteur réduite de 170 à 110 pour voir plus de produits en bas
           preferredSize: const Size.fromHeight(110),
           child: Container(
             decoration: BoxDecoration(
@@ -97,7 +85,6 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Ligne du haut (Profil + Boutons) plus compacte
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                     child: Row(
@@ -110,7 +97,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                           ),
                           child: const CircleAvatar(
                             backgroundColor: Colors.white10,
-                            radius: 16, // Réduit
+                            radius: 16, 
                             child: Icon(Icons.admin_panel_settings_rounded, color: Colors.amber, size: 18),
                           ),
                         ),
@@ -124,7 +111,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.5,
-                                fontSize: 13, // Police légèrement réduite
+                                fontSize: 13, 
                               ),
                             ),
                             Text(
@@ -173,10 +160,8 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                       ],
                     ),
                   ),
-
-                  // Zone des onglets (TabBar) compactée
                   Container(
-                    height: 45, // Réduit de 80 à 45
+                    height: 45, 
                     padding: const EdgeInsets.only(bottom: 4),
                     child: TabBar(
                       controller: _tabController,
@@ -213,7 +198,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
         ),
         floatingActionButton: _tabController.index == 5
             ? SizedBox(
-          height: 60, // Réduit un peu
+          height: 60, 
           width: 170,
           child: FloatingActionButton.extended(
             elevation: 2,
@@ -228,21 +213,19 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       ),
     );
   }
-
   Widget _buildSharpTab(int index, String label, IconData icon, Color cStart, Color cEnd) {
     final bool isSelected = _tabController.index == index;
-
     return Tab(
-      height: 40, // Hauteur réduite pour l'onglet individuel
+      height: 40, 
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), // Padding réduit
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), 
         decoration: BoxDecoration(
           gradient: isSelected
               ? LinearGradient(colors: [cStart, cEnd], begin: Alignment.topLeft, end: Alignment.bottomRight)
               : null,
           color: isSelected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(20), // Rayon ajusté
+          borderRadius: BorderRadius.circular(20), 
           border: isSelected
               ? null
               : Border.all(color: Colors.white12, width: 1),
@@ -253,7 +236,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
             Icon(
                 icon,
                 color: isSelected ? Colors.white : Colors.white60,
-                size: 18 // Icône réduite
+                size: 18 
             ),
             const SizedBox(width: 8),
             Text(
@@ -261,7 +244,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.white60,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 13, // Police ajustée
+                fontSize: 13, 
               ),
             ),
           ],
@@ -269,13 +252,11 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       ),
     );
   }
-
   void _showAddWallpaperDialog(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
     final ImagePicker picker = ImagePicker();
     XFile? pickedFile;
     bool isLoading = false;
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -311,7 +292,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                     }
                   },
                   child: Container(
-                    height: 150, // Un peu moins haut
+                    height: 150, 
                     width: double.infinity,
                     decoration: BoxDecoration(
                         color: pickedFile == null ? Colors.grey[200] : null,
@@ -356,10 +337,8 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                   try {
                     final repo = FranchiseRepository();
                     final auth = Provider.of<AuthProvider>(context, listen: false);
-
                     String path = 'wallpapers/${DateTime.now().millisecondsSinceEpoch}.jpg';
                     String url = await repo.uploadUniversalFile(pickedFile!, path);
-
                     await FirebaseFirestore.instance.collection('kiosk_medias').add({
                       'franchisorId': auth.firebaseUser!.uid,
                       'name': nameController.text.isEmpty ? 'Sans nom' : nameController.text,
@@ -367,7 +346,6 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                       'url': url,
                       'createdAt': FieldValue.serverTimestamp(),
                     });
-
                     if (mounted) {
                       Navigator.pop(ctx);
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Succès !")));
@@ -386,17 +364,13 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     );
   }
 }
-
 class FranchisorGlobalConfigView extends StatefulWidget {
   const FranchisorGlobalConfigView({super.key});
-
   @override
   State<FranchisorGlobalConfigView> createState() => _FranchisorGlobalConfigViewState();
 }
-
 class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView> {
   bool _isUpdating = false;
-
   Future<void> _updateTechnicalButton(String typeKey, String currentOtherUrl) async {
     final ImagePicker picker = ImagePicker();
     final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
@@ -418,7 +392,6 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
       setState(() => _isUpdating = false);
     }
   }
-
   Future<void> _deleteTechnicalButton(String typeKey) async {
     setState(() => _isUpdating = true);
     try {
@@ -431,7 +404,6 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
       setState(() => _isUpdating = false);
     }
   }
-
   Future<void> _deleteMedia(String docId) async {
     bool? confirm = await showDialog(
         context: context,
@@ -447,13 +419,11 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
       await FirebaseFirestore.instance.collection('kiosk_medias').doc(docId).delete();
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final user = auth.franchiseUser;
     if (user == null) return const Center(child: CircularProgressIndicator());
-
     return StreamBuilder<DocumentSnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
         builder: (context, snapshot) {
@@ -464,7 +434,6 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
             liveDineInUrl = data['dineInImageUrl'];
             liveTakeawayUrl = data['takeawayImageUrl'];
           }
-
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -541,7 +510,6 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                     if (!mediaSnapshot.hasData) return const Center(child: CircularProgressIndicator());
                     final docs = mediaSnapshot.data!.docs;
                     if (docs.isEmpty) return const Center(child: Text("Aucun fond d'écran"));
-
                     return GridView.builder(
                       physics: const BouncingScrollPhysics(),
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -588,7 +556,6 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
           );
         });
   }
-
   Widget _buildInteractiveBtn({
     required String label,
     required IconData icon,
@@ -603,7 +570,7 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
         GestureDetector(
           onTap: onTap,
           child: Container(
-            height: 120, // Taille réduite
+            height: 120, 
             width: 120,
             decoration: BoxDecoration(
               color: color,
@@ -632,15 +599,12 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
     );
   }
 }
-
 class _KeepAlivePage extends StatefulWidget {
   final Widget child;
   const _KeepAlivePage({required this.child});
-
   @override
   State<_KeepAlivePage> createState() => _KeepAlivePageState();
 }
-
 class _KeepAlivePageState extends State<_KeepAlivePage> with AutomaticKeepAliveClientMixin {
   @override
   Widget build(BuildContext context) {

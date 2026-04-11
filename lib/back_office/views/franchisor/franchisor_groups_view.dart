@@ -3,23 +3,15 @@ import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
-// --- GESTIONNAIRE DE CACHE LOCAL ---
-// Cette classe gère le cache directement ici pour éviter les erreurs dans le Repository
 class _LocalSectionCache {
   static List<ProductSection>? _cachedSections;
   static DateTime? _lastFetch;
-
   static Future<List<ProductSection>> getSections(FranchiseRepository repo, String uid) async {
-    // Si le cache a moins de 5 minutes, on l'utilise
     if (_cachedSections != null &&
         _lastFetch != null &&
         DateTime.now().difference(_lastFetch!) < const Duration(minutes: 5)) {
       return _cachedSections!;
     }
-
-    // Sinon, on récupère les données via la méthode standard existante
-    // On utilise .first pour transformer le Stream en Future unique
     try {
       final sections = await repo.getSectionsStream(uid).first;
       _cachedSections = sections;
@@ -30,26 +22,20 @@ class _LocalSectionCache {
       return [];
     }
   }
-
-  // Permet de forcer le rafraîchissement si nécessaire
   static void invalidate() {
     _cachedSections = null;
     _lastFetch = null;
   }
 }
-// -----------------------------------
-
 class SectionGroupsView extends StatefulWidget {
   const SectionGroupsView({super.key});
   @override
   State<SectionGroupsView> createState() => _SectionGroupsViewState();
 }
-
 class _SectionGroupsViewState extends State<SectionGroupsView> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   final Set<String> _selectedFilterIds = {};
-
   @override
   void initState() {
     super.initState();
@@ -57,34 +43,26 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       setState(() => _searchQuery = _searchController.text);
     });
   }
-
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
-
   Map<String, dynamic> _processData(
       List<SectionGroup> allGroups, List<ProductFilter> allFilters) {
     List<SectionGroup> filteredGroups = allGroups;
-
-    // Filtre par recherche
     if (_searchQuery.isNotEmpty) {
       filteredGroups = filteredGroups
           .where((g) =>
           g.name.toLowerCase().contains(_searchQuery.toLowerCase()))
           .toList();
     }
-
-    // Filtre par tags/filtres
     if (_selectedFilterIds.isNotEmpty) {
       filteredGroups = filteredGroups
           .where((g) =>
           g.filterIds.any((id) => _selectedFilterIds.contains(id)))
           .toList();
     }
-
-    // Tri alphabétique
     Set<String> activeFilterIds = {};
     for (var group in allGroups) {
       activeFilterIds.addAll(group.filterIds);
@@ -94,18 +72,15 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
         .toList();
     visibleFilters.sort((a, b) => a.name.compareTo(b.name));
     filteredGroups.sort((a, b) => a.name.compareTo(b.name));
-
     return {
       'groups': filteredGroups,
       'filters': visibleFilters,
     };
   }
-
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: StreamBuilder<List<ProductFilter>>(
@@ -117,11 +92,9 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
               if (!filterSnapshot.hasData || !groupSnapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-
               final processed = _processData(groupSnapshot.data!, filterSnapshot.data!);
               final List<SectionGroup> groupsToShow = processed['groups'];
               final List<ProductFilter> relevantFilters = processed['filters'];
-
               return Column(
                 children: [
                   _buildHeader(relevantFilters),
@@ -156,7 +129,6 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-
   Widget _buildHeader(List<ProductFilter> filters) {
     return Container(
       decoration: BoxDecoration(
@@ -240,7 +212,6 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -261,7 +232,6 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-
   Widget _buildGroupCard(BuildContext context, SectionGroup group, FranchiseRepository repository) {
     return Container(
       decoration: BoxDecoration(
@@ -348,7 +318,6 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-
   Widget _buildActionButton({required IconData icon, required Color color, required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
@@ -363,7 +332,6 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-
   void _duplicateGroup(BuildContext context, FranchiseRepository repository, SectionGroup group) async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -371,11 +339,9 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
         behavior: SnackBarBehavior.floating,
       ),
     );
-    // Invalider le cache au cas où cela impacte l'ordre ou les ID
     _LocalSectionCache.invalidate();
     await repository.duplicateSectionGroup(group);
   }
-
   void _deleteGroup(BuildContext context, FranchiseRepository repository, SectionGroup group) async {
     final confirm = await showDialog<bool>(
         context: context,
@@ -401,27 +367,21 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
     }
   }
 }
-
 class SectionGroupFormView extends StatefulWidget {
   final SectionGroup? groupToEdit;
   const SectionGroupFormView({super.key, this.groupToEdit});
   @override
   State<SectionGroupFormView> createState() => _SectionGroupFormViewState();
 }
-
 class _SectionGroupFormViewState extends State<SectionGroupFormView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-
-  // Contrôleur pour la recherche de sections
   final _sectionSearchController = TextEditingController();
   String _sectionSearchQuery = "";
-
   List<ProductSection> _availableSections = [];
   List<ProductSection> _selectedSections = [];
   List<String> _selectedFilterIds = [];
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -429,46 +389,31 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       _nameController.text = widget.groupToEdit!.name;
       _selectedFilterIds = List.from(widget.groupToEdit!.filterIds);
     }
-
-    // Écouteur pour la recherche en temps réel
     _sectionSearchController.addListener(() {
       setState(() {
         _sectionSearchQuery = _sectionSearchController.text;
       });
     });
-
     _loadAndCategorizeSections();
   }
-
   @override
   void dispose() {
     _nameController.dispose();
     _sectionSearchController.dispose();
     super.dispose();
   }
-
   Future<void> _loadAndCategorizeSections() async {
     setState(() => _isLoading = true);
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-
-    // --- UTILISATION DU CACHE LOCAL ---
-    // On utilise notre classe interne _LocalSectionCache au lieu du repository
     final allSections = await _LocalSectionCache.getSections(repository, authProvider.firebaseUser!.uid);
-
     if (!mounted) return;
-
     if (widget.groupToEdit != null) {
       final groupSectionIds = widget.groupToEdit!.sectionIds;
-
-      // On filtre d'abord pour ne garder que les sections qui existent vraiment
-      // Cela évite l'erreur "not-found" si une section a été supprimée
       _selectedSections = groupSectionIds
           .where((id) => allSections.any((s) => s.sectionId == id))
           .map((id) => allSections.firstWhere((s) => s.sectionId == id))
           .toList();
-
-      // Les sections disponibles sont celles qui ne sont pas dans le groupe
       _availableSections = allSections
           .where((s) => !groupSectionIds.contains(s.sectionId))
           .toList();
@@ -476,10 +421,8 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       _availableSections = allSections;
       _selectedSections = [];
     }
-
     setState(() => _isLoading = false);
   }
-
   Future<void> _saveGroup() async {
     if (!_formKey.currentState!.validate() || _selectedSections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -507,7 +450,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -560,7 +502,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ),
     );
   }
-
   Widget _buildFilterSelector(BuildContext context) {
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -609,14 +550,11 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ],
     );
   }
-
   Widget _buildDragDropLists() {
-    // FILTRAGE DES SECTIONS DISPONIBLES EN FONCTION DE LA RECHERCHE
     final visibleAvailableSections = _availableSections.where((section) {
       if (_sectionSearchQuery.isEmpty) return true;
       return section.title.toLowerCase().contains(_sectionSearchQuery.toLowerCase());
     }).toList();
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
       child: Row(
@@ -625,7 +563,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
           Expanded(
               child: _buildSectionColumn(
                   "Sections Disponibles",
-                  visibleAvailableSections, // Utilisation de la liste filtrée
+                  visibleAvailableSections, 
                   isSource: true)),
           const SizedBox(width: 16),
           Expanded(
@@ -636,7 +574,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ),
     );
   }
-
   Widget _buildSectionColumn(String title, List<ProductSection> sections,
       {required bool isSource}) {
     return DragTarget<ProductSection>(
@@ -668,7 +605,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
                       Text(title,
                           style: const TextStyle(
                               fontWeight: FontWeight.bold, fontSize: 14)),
-                      // AJOUT : BARRE DE RECHERCHE LOCALE AUX COLONNES
                       if (isSource) ...[
                         const SizedBox(height: 8),
                         TextField(
@@ -718,7 +654,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }),
     );
   }
-
   Widget _buildDraggableList(List<ProductSection> sections) {
     if (sections.isEmpty) {
       return Center(
@@ -740,7 +675,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       },
     );
   }
-
   Widget _buildReorderableTargetList(List<ProductSection> sections) {
     if (sections.isEmpty) {
       return Center(
@@ -767,7 +701,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }),
     );
   }
-
   Widget _buildSectionTile(ProductSection section,
       {bool hasHandle = false, int? index}) {
     return Container(
@@ -802,7 +735,6 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ),
     );
   }
-
   Widget _buildFeedbackTile(ProductSection section) => Material(
     color: Colors.transparent,
     child: Container(

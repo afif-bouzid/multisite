@@ -9,7 +9,7 @@ import '../../../../../core/services/printing_service.dart';
 import '../../franchisee_stats_view.dart';
 import '../../shared/payment_dialogs.dart';
 import '../pos_dialogs.dart';
-import 'product_view_content.dart'; // Import crucial pour accéder à ProductOptionsPage
+import 'product_view_content.dart';
 
 class CartPanel extends StatefulWidget {
   final PosData posData;
@@ -197,7 +197,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
             )));
   }
 
-  // --- LOGIQUE COMMANDE ET PAIEMENT ---
   Future<void> _handleSavePendingOrder(CartProvider cart) async {
     HapticFeedback.lightImpact();
     if (cart.orderIdentifier == null || cart.orderIdentifier!.isEmpty) {
@@ -214,7 +213,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
     final String typeStr = cart.orderType == OrderType.takeaway ? 'takeaway' : 'onSite';
 
     cart.clearCart();
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Commande mise en attente."), backgroundColor: Colors.blueAccent, duration: Duration(seconds: 1)));
     }
@@ -226,7 +224,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
 
   Future<void> _handleSendToKitchen(CartProvider cart) async {
     final printerConfig = widget.posData.printerConfig;
-
     if (cart.orderIdentifier == null || cart.orderIdentifier!.isEmpty) {
       final identifier = await _showIdentifierDialog();
       if (identifier == null || identifier.isEmpty) return;
@@ -234,7 +231,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       _identifierController.text = identifier;
     }
 
-    // 1. On prépare le libellé en Français pour l'imprimante
     final String kitchenOrderType = cart.orderType == OrderType.takeaway
         ? "A EMPORTER"
         : "SUR PLACE";
@@ -257,14 +253,13 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       if (confirmReprint != true) return;
 
       if (printerConfig.isKitchenPrintingEnabled) {
-        // RÉIMPRESSION
         await PrintingService().printKitchenTicketSafe(
           printerConfig: printerConfig,
-          itemsToPrint: cart.items, // On envoie la liste
+          itemsToPrint: cart.items,
           identifier: cart.orderIdentifier!,
           isUpdate: false,
           isReprint: true,
-          orderType: kitchenOrderType, // On passe l'info ici
+          orderType: kitchenOrderType,
         );
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Réimpression envoyée."), backgroundColor: Colors.blue));
@@ -273,7 +268,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       return;
     }
 
-    // ENVOI NORMAL
     cart.markUnsentItemsAsSent();
     HapticFeedback.heavyImpact();
 
@@ -284,10 +278,11 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
         identifier: cart.orderIdentifier!,
         isUpdate: cart.items.length > itemsToPrint.length,
         isReprint: false,
-        orderType: kitchenOrderType, // On passe l'info ici aussi
+        orderType: kitchenOrderType,
       );
     }
   }
+
   Future<void> _processPayment(Map<String, dynamic> paymentMethods, CartProvider cart) async {
     if (cart.items.isEmpty) return;
 
@@ -371,11 +366,11 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
       customerName: null,
       kioskName: null,
     );
+
     try {
       await FranchiseRepository().recordTransaction(transaction);
       cart.clearCart();
       if (!mounted) return;
-
       await showDialog(
         context: context,
         barrierDismissible: false,
@@ -468,11 +463,14 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
     );
   }
 
+  // LE COMPTEUR EST DE RETOUR : Il filtre les commandes bornes payées !
   Widget _buildPendingOrdersButton() {
     return StreamBuilder<List<PendingOrder>>(
       stream: FranchiseRepository().getPendingOrdersStream(widget.franchiseeId),
       builder: (context, snapshot) {
-        final count = snapshot.data?.length ?? 0;
+        // On filtre pour ne compter que les vraies commandes en attente (NON PAYÉES)
+        final orders = snapshot.data?.where((o) => !(o.source == 'borne' && o.isPaid)).toList() ?? [];
+        final count = orders.length;
         final bool hasOrders = count > 0;
 
         return ElevatedButton(
@@ -595,7 +593,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                   ],
                 ),
               ),
-
               Expanded(
                 child: cart.items.isEmpty
                     ? Center(
@@ -614,7 +611,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                   },
                 ),
               ),
-
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(color: Colors.white, boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, -5))]),
@@ -649,7 +645,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                       Text("${cart.total.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900)),
                     ]),
                     const Divider(height: 24),
-
                     Row(children: [
                       Expanded(
                         child: OutlinedButton(
@@ -670,7 +665,6 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                       ]
                     ]),
                     const SizedBox(height: 16),
-
                     SizedBox(
                       width: double.infinity, height: 75,
                       child: ElevatedButton(
@@ -738,13 +732,10 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
   }
 }
 
-// --- WIDGET ITEM PANIER ---
-
 class _CartItemCard extends StatelessWidget {
   final CartItem item;
   final CartProvider cart;
   final PosData posData;
-
   const _CartItemCard({
     required this.item,
     required this.cart,
@@ -753,7 +744,6 @@ class _CartItemCard extends StatelessWidget {
 
   Future<void> _editItem(BuildContext context) async {
     final sections = posData.allSections.where((s) => item.product.sectionIds.contains(s.sectionId)).toList();
-
     final CartItem? editedItem = await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -769,7 +759,6 @@ class _CartItemCard extends StatelessWidget {
         ),
       ),
     );
-
     if (editedItem != null) {
       cart.removeItem(item);
       cart.addItem(editedItem);
@@ -781,7 +770,6 @@ class _CartItemCard extends StatelessWidget {
     final Map<String, List<SectionItem>> groupedOptions = item.selectedOptions;
     final List<String> sortedSectionIds = groupedOptions.keys.toList();
     final bool isEditable = item.product.sectionIds.isNotEmpty || item.product.isComposite;
-
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
@@ -792,7 +780,6 @@ class _CartItemCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Bouton Moins (-)
             if (!item.isSentToKitchen && item.quantity > 1)
               InkWell(
                 onTap: () => cart.decrementItemQuantity(item),
@@ -802,8 +789,6 @@ class _CartItemCard extends StatelessWidget {
                   child: Icon(Icons.remove, color: Colors.red.shade900, size: 32),
                 ),
               ),
-
-            // Corps du produit
             Expanded(
               child: InkWell(
                 onTap: item.isSentToKitchen ? null : () => cart.incrementItemQuantity(item),
@@ -813,7 +798,6 @@ class _CartItemCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Ligne Titre + Prix Total Ligne
                       Row(
                         children: [
                           Container(
@@ -828,13 +812,10 @@ class _CartItemCard extends StatelessWidget {
                           Text("${item.total.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
                         ],
                       ),
-
-                      // --- OPTIONS EN LIGNE (WRAP) AVEC PRIX ---
                       if (groupedOptions.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         ...sortedSectionIds.map((sectionId) {
                           final options = groupedOptions[sectionId]!;
-
                           return Container(
                             width: double.infinity,
                             margin: const EdgeInsets.only(top: 4),
@@ -844,12 +825,10 @@ class _CartItemCard extends StatelessWidget {
                               spacing: 8.0,
                               runSpacing: 2.0,
                               children: options.map((opt) {
-                                // Calcul du texte à afficher
                                 String displayText = "+ ${opt.product.name}";
                                 if (opt.supplementPrice > 0) {
                                   displayText += " (${opt.supplementPrice.toStringAsFixed(2)}€)";
                                 }
-
                                 return Text(
                                     displayText,
                                     style: TextStyle(
@@ -863,8 +842,6 @@ class _CartItemCard extends StatelessWidget {
                           );
                         }).toList(),
                       ],
-                      // ------------------------------------------
-
                       if (item.removedIngredientNames.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6.0),
@@ -875,8 +852,6 @@ class _CartItemCard extends StatelessWidget {
                 ),
               ),
             ),
-
-            // Boutons Actions (Edit / Delete)
             if (!item.isSentToKitchen)
               Column(
                 children: [

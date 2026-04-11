@@ -1,10 +1,9 @@
-﻿import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:ouiborne/screens/login/quick_login_screen.dart';
 import 'package:provider/provider.dart';
-
 import 'back_office/views/franchisee/franchisee_about_view.dart';
 import 'back_office/views/franchisee/franchisee_catalogue_view.dart';
 import 'back_office/views/franchisee/franchisee_dashboard_view.dart';
@@ -21,32 +20,18 @@ import 'core/cart_provider.dart';
 import 'core/firebase_options.dart';
 import 'core/providers/update_provider.dart';
 import 'core/theme/app_colors.dart';
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // ============================================================
-  // OPTIMISATION PERFORMANCE : AUGMENTATION DU CACHE MÉMOIRE
-  // ============================================================
-  // Augmente la limite de mémoire cache pour les images à 600 MB (défaut: 100 MB)
-  // Cela empêche les images de se recharger et de clignoter.
   PaintingBinding.instance.imageCache.maximumSizeBytes = 1024 * 1024 * 600;
-
-  // Augmente le nombre maximum d'images gardées en cache à 5000 (défaut: 1000)
   PaintingBinding.instance.imageCache.maximumSize = 5000;
-  // ============================================================
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   await initializeDateFormatting('fr_FR', null);
-
   runApp(const MyApp());
 }
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -145,11 +130,9 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
 class AppRouter {
   final AuthProvider authProvider;
   late final GoRouter router;
-
   AppRouter({required this.authProvider}) {
     router = GoRouter(
       refreshListenable: authProvider,
@@ -196,7 +179,6 @@ class AppRouter {
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.firebaseUser != null;
         final isLoggingIn = state.matchedLocation == '/login';
-
         if (!isLoggedIn) return isLoggingIn ? null : '/login';
         if (isLoggingIn && isLoggedIn) {
           if (authProvider.franchiseUser?.isFranchisor == true) {
@@ -210,19 +192,15 @@ class AppRouter {
     );
   }
 }
-
 class LoginView extends StatefulWidget {
   const LoginView({super.key});
-
   @override
   State<LoginView> createState() => _LoginViewState();
 }
-
 class _LoginViewState extends State<LoginView> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   String? _errorMessage;
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(

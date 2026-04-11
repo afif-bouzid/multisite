@@ -2,15 +2,13 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-
 class ImageInputCard extends StatelessWidget {
   final XFile? imageFile;
   final String? imageUrl;
   final VoidCallback onPick;
   final VoidCallback onRemove;
   final String label;
-  final double size; // Pour gérer la taille (petit ou grand)
-
+  final double size; 
   const ImageInputCard({
     super.key,
     required this.imageFile,
@@ -18,18 +16,14 @@ class ImageInputCard extends StatelessWidget {
     required this.onPick,
     required this.onRemove,
     this.label = "Photo",
-    this.size = 140, // Taille par défaut
+    this.size = 140, 
   });
-
   @override
   Widget build(BuildContext context) {
-    // Y a-t-il une image à afficher ?
     final bool hasImage = imageFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
-
     return Stack(
       clipBehavior: Clip.none,
       children: [
-        // La zone image / bouton
         InkWell(
           onTap: onPick,
           borderRadius: BorderRadius.circular(12),
@@ -60,8 +54,6 @@ class ImageInputCard extends StatelessWidget {
                 : null,
           ),
         ),
-
-        // La petite croix rouge (visible uniquement si image)
         if (hasImage)
           Positioned(
             top: -6,
@@ -82,7 +74,6 @@ class ImageInputCard extends StatelessWidget {
       ],
     );
   }
-
   DecorationImage _buildDecorationImage() {
     if (imageFile != null) {
       if (kIsWeb) {

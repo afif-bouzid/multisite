@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
 class FranchiseesView extends StatelessWidget {
   const FranchiseesView({super.key});
-
   void _deleteFranchisee(BuildContext context, FranchiseRepository repository,
       FranchiseUser franchisee) async {
     final emailConfirmationController = TextEditingController();
@@ -69,7 +66,6 @@ class FranchiseesView extends StatelessWidget {
         ],
       ),
     );
-
     if (confirmed == true) {
       if (!context.mounted) return;
       showDialog(
@@ -83,12 +79,9 @@ class FranchiseesView extends StatelessWidget {
                     SizedBox(width: 20),
                     Text("Suppression en cours...")
                   ]))));
-
       final error = await repository.deleteFranchiseeAccount(franchisee.uid);
-
       if (!context.mounted) return;
       Navigator.pop(context);
-
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(error == null
             ? "Franchisé supprimé avec succès."
@@ -97,13 +90,11 @@ class FranchiseesView extends StatelessWidget {
       ));
     }
   }
-
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
     final uid =
         Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: StreamBuilder<List<FranchiseUser>>(
@@ -129,7 +120,6 @@ class FranchiseesView extends StatelessWidget {
               ),
             );
           }
-
           final franchisees = snapshot.data!;
           return ListView.separated(
             padding: const EdgeInsets.all(16.0),
@@ -246,7 +236,6 @@ class FranchiseesView extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildActionButton(
       {required IconData icon,
         required Color color,
@@ -265,16 +254,12 @@ class FranchiseesView extends StatelessWidget {
     );
   }
 }
-
 class FranchiseeFormView extends StatefulWidget {
   final FranchiseUser? franchiseeToEdit;
-
   const FranchiseeFormView({super.key, this.franchiseeToEdit});
-
   @override
   State<FranchiseeFormView> createState() => _FranchiseeFormViewState();
 }
-
 class _FranchiseeFormViewState extends State<FranchiseeFormView> {
   final _formKey = GlobalKey<FormState>();
   final _companyNameController = TextEditingController();
@@ -285,11 +270,9 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   late bool _isEditing;
-
   bool _moduleKioskEnabled = true;
   bool _moduleClickAndCollectEnabled = false;
   bool _moduleDealsEnabled = true;
-
   @override
   void initState() {
     super.initState();
@@ -307,7 +290,6 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       _moduleDealsEnabled = franchisee.enabledModules['deals'] ?? true;
     }
   }
-
   @override
   void dispose() {
     _companyNameController.dispose();
@@ -318,7 +300,6 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
     _passwordController.dispose();
     super.dispose();
   }
-
   Future<void> _saveFranchisee() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -329,7 +310,6 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       'click_and_collect': _moduleClickAndCollectEnabled,
       'deals': _moduleDealsEnabled,
     };
-
     if (_isEditing) {
       result = await repository.updateFranchiseeDetails(
         uid: widget.franchiseeToEdit!.uid,
@@ -350,9 +330,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
         enabledModules: enabledModules,
       );
     }
-
     if (!mounted) return;
-
     if (result == null) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -364,12 +342,10 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Erreur: $result"), backgroundColor: Colors.red));
     }
-
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -586,7 +562,6 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       ),
     );
   }
-
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
@@ -598,20 +573,16 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
     );
   }
 }
-
 class FranchiseeEmployeesSection extends StatelessWidget {
   final String franchiseeId;
   final FranchiseRepository repository = FranchiseRepository();
-
   FranchiseeEmployeesSection({super.key, required this.franchiseeId});
-
   void _showAddEmployeeDialog(BuildContext context) {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
-
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -672,7 +643,6 @@ class FranchiseeEmployeesSection extends StatelessWidget {
                     password: passwordController.text.trim(),
                   );
                   setState(() => isLoading = false);
-
                   if (context.mounted) {
                     if (error == null) {
                       Navigator.pop(ctx);
@@ -695,7 +665,6 @@ class FranchiseeEmployeesSection extends StatelessWidget {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -751,7 +720,6 @@ class FranchiseeEmployeesSection extends StatelessWidget {
                   ),
                 );
               }
-
               return ListView.separated(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),

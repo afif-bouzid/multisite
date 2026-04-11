@@ -1,11 +1,11 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'dart:async'; // TRÈS IMPORTANT : Pour utiliser StreamSubscription
+
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:ouiborne/back_office/views/franchisee/till/pos_dialogs.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:flutter_cache_manager/flutter_cache_manager.dart'; // Nécessaire pour le CacheManager custom
-
-// --- IMPORTS ---
+import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import '../../../../../core/auth_provider.dart';
 import '../../../../../core/cart_provider.dart';
 import '../../../../../core/repository/repository.dart';
@@ -34,11 +34,12 @@ class _PosViewState extends State<PosView> {
   late String _effectiveFranchisorId;
   String? _selectedCategoryId;
 
-  // --- 1. CONFIGURATION DU CACHE PERSISTANT ---
-  // On garde les images 1 an et jusqu'à 2000 fichiers pour éviter qu'elles ne s'effacent.
+  // LE BLINDAGE : Écouteur en arrière-plan sans plantage
+  StreamSubscription<List<PendingOrder>>? _backgroundArchiveSub;
+
   static final customCacheManager = CacheManager(
     Config(
-      'posImageCache', // Clé unique pour isoler ce cache
+      'posImageCache',
       stalePeriod: const Duration(days: 365),
       maxNrOfCacheObjects: 2000,
       repo: JsonCacheInfoRepository(databaseName: 'posImageCache'),
@@ -53,13 +54,40 @@ class _PosViewState extends State<PosView> {
     _effectiveFranchiseeId = widget.franchiseeId ?? auth.franchiseUser!.effectiveStoreId;
     _effectiveFranchisorId = widget.franchisorId ?? (auth.franchiseUser?.franchisorId ?? '');
     _posDataFutureState = _loadData();
+
+    // LANCEMENT DE L'ÉCOUTEUR DE NETTOYAGE SILENCIEUX (Version Production)
+    _backgroundArchiveSub = FranchiseRepository()
+        .getPendingOrdersStream(_effectiveFranchiseeId)
+        .listen(
+          (orders) async {
+        for (var order in orders) {
+          if (order.source == 'borne' && order.isPaid) {
+            try {
+              // Tentative sécurisée d'effacement
+              await FranchiseRepository().deletePendingOrder(order.id);
+            } catch (e) {
+              // Ne fait pas planter l'application en cas d'erreur de connexion momentanée
+              debugPrint("Échec de la suppression silencieuse de la commande ${order.id} : $e");
+            }
+          }
+        }
+      },
+      onError: (error) {
+        debugPrint("Erreur critique sur le flux des commandes en attente : $error");
+      },
+      cancelOnError: false, // Ne ferme jamais l'écoute, même en cas de coupure réseau
+    );
   }
 
-  // --- CHARGEMENT ---
+  @override
+  void dispose() {
+    _backgroundArchiveSub?.cancel();
+    super.dispose();
+  }
+
   Future<PosData> _loadData() async {
     final repo = FranchiseRepository();
     final firestore = FirebaseFirestore.instance;
-
     final results = await Future.wait([
       repo.getFiltersStream(_effectiveFranchisorId).first,
       repo.getKioskCategoriesStream(_effectiveFranchisorId).first,
@@ -71,26 +99,21 @@ class _PosViewState extends State<PosView> {
     ]);
 
     final visibleProducts = results[5] as List<MasterProduct>;
-
-    // --- OPTIMISATION "INSTANTANÉ" AVEC CACHE LONGUE DURÉE ---
     if (mounted) {
       final imagesToLoad = visibleProducts
           .where((p) => p.photoUrl != null && p.photoUrl!.isNotEmpty)
           .map((p) => precacheImage(
         CachedNetworkImageProvider(
           p.photoUrl!,
-          cacheManager: customCacheManager, // Utilisation du cache custom
+          cacheManager: customCacheManager,
         ),
         context,
       ))
           .toList();
-
       await Future.wait(imagesToLoad);
     }
-    // ---------------------------------
 
     final menuSnapshot = results[6] as QuerySnapshot;
-
     final menuSettings = <String, FranchiseeMenuItem>{
       for (var doc in menuSnapshot.docs)
         doc.id: FranchiseeMenuItem.fromFirestore(doc.data() as Map<String, dynamic>)
@@ -106,11 +129,9 @@ class _PosViewState extends State<PosView> {
     );
   }
 
-  // --- AJOUT AU PANIER ---
   void _addToCart(MasterProduct product, PosData posData) {
     final settings = posData.menuSettings[product.productId];
     final double price = settings?.price ?? 0.0;
-
     context.read<CartProvider>().addItem(CartItem(
       product: product,
       price: price,
@@ -118,7 +139,6 @@ class _PosViewState extends State<PosView> {
       vatRate: settings?.vatRate ?? 10.0,
       selectedOptions: {},
     ));
-
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text("${product.name} ajouté !"),
@@ -127,12 +147,10 @@ class _PosViewState extends State<PosView> {
     ));
   }
 
-  // --- MODALE DOSSIER ---
   void _showContainerModal(BuildContext context, MasterProduct container, PosData posData) {
     final children = posData.products
         .where((p) => container.containerProductIds.contains(p.productId))
         .toList();
-
     showDialog(
       context: context,
       builder: (ctx) {
@@ -161,7 +179,6 @@ class _PosViewState extends State<PosView> {
               itemBuilder: (ctx, index) {
                 final child = children[index];
                 final price = posData.menuSettings[child.productId]?.price ?? 0.0;
-
                 return InkWell(
                   onTap: () => _addToCart(child, posData),
                   child: Card(
@@ -175,7 +192,7 @@ class _PosViewState extends State<PosView> {
                             child: (child.photoUrl != null && child.photoUrl!.isNotEmpty)
                                 ? CachedNetworkImage(
                               imageUrl: child.photoUrl!,
-                              cacheManager: customCacheManager, // Cache custom
+                              cacheManager: customCacheManager,
                               fit: BoxFit.contain,
                               fadeInDuration: Duration.zero,
                               placeholder: (context, url) => const SizedBox(),
@@ -229,8 +246,8 @@ class _PosViewState extends State<PosView> {
 
         final posData = snapshot.data!;
         final bool isTablet = MediaQuery.of(context).size.width >= 900;
-
         List<MasterProduct> displayedProducts = posData.products;
+
         if (_selectedCategoryId != null) {
           final category = posData.kioskCategories.firstWhere(
                   (c) => c.id == _selectedCategoryId,
@@ -246,22 +263,18 @@ class _PosViewState extends State<PosView> {
           appBar: AppBar(title: const Text("Caisse Enregistreuse")),
           body: Row(
             children: [
-              // GAUCHE : GRILLE
               Expanded(
                 flex: 7,
                 child: Column(
                   children: [
-                    // Barre Catégories
                     Container(
                       height: 60,
                       color: Colors.white,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
                         padding: const EdgeInsets.all(10),
-                        // --- 2. SUPPRESSION DU FILTRE "TOUS" ---
-                        itemCount: posData.kioskCategories.length, // On enlève le +1
+                        itemCount: posData.kioskCategories.length,
                         itemBuilder: (context, index) {
-                          // On accède directement à l'index sans décalage
                           final cat = posData.kioskCategories[index];
                           return Padding(
                             padding: const EdgeInsets.only(right: 8),
@@ -274,8 +287,6 @@ class _PosViewState extends State<PosView> {
                         },
                       ),
                     ),
-
-                    // Grille Produits
                     Expanded(
                       child: GridView.builder(
                         padding: const EdgeInsets.all(12),
@@ -322,7 +333,7 @@ class _PosViewState extends State<PosView> {
                                         child: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
                                             ? CachedNetworkImage(
                                           imageUrl: product.photoUrl!,
-                                          cacheManager: customCacheManager, // Cache custom
+                                          cacheManager: customCacheManager,
                                           fit: BoxFit.cover,
                                           fadeInDuration: Duration.zero,
                                           fadeOutDuration: Duration.zero,
@@ -354,8 +365,6 @@ class _PosViewState extends State<PosView> {
                   ],
                 ),
               ),
-
-              // DROITE : PANIER
               if (isTablet)
                 Expanded(
                   flex: 3,

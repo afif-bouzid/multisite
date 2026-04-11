@@ -1,5 +1,4 @@
-﻿import 'package:flutter/material.dart';
-
+import 'package:flutter/material.dart';
 const List<String> kColorPalette = [
   '#F44336',
   '#E91E63',
@@ -21,7 +20,6 @@ const List<String> kColorPalette = [
   '#9E9E9E',
   '#607D8B',
 ];
-
 Color colorFromHex(String hexColor) {
   hexColor = hexColor.toUpperCase().replaceAll("#", "");
   if (hexColor.length == 6) {

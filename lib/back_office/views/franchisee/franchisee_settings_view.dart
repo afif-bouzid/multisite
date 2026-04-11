@@ -1,13 +1,10 @@
-﻿import 'package:blue_thermal_printer/blue_thermal_printer.dart';
+import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:flutter/material.dart';
-
 import '../../../core/services/local_config_service.dart';
 import '../../../core/services/printing_service.dart';
 import '../../../models.dart';
-
 class FranchiseeSettingsView extends StatelessWidget {
   const FranchiseeSettingsView({super.key});
-
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
@@ -31,62 +28,47 @@ class FranchiseeSettingsView extends StatelessWidget {
     );
   }
 }
-
 class PrinterSettingsForm extends StatefulWidget {
   const PrinterSettingsForm({super.key});
-
   @override
   State<PrinterSettingsForm> createState() => _PrinterSettingsFormState();
 }
-
 class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   final _formKey = GlobalKey<FormState>();
   final _receiptIpController = TextEditingController();
   final _kitchenIpController = TextEditingController();
-
   bool _useBluetooth = false;
   List<BluetoothDevice> _devices = [];
   BluetoothDevice? _selectedDevice;
   bool _isScanning = false;
-
   final LocalConfigService _localService = LocalConfigService();
   final PrintingService _printingService = PrintingService();
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
     _loadSettings();
   }
-
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
     final config = await _localService.getPrinterConfig();
-
     if (mounted) {
       setState(() {
         _receiptIpController.text = config.ipAddress;
         _useBluetooth = config.isBluetooth;
-        _kitchenIpController.text = "192.168.1.100"; // Ou charger depuis config si dispo
+        _kitchenIpController.text = "192.168.1.100"; 
       });
-
       if (_useBluetooth) {
         await _scanBluetoothDevices();
-
-        // Logique de reconnexion automatique à l'ouverture
         if (config.macAddress != null && _devices.isNotEmpty) {
           try {
             final device = _devices.firstWhere(
                   (d) => d.address == config.macAddress,
             );
-
             setState(() {
               _selectedDevice = device;
             });
-
-            // SUPER IMPORTANT : On réinjecte l'imprimante dans le service actif
             _printingService.selectDevice(device);
-
           } catch (e) {
             _selectedDevice = null;
           }
@@ -95,13 +77,11 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
     }
     setState(() => _isLoading = false);
   }
-
   Future<void> _scanBluetoothDevices() async {
     setState(() {
       _isScanning = true;
       _devices = [];
     });
-
     try {
       final devices = await _printingService.getBluetoothDevices();
       if (mounted) {
@@ -121,13 +101,9 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
       }
     }
   }
-
-  // --- C'EST ICI QUE TOUT SE JOUE ---
   Future<void> _saveSettings() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-
-      // 1. Sauvegarde dans la base de données locale (Persistance long terme)
       final newConfig = PrinterConfig(
         name: _useBluetooth
             ? (_selectedDevice?.name ?? 'Imprimante BT')
@@ -136,15 +112,10 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
         isBluetooth: _useBluetooth,
         macAddress: _useBluetooth ? _selectedDevice?.address : null,
       );
-
       await _localService.savePrinterConfig(newConfig);
-
-      // 2. MISE A JOUR IMMEDIATE DU SERVICE D'IMPRESSION (Session en cours)
-      // C'est ce qui manquait : on force le service à utiliser ce device tout de suite
       if (_useBluetooth && _selectedDevice != null) {
         await _printingService.selectDevice(_selectedDevice!);
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -156,23 +127,18 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
       }
     }
   }
-
   Future<void> _testPrint() async {
     setState(() => _isLoading = true);
     try {
-      // On s'assure que le service a bien l'info avant de tester
       if (_useBluetooth && _selectedDevice != null) {
         _printingService.selectDevice(_selectedDevice!);
       }
-
       final testConfig = PrinterConfig(
         ipAddress: _receiptIpController.text,
         isBluetooth: _useBluetooth,
         macAddress: _selectedDevice?.address,
       );
-
       await _printingService.printTestTicket(printerConfig: testConfig);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ticket de test envoyé')),
@@ -190,13 +156,11 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Form(
@@ -321,33 +285,26 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
     );
   }
 }
-
 class ReceiptSettingsForm extends StatefulWidget {
   const ReceiptSettingsForm({super.key});
-
   @override
   State<ReceiptSettingsForm> createState() => _ReceiptSettingsFormState();
 }
-
 class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
   final headerController = TextEditingController();
   final footerController = TextEditingController();
   final LocalConfigService _localService = LocalConfigService();
-
   ReceiptConfig _config = ReceiptConfig(
       headerText: '',
       footerText: '',
       showVatDetails: true,
       printReceiptOnPayment: true);
-
   bool _isLoading = true;
-
   @override
   void initState() {
     super.initState();
     _loadReceiptSettings();
   }
-
   Future<void> _loadReceiptSettings() async {
     setState(() => _isLoading = true);
     final config = await _localService.getReceiptConfig();
@@ -358,14 +315,12 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
       _isLoading = false;
     });
   }
-
   Future<void> _saveSettings(
       {String? headerText,
         String? footerText,
         bool? showVatDetails,
         bool? printReceiptOnPayment}) async {
     setState(() => _isLoading = true);
-
     final newConfig = ReceiptConfig(
       headerText: headerText ?? headerController.text,
       footerText: footerText ?? footerController.text,
@@ -373,25 +328,20 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
       printReceiptOnPayment:
       printReceiptOnPayment ?? _config.printReceiptOnPayment,
     );
-
     await _localService.saveReceiptConfig(newConfig);
-
     setState(() {
       _config = newConfig;
       _isLoading = false;
     });
-
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Préférences sauvegardées')),
       );
     }
   }
-
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [

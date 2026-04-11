@@ -1,4 +1,5 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:flutter/material.dart';
 import 'package:ouiborne/back_office/views/franchisee/till/pos_dialogs.dart';
 import 'package:ouiborne/back_office/views/franchisee/till/widgets/cart_panel.dart';
@@ -7,6 +8,7 @@ import 'package:provider/provider.dart';
 
 // Imports Core
 import '../../../../../core/auth_provider.dart';
+import '../../../../core/services/printing_service.dart';
 import '/models.dart';
 import '../../../../../core/repository/repository.dart';
 
@@ -18,11 +20,99 @@ class FranchiseeTillView extends StatefulWidget {
 }
 
 class _FranchiseeTillViewState extends State<FranchiseeTillView> {
+  // Variable pour écouter les commandes de la borne
+  StreamSubscription? _kioskOrdersSubscription;
+  final Set<String> _printedOrders = {};
+
+  // LE BOUCLIER : Détecte si c'est le tout premier chargement
+  bool _isFirstLoad = true;
+
+  @override
+  void initState() {
+    super.initState();
+    // On lance l'écoute des commandes dès que l'écran de caisse s'initialise
+    _startListeningToKioskOrders();
+  }
+
+  @override
+  void dispose() {
+    // Très important : on coupe l'écoute quand on quitte la caisse
+    _kioskOrdersSubscription?.cancel();
+    super.dispose();
+  }
+
+  // --- LOGIQUE MÉTIER : DÉTECTION DES PAIEMENTS BORNE ET IMPRESSION AUTO ---
+  void _startListeningToKioskOrders() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final franchiseeId = authProvider.franchiseUser?.effectiveStoreId;
+      if (franchiseeId == null) return;
+
+      _kioskOrdersSubscription = FirebaseFirestore.instance
+          .collection('pending_orders')
+          .where('franchiseeId', isEqualTo: franchiseeId)
+          .snapshots()
+          .listen((snapshot) async {
+
+        // --- CORRECTION : IGNORER LES COMMANDES AU REDÉMARRAGE ---
+        if (_isFirstLoad) {
+          // On prend tous les documents qui sont DÉJÀ dans la base au démarrage
+          for (var doc in snapshot.docs) {
+            // On les ajoute à la mémoire silencieusement sans imprimer
+            _printedOrders.add(doc.id);
+          }
+          _isFirstLoad = false; // On désactive le bouclier
+          debugPrint("🚀 Démarrage caisse : ${_printedOrders.length} anciennes commandes bloquées pour impression.");
+          return; // On arrête l'exécution ici pour ce premier tour
+        }
+        // ---------------------------------------------------------
+
+        for (var change in snapshot.docChanges) {
+          // On écoute maintenant les AJOUTS (added) ET les MISES À JOUR (modified)
+          if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
+
+            final newOrder = PendingOrder.fromFirestore(change.doc);
+
+            // LOGIQUE MÉTIER : Ça vient de la borne ET c'est payé
+            if ((newOrder.source == 'borne' || newOrder.source == 'kiosk') && newOrder.isPaid) {
+
+              // SÉCURITÉ : On vérifie que ce ticket n'a pas DÉJÀ été imprimé
+              if (!_printedOrders.contains(newOrder.id)) {
+
+                // On l'ajoute à la mémoire pour bloquer les futures impressions de ce ticket
+                _printedOrders.add(newOrder.id);
+
+                try {
+                  final printerConfig = await FranchiseRepository().getPrinterConfigStream(franchiseeId).first;
+
+                  await PrintingService().printKitchenTicketSafe(
+                      printerConfig: printerConfig,
+                      itemsToPrint: newOrder.itemsAsMap,
+                      identifier: newOrder.identifier,
+                      orderType: newOrder.orderType,
+                      // ON ENVOIE LE NOM DU RESTAURANT ICI :
+                      franchisee: {
+                        'companyName': authProvider.franchiseUser?.companyName,
+                        'restaurantName': authProvider.franchiseUser?.restaurantName,
+                      }
+                  );
+
+                  debugPrint("🖨️ ✅ Impression auto cuisine lancée en direct pour : ${newOrder.identifier}");
+                } catch (e) {
+                  debugPrint("❌ Erreur lors de l'impression auto en cuisine : $e");
+                }
+              }
+            }
+          }
+        }
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final franchiseeId = authProvider.franchiseUser!.effectiveStoreId;
-
     final repository = FranchiseRepository();
 
     return StreamBuilder<TillSession?>(
@@ -100,7 +190,7 @@ class _PosContentState extends State<_PosContent> {
             .get(),
         repo
             .getFranchiseeVisibleProductsStream(
-                widget.franchiseeId, widget.franchisorId)
+            widget.franchiseeId, widget.franchisorId)
             .first,
         firestore
             .collection('users')
@@ -161,7 +251,6 @@ class _PosContentState extends State<_PosContent> {
         return a.name.compareTo(b.name);
       });
 
-      // --- CORRECTION ICI : On ne passe plus customSubFilterOrders ---
       return PosData(
         products: visibleProducts,
         menuSettings: menuSettings,
@@ -214,21 +303,21 @@ class _PosContentState extends State<_PosContent> {
           return Scaffold(
             body: Center(
                 child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                const SizedBox(height: 16),
-                Text("Erreur de chargement : ${snapshot.error}"),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                    onPressed: () {
-                      setState(() {
-                        _posDataFutureState = _loadData();
-                      });
-                    },
-                    child: const Text("Réessayer"))
-              ],
-            )),
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                    const SizedBox(height: 16),
+                    Text("Erreur de chargement : ${snapshot.error}"),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            _posDataFutureState = _loadData();
+                          });
+                        },
+                        child: const Text("Réessayer"))
+                  ],
+                )),
           );
         }
 
@@ -237,7 +326,6 @@ class _PosContentState extends State<_PosContent> {
         final bool isTablet = MediaQuery.of(context).size.width >= 900;
 
         return Scaffold(
-          // Couleur de fond légèrement teintée pour le confort
           backgroundColor: const Color(0xFFF3F4F6),
           body: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,7 +379,7 @@ class _TillOpenFormState extends State<TillOpenForm> {
     if (!_formKey.currentState!.validate()) return;
 
     final initialCash =
-        double.tryParse(_initialCashController.text.replaceAll(',', '.'));
+    double.tryParse(_initialCashController.text.replaceAll(',', '.'));
     if (initialCash == null || initialCash < 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -342,9 +430,9 @@ class _TillOpenFormState extends State<TillOpenForm> {
                         labelText: "Fonds de caisse initial (€)",
                         prefixIcon: Icon(Icons.euro_symbol)),
                     keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
+                    const TextInputType.numberWithOptions(decimal: true),
                     validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Requis' : null,
+                    (v == null || v.isEmpty) ? 'Requis' : null,
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -354,10 +442,10 @@ class _TillOpenFormState extends State<TillOpenForm> {
                       onPressed: _isLoading ? null : _openTill,
                       icon: _isLoading
                           ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                  strokeWidth: 2, color: Colors.white))
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.check),
                       label: const Text("Démarrer la Session"),
                       style: ElevatedButton.styleFrom(

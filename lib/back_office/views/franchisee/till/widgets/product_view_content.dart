@@ -8,8 +8,6 @@ import '../../../../../core/cart_provider.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../../models.dart';
 import '../pos_dialogs.dart';
-
-// --- UTILS ---
 Color? _colorFromHex(String? hexString) {
   if (hexString == null || hexString.isEmpty || !hexString.startsWith('#')) return null;
   try {
@@ -18,8 +16,6 @@ Color? _colorFromHex(String? hexString) {
     return null;
   }
 }
-
-// --- WIDGETS D'ANIMATION ---
 class BouncingButton extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
@@ -28,18 +24,15 @@ class BouncingButton extends StatefulWidget {
   @override
   State<BouncingButton> createState() => _BouncingButtonState();
 }
-
 class _BouncingButtonState extends State<BouncingButton> with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   final Duration _duration = const Duration(milliseconds: 80);
-
   @override
   void initState() {
     super.initState();
     _controller = AnimationController(vsync: this, duration: _duration, lowerBound: 0.96, upperBound: 1.0);
     _controller.value = 1.0;
   }
-
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -56,31 +49,23 @@ class _BouncingButtonState extends State<BouncingButton> with SingleTickerProvid
   @override
   void dispose() { _controller.dispose(); super.dispose(); }
 }
-
-// =============================================================================
-// 1. VUE PRINCIPALE (DASHBOARD)
-// =============================================================================
 class ProductViewContent extends StatefulWidget {
   final PosData posData;
   final String franchiseeId;
   final bool isTablet;
-
   const ProductViewContent({
     super.key,
     required this.posData,
     required this.franchiseeId,
     required this.isTablet,
   });
-
   @override
   State<ProductViewContent> createState() => _ProductViewContentState();
 }
-
 class _ProductViewContentState extends State<ProductViewContent> {
   String? _selectedKioskCategoryId;
   String? _selectedKioskFilterId;
   final List<MasterProduct> _folderStack = [];
-
   @override
   void initState() {
     super.initState();
@@ -91,24 +76,20 @@ class _ProductViewContentState extends State<ProductViewContent> {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) => _precacheAllActiveImages());
   }
-
   void _autoSelectFirstFilter(KioskCategory cat) {
     final validFilters = _getValidFiltersForCategory(cat);
     _selectedKioskFilterId = validFilters.isNotEmpty ? validFilters.first.id : null;
   }
-
   List<KioskFilter> _getValidFiltersForCategory(KioskCategory cat) {
     final activeProducts = widget.posData.products.where((p) => !p.isIngredient && (widget.posData.menuSettings[p.productId]?.isVisible ?? false));
     final activeFilterIds = activeProducts.expand((p) => p.kioskFilterIds).toSet();
     return cat.filters.where((f) => activeFilterIds.contains(f.id)).toList();
   }
-
   List<KioskCategory> _getValidCategories() {
     final visibleProducts = widget.posData.products.where((p) => !p.isIngredient && (widget.posData.menuSettings[p.productId]?.isVisible ?? false));
     final visibleFilterIds = visibleProducts.expand((p) => p.kioskFilterIds).toSet();
     return widget.posData.kioskCategories.where((c) => c.filters.any((f) => visibleFilterIds.contains(f.id))).toList();
   }
-
   void _precacheAllActiveImages() {
     if (!mounted) return;
     final activeProducts = widget.posData.products.where((p) {
@@ -119,20 +100,16 @@ class _ProductViewContentState extends State<ProductViewContent> {
       precacheImage(CachedNetworkImageProvider(product.photoUrl!, maxWidth: 300), context);
     }
   }
-
   List<MasterProduct> _getFilteredProducts() {
     return widget.posData.products.where((p) {
       if (p.isIngredient) return false;
       final settings = widget.posData.menuSettings[p.productId];
       if (settings == null || !settings.isVisible) return false;
-
       if (_selectedKioskCategoryId != null) {
         final cat = widget.posData.kioskCategories.firstWhereOrNull((c) => c.id == _selectedKioskCategoryId);
         if (cat == null) return false;
-
         final catFilterIds = cat.filters.map((f) => f.id).toSet();
         if (!p.kioskFilterIds.any((id) => catFilterIds.contains(id))) return false;
-
         if (_selectedKioskFilterId != null) {
           if (!p.kioskFilterIds.contains(_selectedKioskFilterId)) return false;
         }
@@ -140,7 +117,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
       return true;
     }).toList();
   }
-
   void _handleProductTap(MasterProduct product, FranchiseeMenuItem settings) {
     if (product.isContainer || (product.containerProductIds.isNotEmpty)) {
       setState(() => _folderStack.add(product));
@@ -148,19 +124,14 @@ class _ProductViewContentState extends State<ProductViewContent> {
     }
     _addProductToCart(product, settings);
   }
-
   void _addProductToCart(MasterProduct product, FranchiseeMenuItem settings) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
-
     bool hasOptions = product.sectionIds.isNotEmpty || product.isComposite || product.ingredientProductIds.isNotEmpty;
-
     if (hasOptions) {
-      // Respect de l'ordre des IDs de sections stockés dans le produit
       final sections = product.sectionIds
           .map((id) => widget.posData.allSections.firstWhereOrNull((s) => s.sectionId == id))
           .whereType<ProductSection>()
           .toList();
-
       final CartItem? configuredItem = await Navigator.of(context).push(
         MaterialPageRoute(
           fullscreenDialog: true,
@@ -176,7 +147,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
           ),
         ),
       );
-
       if (configuredItem != null) {
         cart.addItem(configuredItem);
         _showFlashFeedback("AJOUTÉ : ${product.name}");
@@ -192,7 +162,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
       _showFlashFeedback("AJOUTÉ");
     }
   }
-
   void _showFlashFeedback(String message) {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(
@@ -204,17 +173,14 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ),
     );
   }
-
   void _navigateBack() {
     if (_folderStack.isNotEmpty) setState(() => _folderStack.removeLast());
   }
-
   @override
   Widget build(BuildContext context) {
     final content = _folderStack.isNotEmpty
         ? _buildFolderView(_folderStack.last)
         : Column(children: [_buildSubCategoryFilters(), Expanded(child: _buildProductGrid())]);
-
     if (widget.isTablet) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -226,13 +192,11 @@ class _ProductViewContentState extends State<ProductViewContent> {
     }
     return content;
   }
-
   Widget _buildFolderView(MasterProduct folder) {
     final validIds = folder.containerProductIds.toSet();
     final contentProducts = widget.posData.products
         .where((p) => validIds.contains(p.productId) || validIds.contains(p.id))
         .toList();
-
     return Column(
       children: [
         Container(
@@ -259,7 +223,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ],
     );
   }
-
   Widget _buildFastSidebar() {
     final categories = _getValidCategories();
     return Container(
@@ -276,7 +239,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ),
     );
   }
-
   Widget _buildSidebarTile(String label, bool isSelected, VoidCallback onTap) {
     return InkWell(
       onTap: onTap,
@@ -292,13 +254,11 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ),
     );
   }
-
   Widget _buildProductGrid() {
     final products = _getFilteredProducts();
     if (products.isEmpty) return const Center(child: Text("VIDE", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.grey)));
     return _buildOptimizedGrid(products);
   }
-
   Widget _buildOptimizedGrid(List<MasterProduct> products) {
     return GridView.builder(
       padding: const EdgeInsets.all(16),
@@ -315,13 +275,11 @@ class _ProductViewContentState extends State<ProductViewContent> {
       },
     );
   }
-
   Widget _buildUltraFastCard(MasterProduct product, FranchiseeMenuItem settings, {required VoidCallback? onTap}) {
     final bool isContainer = product.isContainer || (product.containerProductIds.isNotEmpty);
     Color placeholderColor = _colorFromHex(product.color) ?? Colors.grey.shade100;
     if (isContainer) placeholderColor = const Color(0xFFFFCC80);
     final bool hasCustomization = product.ingredientProductIds.isNotEmpty || product.sectionIds.isNotEmpty;
-
     return BouncingButton(
       onTap: onTap,
       haptic: true,
@@ -349,12 +307,9 @@ class _ProductViewContentState extends State<ProductViewContent> {
                     )
                   else
                     Container(color: placeholderColor, child: Icon(isContainer ? Icons.folder : Icons.restaurant, color: Colors.black12, size: 50)),
-
                   if (isContainer) Positioned(top: 10, right: 10, child: CircleAvatar(backgroundColor: Colors.white, radius: 16, child: const Icon(Icons.arrow_forward, size: 20, color: Colors.black))),
-
                   if (!settings.isAvailable)
                     Container(color: Colors.black87, alignment: Alignment.center, child: const Text("ÉPUISÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: 2))),
-
                   if (hasCustomization && !isContainer && settings.isAvailable)
                     Positioned(bottom: 8, right: 8, child: CircleAvatar(backgroundColor: Colors.white, radius: 14, child: Icon(Icons.tune, size: 18, color: Colors.black))),
                 ],
@@ -395,14 +350,12 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ),
     );
   }
-
   Widget _buildSubCategoryFilters() {
     if (_selectedKioskCategoryId == null) return const SizedBox.shrink();
     final cat = widget.posData.kioskCategories.firstWhereOrNull((c) => c.id == _selectedKioskCategoryId);
     if (cat == null) return const SizedBox.shrink();
     final validFilters = _getValidFiltersForCategory(cat);
     if (validFilters.length < 2) return const SizedBox.shrink();
-
     return Container(
       height: 80, color: Colors.white,
       child: ListView.separated(
@@ -415,7 +368,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
       ),
     );
   }
-
   Widget _buildChip(String label, bool isSelected, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
@@ -434,10 +386,6 @@ class _ProductViewContentState extends State<ProductViewContent> {
     );
   }
 }
-
-// =============================================================================
-// 2. PAGE D'OPTIONS (MODALE PREMIUM & EDITABLE)
-// =============================================================================
 class ProductOptionsPage extends StatefulWidget {
   final String franchiseeId;
   final MasterProduct product;
@@ -447,7 +395,6 @@ class ProductOptionsPage extends StatefulWidget {
   final Map<String, List<SectionItem>>? initialOptions;
   final List<String>? initialRemovedIngredientIds;
   final List<MasterProduct> allProductsRef;
-
   const ProductOptionsPage({
     super.key,
     required this.franchiseeId,
@@ -459,33 +406,25 @@ class ProductOptionsPage extends StatefulWidget {
     this.initialOptions,
     this.initialRemovedIngredientIds,
   });
-
   @override
   State<ProductOptionsPage> createState() => _ProductOptionsPageState();
 }
-
 class _PosCache {
   static final Map<String, Map<String, double>> prices = {};
   static final Map<String, MasterProduct> ingredients = {};
 }
-
 class _ProductOptionsPageState extends State<ProductOptionsPage> {
   final Map<String, Map<String, int>> _selectionQuantities = {};
   final Map<String, SectionItem> _itemLookup = {};
   late List<ProductSection> _sortedSections;
-
   List<MasterProduct> _baseIngredients = [];
   Map<String, double> _supplementOverrides = {};
   final Set<String> _removedIngredientIds = {};
-
   @override
   void initState() {
     super.initState();
-
-    // CORRECTION FINALE : On trie les items de la section en utilisant product.ingredientProductIds
     _sortedSections = widget.sections.map((section) {
       final itemsCopy = List<SectionItem>.from(section.items);
-
       itemsCopy.sort((a, b) {
         int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
         int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
@@ -493,10 +432,8 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         if (indexB == -1) indexB = 999;
         return indexA.compareTo(indexB);
       });
-
-      // On recrée l'objet Section avec l'ID requis
       return ProductSection(
-        id: section.id, // Correction de l'argument manquant
+        id: section.id, 
         sectionId: section.sectionId,
         title: section.title,
         type: section.type,
@@ -505,20 +442,16 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         items: itemsCopy,
       );
     }).toList();
-
-    // Tri des sections par rapport à l'ordre défini dans le produit
     _sortedSections.sort((a, b) {
       int indexA = widget.product.sectionIds.indexOf(a.sectionId);
       int indexB = widget.product.sectionIds.indexOf(b.sectionId);
       return indexA.compareTo(indexB);
     });
-
     for (var section in _sortedSections) {
       for (var item in section.items) {
         _itemLookup[item.product.id] = item;
       }
     }
-
     if (widget.initialOptions != null) {
       widget.initialOptions!.forEach((sectionId, itemsList) {
         final Map<String, int> sectionMap = {};
@@ -528,11 +461,9 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         _selectionQuantities[sectionId] = sectionMap;
       });
     }
-
     if (widget.initialRemovedIngredientIds != null) {
       _removedIngredientIds.addAll(widget.initialRemovedIngredientIds!);
     }
-
     if (widget.product.ingredientProductIds.isNotEmpty) {
       final local = widget.allProductsRef.where((p) => widget.product.ingredientProductIds.contains(p.productId)).toList();
       if (local.length >= widget.product.ingredientProductIds.length) {
@@ -552,7 +483,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       _fetchPrices();
     }
   }
-
   Future<void> _fetchIngredients() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('master_products').where('productId', whereIn: widget.product.ingredientProductIds).get();
@@ -561,7 +491,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       if (mounted) setState(() => _baseIngredients = fetched);
     } catch (_) {}
   }
-
   Future<void> _fetchPrices() async {
     try {
       final snapshot = await FirebaseFirestore.instance.collection('users').doc(widget.franchiseeId).collection('menu').doc(widget.product.productId).collection('supplement_overrides').get();
@@ -570,9 +499,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       if (mounted) setState(() => _supplementOverrides = prices);
     } catch (_) {}
   }
-
   double _getActualPrice(SectionItem item) => _supplementOverrides[item.product.productId] ?? item.supplementPrice;
-
   double get _totalPrice {
     double total = widget.basePrice;
     _selectionQuantities.forEach((_, itemsMap) {
@@ -583,17 +510,14 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     });
     return total;
   }
-
   void _updateQuantity(ProductSection section, SectionItem item, int delta) {
     HapticFeedback.lightImpact();
     setState(() {
       final sectionMap = _selectionQuantities[section.sectionId] ?? {};
       int currentQty = sectionMap[item.product.id] ?? 0;
-
       final String typeLower = section.type.toLowerCase();
       final bool isRadio = typeLower.contains('unique') || typeLower.contains('radio');
       final bool isIncremental = typeLower.contains('increment') || typeLower.contains('quantity') || typeLower.contains('compteur');
-
       if (isRadio) {
         if (delta > 0) {
           sectionMap.clear();
@@ -603,19 +527,16 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
         int newQty = currentQty + delta;
         if (!isIncremental && newQty > 1) newQty = 1;
         if (newQty < 0) newQty = 0;
-
         if (delta > 0 && section.selectionMax > 0) {
           int totalInSection = sectionMap.values.fold(0, (sum, q) => sum + q);
           if (totalInSection >= section.selectionMax) return;
         }
-
         if (newQty == 0) sectionMap.remove(item.product.id);
         else sectionMap[item.product.id] = newQty;
       }
       _selectionQuantities[section.sectionId] = sectionMap;
     });
   }
-
   bool _validate() {
     for (var section in _sortedSections) {
       final sectionMap = _selectionQuantities[section.sectionId] ?? {};
@@ -632,7 +553,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     }
     return true;
   }
-
   void _onConfirm() {
     if (!_validate()) return;
     final Map<String, List<SectionItem>> finalOptions = {};
@@ -649,7 +569,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       });
       if (itemsList.isNotEmpty) finalOptions[sectionId] = itemsList;
     });
-
     Navigator.pop(context, CartItem(
       product: widget.product, quantity: 1, price: widget.basePrice, vatRate: widget.vatRate,
       selectedOptions: finalOptions,
@@ -657,7 +576,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       removedIngredientNames: _baseIngredients.where((p) => _removedIngredientIds.contains(p.productId)).map((p) => p.name).toList(),
     ));
   }
-
   void _showIngredientModifier() async {
     await showDialog(
       context: context,
@@ -666,7 +584,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       if (result != null && result is List<String>) setState(() { _removedIngredientIds.clear(); _removedIngredientIds.addAll(result); });
     });
   }
-
   bool _areRequirementsMet() {
     for (var section in _sortedSections) {
       final sectionMap = _selectionQuantities[section.sectionId] ?? {};
@@ -675,13 +592,11 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     }
     return true;
   }
-
   @override
   Widget build(BuildContext context) {
     final bool isModif = widget.initialOptions != null || widget.initialRemovedIngredientIds != null;
     final bool isFormValid = _areRequirementsMet();
     final Color primaryColor = isModif ? AppColors.bkBlue : Colors.black;
-
     return Scaffold(
       backgroundColor: const Color(0xFFF2F4F7),
       body: Column(
@@ -740,7 +655,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
               ],
             ),
           ),
-
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
@@ -761,15 +675,12 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                       ],
                     ),
                   ),
-
                 ..._sortedSections.map((section) => _buildSectionBlock(section)),
-
                 if (_sortedSections.isEmpty)
                   const Padding(padding: EdgeInsets.all(40), child: Center(child: Text("Aucune option disponible", style: TextStyle(color: Colors.grey, fontSize: 22, fontWeight: FontWeight.w900)))),
               ],
             ),
           ),
-
           Container(
             padding: const EdgeInsets.all(24),
             decoration: BoxDecoration(
@@ -812,13 +723,11 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
       ),
     );
   }
-
   Widget _buildSectionBlock(ProductSection section) {
     final String typeLower = section.type.toLowerCase();
     final bool isRadio = typeLower.contains('unique') || typeLower.contains('radio');
     final bool isIncremental = typeLower.contains('increment') || typeLower.contains('quantity') || typeLower.contains('compteur');
     final sectionMap = _selectionQuantities[section.sectionId] ?? {};
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -843,7 +752,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
             ],
           ),
         ),
-
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -861,7 +769,6 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
             final double displayPrice = _getActualPrice(item);
             final int totalInSection = sectionMap.values.fold(0, (sum, q) => sum + q);
             final bool canAdd = section.selectionMax <= 0 || totalInSection < section.selectionMax;
-
             if (isIncremental) {
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 200),
@@ -1000,19 +907,13 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
     );
   }
 }
-
-// =============================================================================
-// 3. WIDGET DIALOGUE INGRÉDIENTS (PRIVÉ)
-// =============================================================================
 class _IngredientCustomizationDialog extends StatefulWidget {
   final List<MasterProduct> baseIngredients;
   final List<String> initiallyRemovedIds;
-
   const _IngredientCustomizationDialog({required this.baseIngredients, required this.initiallyRemovedIds});
   @override
   State<_IngredientCustomizationDialog> createState() => _IngredientCustomizationDialogState();
 }
-
 class _IngredientCustomizationDialogState extends State<_IngredientCustomizationDialog> {
   late Set<String> _removedIds;
   @override
@@ -1020,7 +921,6 @@ class _IngredientCustomizationDialogState extends State<_IngredientCustomization
     super.initState();
     _removedIds = Set.from(widget.initiallyRemovedIds);
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(

@@ -1,6 +1,5 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -14,6 +13,7 @@ class UpdateService {
 
   static Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
+      // CORRECTION : L'URL était tronquée. Voici l'URL complète de l'API GitHub.
       final response = await http.get(Uri.parse(
           'https://api.github.com/repos/$repoOwner/$repoName/releases/latest'));
 
@@ -24,12 +24,11 @@ class UpdateService {
 
       final data = jsonDecode(response.body);
       final tagName = data['tag_name'];
-
-      // CORRECTION: On cherche l'APK de manière plus sûre
-      // Idéalement, si vous avez plusieurs APK (arm64, v7), filtrez ici.
       final assets = data['assets'] as List?;
+
       if (assets == null || assets.isEmpty) return null;
 
+      // Recherche du fichier .apk dans les assets de la release
       final apkAsset = assets.firstWhere(
             (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
         orElse: () => null,
@@ -39,7 +38,7 @@ class UpdateService {
 
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
-      // Nettoyage de la version (enlève le 'v' s'il existe)
+      // Nettoyage du tag (ex: "v1.0.1" devient "1.0.1")
       final latestVersion = tagName.toString().replaceAll('v', '');
 
       if (_isNewer(latestVersion, currentVersion)) {
@@ -51,7 +50,6 @@ class UpdateService {
     } catch (e) {
       debugPrint("Erreur check update: $e");
     }
-
     return null;
   }
 
@@ -59,7 +57,6 @@ class UpdateService {
     try {
       final latestParts = latest.split('.').map(int.parse).toList();
       final currentParts = current.split('.').map(int.parse).toList();
-
       final maxLen = latestParts.length > currentParts.length
           ? latestParts.length
           : currentParts.length;
@@ -67,7 +64,6 @@ class UpdateService {
       for (int i = 0; i < maxLen; i++) {
         final l = (i < latestParts.length) ? latestParts[i] : 0;
         final c = (i < currentParts.length) ? currentParts[i] : 0;
-
         if (l > c) return true;
         if (l < c) return false;
       }
@@ -83,12 +79,10 @@ class UpdateService {
       final savePath = "${dir.path}/update.apk";
       final file = File(savePath);
 
-      // Si un vieux fichier existe, on le supprime
       if (await file.exists()) {
         await file.delete();
       }
 
-      // CORRECTION CRITIQUE : Utilisation de Stream pour éviter le crash mémoire
       final request = http.Request('GET', Uri.parse(apkUrl));
       final response = await http.Client().send(request);
 
@@ -96,19 +90,15 @@ class UpdateService {
         throw Exception("Échec du téléchargement : ${response.statusCode}");
       }
 
-      // Écriture du fichier par morceaux (chunks)
       final sink = file.openWrite();
       await response.stream.pipe(sink);
       await sink.close();
 
       debugPrint("Téléchargement terminé : $savePath");
-
-      // Appel au code natif
-      await platform.invokeMethod("installApk", { "path": savePath });
-
+      await platform.invokeMethod("installApk", {"path": savePath});
     } catch (e) {
       debugPrint("Erreur lors de la mise à jour : $e");
-      rethrow; // Relance l'erreur pour pouvoir l'afficher dans l'UI si besoin
+      rethrow;
     }
   }
 }

@@ -1,13 +1,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '/models.dart';
-
 class FranchiseeContainerConfigDialog extends StatefulWidget {
   final MasterProduct containerProduct;
   final List<MasterProduct> allProducts;
   final Map<String, FranchiseeMenuItem> franchiseeSettings;
   final Function(MasterProduct, double) onUpdateChildPrice;
-
   const FranchiseeContainerConfigDialog({
     super.key,
     required this.containerProduct,
@@ -15,29 +13,21 @@ class FranchiseeContainerConfigDialog extends StatefulWidget {
     required this.franchiseeSettings,
     required this.onUpdateChildPrice,
   });
-
   @override
   State<FranchiseeContainerConfigDialog> createState() =>
       _FranchiseeContainerConfigDialogState();
 }
-
 class _FranchiseeContainerConfigDialogState
     extends State<FranchiseeContainerConfigDialog> {
-  // Contrôleurs pour éditer les prix
   final Map<String, TextEditingController> _controllers = {};
-
   @override
   void initState() {
     super.initState();
     _initializeControllers();
   }
-
   void _initializeControllers() {
-    // On récupère les produits enfants
     final children = _getContainerChildren();
-
     for (var child in children) {
-      // On cherche le prix existant pour ce franchisé, sinon 0.00
       double currentPrice = 0.0;
       if (widget.franchiseeSettings.containsKey(child.productId)) {
         currentPrice = widget.franchiseeSettings[child.productId]!.price;
@@ -46,7 +36,6 @@ class _FranchiseeContainerConfigDialogState
           TextEditingController(text: currentPrice.toStringAsFixed(2));
     }
   }
-
   @override
   void dispose() {
     for (var c in _controllers.values) {
@@ -54,17 +43,11 @@ class _FranchiseeContainerConfigDialogState
     }
     super.dispose();
   }
-
-  // --- LOGIQUE CRITIQUE DE RÉCUPÉRATION (MISE À JOUR) ---
-  // Cette méthode garantit que l'ordre d'affichage respecte strictement
-  // l'ordre des IDs présents dans widget.containerProduct.containerProductIds
   List<MasterProduct> _getContainerChildren() {
     if (widget.containerProduct.containerProductIds.isEmpty) return [];
-
     return widget.containerProduct.containerProductIds
         .map((childId) {
       try {
-        // On cherche l'objet complet correspondant à l'ID
         return widget.allProducts.firstWhere(
               (p) => p.id == childId,
         );
@@ -73,14 +56,12 @@ class _FranchiseeContainerConfigDialogState
         return null;
       }
     })
-        .whereType<MasterProduct>() // On retire les nulls (produits non trouvés)
+        .whereType<MasterProduct>() 
         .toList();
   }
-
   @override
   Widget build(BuildContext context) {
     final children = _getContainerChildren();
-
     return AlertDialog(
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,7 +87,6 @@ class _FranchiseeContainerConfigDialogState
           itemBuilder: (context, index) {
             final child = children[index];
             final controller = _controllers[child.id];
-
             return ListTile(
               leading: Container(
                 width: 50,
@@ -146,8 +126,6 @@ class _FranchiseeContainerConfigDialogState
                     EdgeInsets.symmetric(horizontal: 8, vertical: 0),
                   ),
                   onChanged: (val) {
-                    // Sauvegarde automatique ou bouton valider ?
-                    // Ici on laisse l'utilisateur valider à la fin via le bouton "Enregistrer tout".
                   },
                 ),
               ),
@@ -162,7 +140,6 @@ class _FranchiseeContainerConfigDialogState
         ),
         ElevatedButton(
           onPressed: () {
-            // Sauvegarder tous les prix
             for (var child in children) {
               final ctrl = _controllers[child.id];
               if (ctrl != null) {

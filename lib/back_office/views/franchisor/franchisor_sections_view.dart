@@ -4,21 +4,17 @@ import 'package:uuid/uuid.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
 class SectionsView extends StatelessWidget {
   const SectionsView({super.key});
-
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.firebaseUser;
-
     if (user == null) {
       return const Scaffold(
           body: Center(child: Text("Utilisateur non connecté")));
     }
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: StreamBuilder<List<ProductSection>>(
@@ -27,11 +23,9 @@ class SectionsView extends StatelessWidget {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (snapshot.hasError) {
             return Center(child: Text("Erreur: ${snapshot.error}"));
           }
-
           final sections = snapshot.data ?? [];
           if (sections.isEmpty) {
             return const Center(
@@ -46,9 +40,7 @@ class SectionsView extends StatelessWidget {
               ),
             );
           }
-
           sections.sort((a, b) => a.title.compareTo(b.title));
-
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: sections.length,
@@ -73,7 +65,6 @@ class SectionsView extends StatelessWidget {
                 builder: (context) => const SectionFormView())),
       ),    );
   }
-
   Widget _buildSectionCard(BuildContext context, ProductSection section, FranchiseRepository repo) {
     return Container(
       decoration: BoxDecoration(
@@ -151,28 +142,23 @@ class SectionsView extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  // Badge TYPE avec couleur spécifique
                   _buildInfoBadge(
                     icon: _getTypeIcon(section.type),
                     label: _getTypeLabel(section.type),
                     color: _getTypeColor(section.type),
                     isBold: true,
                   ),
-                  // Badge MIN/MAX
                   _buildInfoBadge(
                     icon: Icons.unfold_more_rounded,
                     label: "Choix : ${section.selectionMin} - ${section.selectionMax}",
                     color: Colors.grey.shade700,
                     bgColor: Colors.grey.shade100,
                   ),
-                  // Badge PRODUITS
                   _buildInfoBadge(
                     icon: Icons.fastfood_rounded,
                     label: "${section.items.length} produits",
@@ -187,7 +173,6 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildActionButton(
       {required IconData icon,
         required Color color,
@@ -206,7 +191,6 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildInfoBadge({
     required IconData icon,
     required String label,
@@ -214,9 +198,7 @@ class SectionsView extends StatelessWidget {
     Color? bgColor,
     bool isBold = false,
   }) {
-    // Si pas de bgColor fourni, on crée un pastel basé sur la couleur principale
     final background = bgColor ?? color.withOpacity(0.12);
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -241,9 +223,6 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
-
-  // --- LOGIQUE D'AFFICHAGE AMÉLIORÉE ---
-
   String _getTypeLabel(String type) {
     final t = type.toLowerCase();
     if (t.contains('radio') || t.contains('unique')) return 'Choix Unique';
@@ -251,19 +230,13 @@ class SectionsView extends StatelessWidget {
     if (t.contains('quantity') || t.contains('increment')) return 'Quantité (Compteur)';
     return 'Standard';
   }
-
   Color _getTypeColor(String type) {
     final t = type.toLowerCase();
-    // Orange Vif pour Choix Unique (Attention requise)
     if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE65100);
-    // Bleu Profond pour Checkbox (Standard)
     if (t.contains('check') || t.contains('multi')) return const Color(0xFF1565C0);
-    // Vert pour Quantité (Positif/Ajout)
     if (t.contains('quantity') || t.contains('increment')) return const Color(0xFF2E7D32);
-
     return Colors.grey.shade800;
   }
-
   IconData _getTypeIcon(String type) {
     final t = type.toLowerCase();
     if (t.contains('radio') || t.contains('unique')) return Icons.radio_button_checked;
@@ -272,35 +245,24 @@ class SectionsView extends StatelessWidget {
     return Icons.widgets;
   }
 }
-
-// =============================================================================
-// FORMULAIRE
-// =============================================================================
-
 class SectionFormView extends StatefulWidget {
   final ProductSection? sectionToEdit;
-
   const SectionFormView({super.key, this.sectionToEdit});
-
   @override
   State<SectionFormView> createState() => _SectionFormViewState();
 }
-
 class _SectionFormViewState extends State<SectionFormView> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
   final _minController = TextEditingController(text: "0");
   final _maxController = TextEditingController(text: "1");
   String _type = 'checkbox';
-
   List<SectionItem> _items = [];
   bool _isSaving = false;
-
   final FranchiseRepository _repository = FranchiseRepository();
   List<MasterProduct>? _cachedProducts;
   List<ProductFilter>? _cachedFilters;
   bool _isDataLoading = true;
-
   @override
   void initState() {
     super.initState();
@@ -314,17 +276,14 @@ class _SectionFormViewState extends State<SectionFormView> {
     }
     _preloadData();
   }
-
   Future<void> _preloadData() async {
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser;
     if (user == null) return;
-
     try {
       final results = await Future.wait([
         _repository.getMasterProductsStream(user.uid).first,
         _repository.getFiltersStream(user.uid).first,
       ]);
-
       if (mounted) {
         setState(() {
           _cachedProducts = results[0] as List<MasterProduct>;
@@ -339,7 +298,6 @@ class _SectionFormViewState extends State<SectionFormView> {
       }
     }
   }
-
   @override
   void dispose() {
     _titleController.dispose();
@@ -347,15 +305,10 @@ class _SectionFormViewState extends State<SectionFormView> {
     _maxController.dispose();
     super.dispose();
   }
-
   Future<void> _saveSection() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isSaving = true);
-
-    // ignore: unused_local_variable
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
-
     final newSection = ProductSection(
       id: widget.sectionToEdit?.id ?? '',
       sectionId: widget.sectionToEdit?.sectionId ?? const Uuid().v4(),
@@ -366,7 +319,6 @@ class _SectionFormViewState extends State<SectionFormView> {
       items: _items,
       filterIds: widget.sectionToEdit?.filterIds ?? [],
     );
-
     try {
       await _repository.saveSection(newSection);
       if (mounted) Navigator.pop(context);
@@ -379,7 +331,6 @@ class _SectionFormViewState extends State<SectionFormView> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
-
   void _openProductPicker() async {
     if (_isDataLoading) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -387,14 +338,12 @@ class _SectionFormViewState extends State<SectionFormView> {
       );
       return;
     }
-
     if (_cachedProducts == null || _cachedFilters == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Impossible de récupérer les produits.")),
       );
       return;
     }
-
     final List<MasterProduct>? selected = await showDialog<List<MasterProduct>>(
       context: context,
       builder: (ctx) => ProductPickerDialog(
@@ -403,7 +352,6 @@ class _SectionFormViewState extends State<SectionFormView> {
         initialSelection: _items.map((e) => e.product).toList(),
       ),
     );
-
     if (selected != null) {
       setState(() {
         final newItems = <SectionItem>[];
@@ -420,7 +368,6 @@ class _SectionFormViewState extends State<SectionFormView> {
       });
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -527,9 +474,7 @@ class _SectionFormViewState extends State<SectionFormView> {
                 ],
               ),
             ),
-
             const SizedBox(height: 24),
-
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -556,7 +501,6 @@ class _SectionFormViewState extends State<SectionFormView> {
               ],
             ),
             const SizedBox(height: 8),
-
             if (_items.isEmpty)
               Container(
                 padding: const EdgeInsets.all(32),
@@ -608,7 +552,6 @@ class _SectionFormViewState extends State<SectionFormView> {
                                   border: UnderlineInputBorder(),
                                 ),
                                 onChanged: (val) {
-                                  // Protection contre les virgules au lieu des points
                                   final normalized = val.replaceAll(',', '.');
                                   final p = double.tryParse(normalized) ?? 0.0;
                                   item.supplementPrice = p;
@@ -630,7 +573,6 @@ class _SectionFormViewState extends State<SectionFormView> {
                   );
                 },
               ),
-
             const SizedBox(height: 50),
           ],
         ),
@@ -638,17 +580,11 @@ class _SectionFormViewState extends State<SectionFormView> {
     );
   }
 }
-
-// =============================================================================
-// MODALE DE SÉLECTION (Inchangée mais nécessaire)
-// =============================================================================
-
 class ProductPickerDialog extends StatefulWidget {
   final List<MasterProduct> availableProducts;
   final List<ProductFilter> availableFilters;
   final List<MasterProduct> initialSelection;
   final bool ingredientsOnly;
-
   const ProductPickerDialog({
     super.key,
     required this.availableProducts,
@@ -656,30 +592,24 @@ class ProductPickerDialog extends StatefulWidget {
     required this.initialSelection,
     this.ingredientsOnly = false,
   });
-
   @override
   State<ProductPickerDialog> createState() => _ProductPickerDialogState();
 }
-
 class _ProductPickerDialogState extends State<ProductPickerDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
-
   String _searchQuery = '';
   String? _selectedFilterId;
   List<MasterProduct> _selectedProducts = [];
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _selectedProducts = List.from(widget.initialSelection);
-
     if (widget.ingredientsOnly) {
       _tabController.index = 1;
     }
-
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) {
         setState(() {
@@ -687,21 +617,18 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
         });
       }
     });
-
     _searchController.addListener(() {
       setState(() {
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
   }
-
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
-
   void _toggleProduct(MasterProduct product) {
     setState(() {
       if (_selectedProducts.any((p) => p.productId == product.productId)) {
@@ -711,7 +638,6 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       }
     });
   }
-
   List<MasterProduct> _filterProducts(List<MasterProduct> source) {
     return source.where((p) {
       if (_selectedFilterId != null) {
@@ -725,29 +651,22 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       return true;
     }).toList();
   }
-
   @override
   Widget build(BuildContext context) {
     final List<MasterProduct> vendables =
     widget.availableProducts.where((p) => !p.isIngredient).toList();
     final List<MasterProduct> nonVendables =
     widget.availableProducts.where((p) => p.isIngredient).toList();
-
     final currentTabProducts = _tabController.index == 0 ? vendables : nonVendables;
-
     final Set<String> presentFilterIds = currentTabProducts
         .expand((p) => p.filterIds)
         .toSet();
-
     final List<ProductFilter> activeFilters = widget.availableFilters
         .where((f) => presentFilterIds.contains(f.id))
         .toList();
-
     activeFilters.sort((a, b) => a.name.compareTo(b.name));
-
     final filteredVendables = _filterProducts(vendables);
     final filteredNonVendables = _filterProducts(nonVendables);
-
     return AlertDialog(
       title: const Text("Sélection des Produits"),
       content: SizedBox(
@@ -774,7 +693,6 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
               ),
             ),
             const SizedBox(height: 16),
-
             Container(
               decoration: BoxDecoration(
                 color: Colors.grey.shade100,
@@ -798,7 +716,6 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
               ),
             ),
             const SizedBox(height: 12),
-
             if (activeFilters.isNotEmpty)
               SizedBox(
                 height: 40,
@@ -849,10 +766,8 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                   ],
                 ),
               ),
-
             const SizedBox(height: 10),
             const Divider(height: 1),
-
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -882,7 +797,6 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       ],
     );
   }
-
   Widget _buildProductList(List<MasterProduct> products) {
     if (products.isEmpty) {
       return Center(
@@ -903,7 +817,6 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       itemBuilder: (context, index) {
         final product = products[index];
         final isSelected = _selectedProducts.any((p) => p.productId == product.productId);
-
         return InkWell(
           onTap: () => _toggleProduct(product),
           child: Padding(

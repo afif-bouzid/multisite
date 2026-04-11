@@ -1,47 +1,38 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-
 import '../../../core/repository/repository.dart';
 import '../../../models.dart';
-
 class SectionOverrideData {
   final ProductSection section;
   List<SectionItem> items;
   final Map<String, double> priceOverrides;
-
   SectionOverrideData({
     required this.section,
     required this.items,
     required this.priceOverrides,
   });
 }
-
 class FranchiseeCompositeOverridesDialog extends StatefulWidget {
   final String franchiseeId;
   final String franchisorId;
   final MasterProduct product;
-
   const FranchiseeCompositeOverridesDialog({
     super.key,
     required this.franchiseeId,
     required this.franchisorId,
     required this.product,
   });
-
   @override
   State<FranchiseeCompositeOverridesDialog> createState() =>
       _FranchiseeCompositeOverridesDialogState();
 }
-
 class _FranchiseeCompositeOverridesDialogState
     extends State<FranchiseeCompositeOverridesDialog> {
   late Future<List<SectionOverrideData>> _dataFuture;
   final Map<String, TextEditingController> _priceControllers = {};
   bool _isLoading = false;
-
   late final DocumentReference _menuProductRef;
-
   @override
   void initState() {
     super.initState();
@@ -50,30 +41,21 @@ class _FranchiseeCompositeOverridesDialogState
         .doc(widget.franchiseeId)
         .collection('menu')
         .doc(widget.product.productId);
-
     _dataFuture = _loadData();
   }
-
   Future<List<SectionOverrideData>> _loadData() async {
     final repository = FranchiseRepository();
-
-    // 1. Récupérer les sections de base (ordre et items du franchiseur)
     final baseSections = await repository.getSectionsForProduct(
         widget.franchisorId, widget.product.sectionIds);
-
-    // 2. Récupérer les overrides de prix
     final priceOverridesSnapshot =
     await _menuProductRef.collection('supplement_overrides').get();
     final priceOverrides = {
       for (var doc in priceOverridesSnapshot.docs)
         doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
     };
-
     List<SectionOverrideData> finalData = [];
     for (var section in baseSections) {
       List<SectionItem> items = List.from(section.items);
-
-      // TRI : On force l'ordre selon la liste "ingredientProductIds" du produit (Master Order)
       if (widget.product.ingredientProductIds.isNotEmpty) {
         items.sort((a, b) {
           int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
@@ -83,43 +65,32 @@ class _FranchiseeCompositeOverridesDialogState
           return indexA.compareTo(indexB);
         });
       }
-
-      // Initialiser les contrôleurs de prix
       for (var item in items) {
         final overridePrice = priceOverrides[item.product.productId];
         _priceControllers[item.product.productId] = TextEditingController(
           text: overridePrice != null ? overridePrice.toStringAsFixed(2) : "",
         );
       }
-
       finalData.add(SectionOverrideData(
         section: section,
         items: items,
         priceOverrides: priceOverrides,
       ));
     }
-
-    // Tri des sections selon l'ordre défini dans le produit
     finalData.sort((a, b) {
       int indexA = widget.product.sectionIds.indexOf(a.section.sectionId);
       int indexB = widget.product.sectionIds.indexOf(b.section.sectionId);
       return indexA.compareTo(indexB);
     });
-
     return finalData;
   }
-
   Future<void> _saveChanges() async {
     setState(() => _isLoading = true);
     final batch = FirebaseFirestore.instance.batch();
-
-    // Sauvegarder uniquement les PRIX dans supplement_overrides pour mise à jour instantanée
     _priceControllers.forEach((productId, controller) {
       final priceRef =
       _menuProductRef.collection('supplement_overrides').doc(productId);
-
       final textVal = controller.text.replaceAll(',', '.').trim();
-
       if (textVal.isNotEmpty) {
         final priceValue = double.tryParse(textVal);
         if (priceValue != null && priceValue >= 0) {
@@ -129,7 +100,6 @@ class _FranchiseeCompositeOverridesDialogState
         batch.delete(priceRef);
       }
     });
-
     try {
       await batch.commit();
       if (mounted) {
@@ -150,7 +120,6 @@ class _FranchiseeCompositeOverridesDialogState
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   void dispose() {
     for (var controller in _priceControllers.values) {
@@ -158,8 +127,6 @@ class _FranchiseeCompositeOverridesDialogState
     }
     super.dispose();
   }
-
-  // --- LOGIQUE DES ICONES DE SECTION ---
   Widget _getSectionIcon(String type) {
     final t = type.toLowerCase();
     if (t.contains('increment') || t.contains('quantity') || t.contains('compteur')) {
@@ -170,14 +137,12 @@ class _FranchiseeCompositeOverridesDialogState
       return const Icon(Icons.check_box, color: Colors.green);
     }
   }
-
   String _getSectionTypeText(String type) {
     final t = type.toLowerCase();
     if (t.contains('increment')) return "INCRÉMENTATION";
     if (t.contains('unique') || t.contains('radio')) return "CHOIX UNIQUE (RADIO)";
     return "CHOIX MULTIPLE (CHECKBOX)";
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -199,7 +164,6 @@ class _FranchiseeCompositeOverridesDialogState
             }
             if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
             if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucune section trouvée."));
-
             return ListView.builder(
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
@@ -210,7 +174,6 @@ class _FranchiseeCompositeOverridesDialogState
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
-                      // Header de la section avec infos type et min/max
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -247,7 +210,6 @@ class _FranchiseeCompositeOverridesDialogState
                           ],
                         ),
                       ),
-                      // Liste des items (Simple ListView, pas de Drag & Drop)
                       ListView.separated(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),

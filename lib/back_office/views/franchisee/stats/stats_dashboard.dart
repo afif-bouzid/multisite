@@ -2,35 +2,28 @@ import 'package:collection/collection.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '/models.dart';
 import '../../../../core/repository/repository.dart';
-
 class StatsDashboard extends StatefulWidget {
   final String franchiseeId;
   final DateTime? startDate;
   final DateTime? endDate;
-
   const StatsDashboard({
     super.key,
     required this.franchiseeId,
     this.startDate,
     this.endDate,
   });
-
   @override
   State<StatsDashboard> createState() => _StatsDashboardState();
 }
-
 class _StatsDashboardState extends State<StatsDashboard> {
   final FranchiseRepository _repository = FranchiseRepository();
-
   @override
   Widget build(BuildContext context) {
     final start =
         widget.startDate ?? DateTime.now().subtract(const Duration(days: 30));
     final end = widget.endDate ?? DateTime.now();
-
     return StreamBuilder<List<Transaction>>(
       stream: _repository.getTransactionsInDateRange(
         widget.franchiseeId,
@@ -54,18 +47,15 @@ class _StatsDashboardState extends State<StatsDashboard> {
             ),
           );
         }
-
         final transactions = snapshot.data!;
         return _buildFixedDashboard(transactions);
       },
     );
   }
-
   Widget _buildFixedDashboard(List<Transaction> transactions) {
     double totalRevenue = transactions.fold(0, (sum, t) => sum + t.total);
     int totalOrders = transactions.length;
     double averageBasket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
     Map<String, double> paymentStats = {};
     for (var t in transactions) {
       t.paymentMethods.forEach((method, amount) {
@@ -73,32 +63,24 @@ class _StatsDashboardState extends State<StatsDashboard> {
             (paymentStats[method] ?? 0) + (amount as num).toDouble();
       });
     }
-
     var groupedByDay = groupBy(transactions, (Transaction t) {
       return DateFormat('yyyy-MM-dd').format(t.timestamp);
     });
     var sortedKeys = groupedByDay.keys.toList()..sort();
-
-    // --- CALCUL TOP PRODUITS ---
     Map<String, int> productCounts = {};
     Map<String, double> productRevenues = {};
-
     for (var t in transactions) {
       for (var item in t.items) {
         final name = item['name'] ?? 'Inconnu';
         final qty = (item['quantity'] as num?)?.toInt() ?? 1;
         final total = (item['total'] as num?)?.toDouble() ?? 0.0;
-
         productCounts[name] = (productCounts[name] ?? 0) + qty;
         productRevenues[name] = (productRevenues[name] ?? 0) + total;
       }
     }
-
-    // Top 5 par quantité
     final topProducts = productCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final top5 = topProducts.take(5).toList();
-
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -214,7 +196,6 @@ class _StatsDashboardState extends State<StatsDashboard> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      // NOUVEAU : LISTE TOP PRODUITS
                       Expanded(
                         flex: 3,
                         child: _buildChartContainer(
@@ -324,7 +305,6 @@ class _StatsDashboardState extends State<StatsDashboard> {
       ),
     );
   }
-
   double _getMaxY(Map<String, List<Transaction>> grouped) {
     double max = 0;
     grouped.forEach((key, value) {
@@ -333,7 +313,6 @@ class _StatsDashboardState extends State<StatsDashboard> {
     });
     return max == 0 ? 100 : max * 1.1;
   }
-
   Color _getPaymentColor(String method) {
     switch (method) {
       case 'Cash':
@@ -346,7 +325,6 @@ class _StatsDashboardState extends State<StatsDashboard> {
         return Colors.grey;
     }
   }
-
   Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
@@ -395,7 +373,6 @@ class _StatsDashboardState extends State<StatsDashboard> {
       ),
     );
   }
-
   Widget _buildChartContainer({required String title, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16),

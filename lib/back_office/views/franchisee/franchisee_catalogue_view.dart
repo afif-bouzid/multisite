@@ -2,24 +2,18 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
-// --- IMPORTS ---
 import 'franchisee_container_config_dialog.dart';
 import 'franchisee_composite_overrides_dialog.dart';
-
 enum _CatalogueMode { ordering, pricing }
 enum _SmartFilter { all, active, inactive, timeRestricted, containers }
-
 class _FilterHeader {
   final String categoryId;
   final String filterName;
   _FilterHeader({required this.categoryId, required this.filterName});
 }
-
 class _SubFilterHeader {
   final String parentCategoryId;
   final String subFilterId;
@@ -29,38 +23,26 @@ class _SubFilterHeader {
         required this.subFilterId,
         required this.subFilterName});
 }
-
 class FranchiseeCatalogueView extends StatefulWidget {
   const FranchiseeCatalogueView({super.key});
-
   @override
   State<FranchiseeCatalogueView> createState() =>
       _FranchiseeCatalogueViewState();
 }
-
 class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
-  // --- ETAT DES FILTRES ---
   String? _selectedBackOfficeFilterId;
   String? _selectedKioskFilterId;
-
-  // --- RECHERCHE ---
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode();
   String _searchQuery = "";
-
   _SmartFilter _currentSmartFilter = _SmartFilter.all;
-
-  // --- DONNÉES ---
   List<ProductFilter> _allBackOfficeFilters = [];
   List<KioskCategory> _allKioskCategories = [];
   final Map<String, KioskFilter> _kioskFilterMap = {};
   final Map<String, String> _kioskFilterIdToCategoryId = {};
   final Map<String, KioskCategory> _kioskCategoryMap = {};
-
   bool _isLoadingFilters = true;
   _CatalogueMode _mode = _CatalogueMode.pricing;
-
-  // --- VARIABLES POUR L'ORDRE ---
   late DocumentReference _filterOrderRef;
   Map<String, List<String>> _customSubFilterOrder = {};
   late CollectionReference _subFilterOrderCollectionRef;
@@ -69,13 +51,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
   bool _isSavingFilterOrder = false;
   bool _isSavingSubFilterOrder = false;
   final Map<String, bool> _expansionState = {};
-
   @override
   void initState() {
     super.initState();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final franchiseeId = authProvider.firebaseUser?.uid;
-
     if (franchiseeId != null) {
       _filterOrderRef = FirebaseFirestore.instance
           .collection('users')
@@ -94,20 +74,17 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     }
     _loadAndCacheFilters();
   }
-
   @override
   void dispose() {
     _searchController.dispose();
     _searchFocusNode.dispose();
     super.dispose();
   }
-
   Future<void> _loadAndCacheFilters() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     if (authProvider.franchiseUser?.franchisorId == null) return;
     final franchisorId = authProvider.franchiseUser!.franchisorId!;
     final repository = FranchiseRepository();
-
     List<String>? loadedFilterOrder;
     Map<String, List<String>> loadedSubFilterOrders = {};
     try {
@@ -119,7 +96,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           List<String>.from((data['order'] as List).whereType<String>());
         }
       }
-
       final subOrderSnapshots = await _subFilterOrderCollectionRef.get();
       for (var doc in subOrderSnapshots.docs) {
         final data = doc.data() as Map<String, dynamic>;
@@ -131,7 +107,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     } catch (e) {
       debugPrint("Erreur lors du chargement des ordres: $e");
     }
-
     final results = await Future.wait([
       repository
           .getFiltersStream(franchisorId)
@@ -153,12 +128,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           _kioskFilterIdToCategoryId[filter.id] = cat.id;
         }
       }
-
       List<KioskCategory> sortedCategories = List.from(kioskCategories);
       if (loadedFilterOrder != null && loadedFilterOrder.isNotEmpty) {
         final categoryMap = {for (var c in kioskCategories) c.id: c};
         final orderedCategories = <KioskCategory>[];
-
         for (final categoryId in loadedFilterOrder) {
           if (categoryId.isNotEmpty && categoryMap.containsKey(categoryId)) {
             orderedCategories.add(categoryMap[categoryId]!);
@@ -172,7 +145,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       } else {
         sortedCategories.sort((a, b) => a.position.compareTo(b.position));
       }
-
       List<ProductFilter> sortedFilters = List.from(filters);
       sortedFilters.sort((a, b) => a.name.compareTo(b.name));
       setState(() {
@@ -180,7 +152,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         _allBackOfficeFilters = sortedFilters;
         _allKioskCategories = sortedCategories;
         _isLoadingFilters = false;
-
         for (var cat in _allKioskCategories) {
           _expansionState.putIfAbsent(cat.id, () => false);
         }
@@ -188,14 +159,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       });
     }
   }
-
-  // --- LOGIQUE SAUVEGARDE ORDRE ---
-
   Future<void> _saveOrder(CollectionReference menuRef) async {
     if (_isSavingOrder) return;
     setState(() => _isSavingOrder = true);
     final batch = FirebaseFirestore.instance.batch();
-
     final currentFlatProductOrder =
     <({MasterProduct product, FranchiseeMenuItem settings})>[];
     for (var item in _displayList) {
@@ -203,7 +170,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         currentFlatProductOrder.add(item);
       }
     }
-
     for (int i = 0; i < currentFlatProductOrder.length; i++) {
       final item = currentFlatProductOrder[i];
       final docRef = menuRef.doc(item.product.productId);
@@ -231,11 +197,9 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       }
     }
   }
-
   Future<void> _saveFilterOrder() async {
     if (_isSavingFilterOrder) return;
     setState(() => _isSavingFilterOrder = true);
-
     final currentCategoryOrder = _allKioskCategories.map((c) => c.id).toList();
     try {
       await _filterOrderRef
@@ -253,14 +217,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       }
     }
   }
-
   Future<void> _saveSubFilterOrder(String mainCategoryId,
       List<String> subFilterIds) async {
     if (_isSavingSubFilterOrder) return;
     setState(() => _isSavingSubFilterOrder = true);
-
     final docRef = _subFilterOrderCollectionRef.doc(mainCategoryId);
-
     try {
       await docRef.set({'order': subFilterIds}, SetOptions(merge: true));
       if (mounted) {
@@ -279,7 +240,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       }
     }
   }
-
   void _prepareOrderModeData(List<MasterProduct> allMasterProducts,
       Map<String, FranchiseeMenuItem> franchiseeSettings) {
     var allVisibleProductsData = allMasterProducts
@@ -291,7 +251,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         Map<String?,
             List<({MasterProduct product, FranchiseeMenuItem settings})>>>
     groupedProducts = {};
-
     for (var item in allVisibleProductsData) {
       if (item.product.kioskFilterIds.isEmpty) {
         groupedProducts
@@ -308,7 +267,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         }
       }
     }
-
     groupedProducts.forEach((mainCategoryId, subGroups) {
       subGroups.forEach((subFilterId, productList) {
         productList.sort((a, b) {
@@ -319,7 +277,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       });
     });
     _displayList = [];
-
     for (var category in _allKioskCategories) {
       if (groupedProducts.containsKey(category.id)) {
         _displayList.add(
@@ -333,7 +290,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           final subGroupMap = Map.from(subGroups);
           List<String> sortedSubFilterIds = [];
           Set<String> addedSubFilterIds = {};
-
           for (String sfId in subFilterOrder) {
             if (availableSubFilterIds.contains(sfId)) {
               sortedSubFilterIds.add(sfId);
@@ -356,13 +312,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
               !sortedSubFilterIds.contains('none')) {
             sortedSubFilterIds.add('none');
           }
-
           for (String subFilterId in sortedSubFilterIds) {
             final productList = subGroupMap[subFilterId]!;
             if (productList.isNotEmpty) {
               String subFilterName = _kioskFilterMap[subFilterId]?.name ??
                   (subFilterId == 'none' ? 'Autres' : 'Inconnu');
-
               _displayList.add(_SubFilterHeader(
                   parentCategoryId: category.id,
                   subFilterId: subFilterId,
@@ -376,7 +330,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         }
       }
     }
-
     if (groupedProducts.containsKey(null)) {
       _displayList
           .add(_FilterHeader(categoryId: 'null', filterName: "Non classés"));
@@ -388,9 +341,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       }
     }
   }
-
-  // --- BUILD UI ---
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -407,7 +357,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         .doc(franchiseeId)
         .collection('menu');
     Map<String, FranchiseeMenuItem> currentFranchiseeSettings = {};
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       appBar: AppBar(
@@ -523,17 +472,14 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     _isLoadingFilters) {
                   return const Center(child: CircularProgressIndicator());
                 }
-
                 if (!snapshot.hasData || snapshot.data!.isEmpty) {
                   return const Center(
                       child: Text("Le catalogue du franchiseur est vide."));
                 }
-
                 List<MasterProduct> allRawProducts = snapshot.data!;
                 List<MasterProduct> visibleProducts = allRawProducts
                     .where((product) => !product.isIngredient)
                     .toList();
-
                 return StreamBuilder<QuerySnapshot>(
                   stream: franchiseeMenuRef.snapshots(),
                   builder: (context, menuSnapshot) {
@@ -541,7 +487,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                         ConnectionState.waiting) {
                       return const Center(child: CircularProgressIndicator());
                     }
-
                     currentFranchiseeSettings =
                     Map<String, FranchiseeMenuItem>.fromEntries(
                       (menuSnapshot.data?.docs ?? []).map(
@@ -553,22 +498,17 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                             ),
                       ),
                     );
-
                     if (_mode == _CatalogueMode.ordering) {
                       return _buildOrderView(franchiseeMenuRef, visibleProducts,
                           currentFranchiseeSettings);
                     }
-
-                    // --- MODE PRIX ---
                     List<MasterProduct> filteredProducts = visibleProducts;
-
                     if (_searchQuery.isNotEmpty) {
                       filteredProducts = filteredProducts
                           .where((p) =>
                           p.name.toLowerCase().contains(_searchQuery))
                           .toList();
                     }
-
                     if (_currentSmartFilter == _SmartFilter.active) {
                       filteredProducts = filteredProducts
                           .where((p) =>
@@ -593,7 +533,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       filteredProducts = filteredProducts.where((p) =>
                       p.isContainer).toList();
                     }
-
                     if (_selectedBackOfficeFilterId != null) {
                       filteredProducts = filteredProducts
                           .where((p) =>
@@ -601,14 +540,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                               .contains(_selectedBackOfficeFilterId))
                           .toList();
                     }
-
                     if (_selectedKioskFilterId != null) {
                       filteredProducts = filteredProducts
                           .where((p) =>
                           p.kioskFilterIds.contains(_selectedKioskFilterId))
                           .toList();
                     }
-
                     if (filteredProducts.isEmpty) {
                       return const Center(
                         child: Column(
@@ -623,7 +560,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                         ),
                       );
                     }
-
                     return _buildPriceView(
                         filteredProducts,
                         currentFranchiseeSettings,
@@ -638,9 +574,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       ),
     );
   }
-
-  // --- WIDGETS ---
-
   Widget _buildSmartFilterChip(String label, _SmartFilter value,
       {IconData? icon, Color? color}) {
     final isSelected = _currentSmartFilter == value;
@@ -671,7 +604,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       showCheckmark: false,
     );
   }
-
   Widget _buildModeToggle() {
     return SizedBox(
       width: double.infinity,
@@ -704,9 +636,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       ),
     );
   }
-
-  // --- VIEWS ---
-
   Widget _buildPriceView(List<MasterProduct> productsToDisplay,
       Map<String, FranchiseeMenuItem> franchiseeSettings,
       CollectionReference franchiseeMenuRef,
@@ -714,14 +643,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final franchiseeId = authProvider.firebaseUser?.uid;
     final franchisorId = authProvider.franchiseUser?.franchisorId;
-
     return ListView.builder(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
       itemCount: productsToDisplay.length,
       itemBuilder: (context, index) {
         final product = productsToDisplay[index];
         final settings = franchiseeSettings[product.productId];
-
         return FranchiseeProductCard(
           product: product,
           settings: settings ?? FranchiseeMenuItem(
@@ -760,8 +687,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       },
     );
   }
-
-  // --- SAVE FUNCTIONS ---
   Future<void> _saveChildProductPrice(CollectionReference menuRef,
       MasterProduct product, double newPrice) async {
     try {
@@ -775,7 +700,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         'isContainer': product.isContainer,
         'containerProductIds': product.containerProductIds,
       }, SetOptions(merge: true));
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Prix mis à jour : ${newPrice.toStringAsFixed(2)} €"),
@@ -786,7 +710,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       debugPrint("Erreur sauvegarde prix enfant: $e");
     }
   }
-
   Future<void> _confirmDisable(BuildContext context,
       CollectionReference menuRef,
       MasterProduct product,
@@ -811,7 +734,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           ),
     );
     if (confirm != true) return;
-
     try {
       final mainDocRef = menuRef.doc(product.productId);
       final batch = FirebaseFirestore.instance.batch();
@@ -823,7 +745,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
             'position': settings?.position ?? 0
           },
           SetOptions(merge: true));
-
       await batch.commit();
     } catch (e) {
       if (context.mounted) {
@@ -832,8 +753,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       }
     }
   }
-
-  // --- ORDRE D'AFFICHAGE ---
   Widget _buildOrderView(CollectionReference franchiseeMenuRef,
       List<MasterProduct> allMasterProducts,
       Map<String, FranchiseeMenuItem> franchiseeSettings) {
@@ -850,7 +769,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           ]));
     }
     _prepareOrderModeData(allMasterProducts, franchiseeSettings);
-
     if (_displayList.isEmpty) {
       return const Center(
           child: Padding(
@@ -859,14 +777,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                   "Aucun produit visible pour l'organisation.\nActivez des produits depuis l'onglet 'Catalogue & Prix' d'abord.",
                   textAlign: TextAlign.center)));
     }
-
     return ReorderableListView.builder(
       padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 16.0),
       itemCount: _displayList.length,
       buildDefaultDragHandles: false,
       itemBuilder: (context, index) {
         final item = _displayList[index];
-
         if (item is _FilterHeader) {
           bool isExpanded =
           _expansionState.putIfAbsent(item.categoryId, () => false);
@@ -971,11 +887,10 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         final dynamic movedItem = _displayList.removeAt(oldDisplayIndex);
         _displayList.insert(newDisplayIndex, movedItem);
         setState(() {});
-
         if (movedItem is _FilterHeader) {
           _saveFilterOrder();
         } else if (movedItem is _SubFilterHeader) {
-          _saveSubFilterOrder(movedItem.parentCategoryId, []); // Simplifié
+          _saveSubFilterOrder(movedItem.parentCategoryId, []); 
         } else
         if (movedItem is ({MasterProduct product, FranchiseeMenuItem settings})) {
           _saveOrder(franchiseeMenuRef);
@@ -983,7 +898,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       },
     );
   }
-
   void _showPriceDialog(BuildContext context, CollectionReference menuRef,
       MasterProduct product, FranchiseeMenuItem? currentSettings,
       {bool isComposite = false,
@@ -992,18 +906,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
         required String franchisorId,
         List<MasterProduct>? allProducts,
         Map<String, FranchiseeMenuItem>? franchiseeSettings}) {
-
-    // --- LOGIQUE D'INITIALISATION ---
-    // On n'affiche une valeur que si elle existe REELLEMENT dans les settings du franchisé.
-    // Si currentSettings.price est null, le champ reste VIDE pour afficher le prix conseillé en gris (hint).
     String initialPrice = '';
     if (currentSettings != null && currentSettings.price != null) {
       initialPrice = currentSettings.price!.toStringAsFixed(2);
     }
-
     final priceController = TextEditingController(text: initialPrice);
-
-    // Initialisation des options
     final Map<String, TextEditingController> optionControllers = {};
     for (var opt in product.options) {
       double? existingPrice = currentSettings?.optionPrices[opt.id];
@@ -1011,14 +918,11 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           text: existingPrice != null ? existingPrice.toStringAsFixed(2) : ""
       );
     }
-
     final List<double> vatRates = [5.5, 10.0, 20.0];
     double selectedVat = currentSettings?.vatRate ?? 10.0;
     double selectedTakeawayVat = currentSettings?.takeawayVatRate ?? 5.5;
     bool hidePrice = currentSettings?.hidePriceOnCard ?? false;
-
     final bool showCompositionBtn = isComposite || product.sectionIds.isNotEmpty || product.ingredientProductIds.isNotEmpty;
-
     TimeOfDay? startTime;
     TimeOfDay? endTime;
     if(currentSettings?.availableStartTime != null) {
@@ -1029,7 +933,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       final parts = currentSettings!.availableEndTime!.split(':');
       endTime = TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
     }
-
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1041,7 +944,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
               final picked = await showTimePicker(context: context, initialTime: (isStart ? startTime : endTime) ?? const TimeOfDay(hour: 12, minute: 0));
               if (picked != null) setStateDialog(() { if (isStart) startTime = picked; else endTime = picked; });
             }
-
             return SizedBox(
               width: 500,
               child: SingleChildScrollView(
@@ -1071,7 +973,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       ),
                       const Divider(height: 20),
                     ],
-
                     if (isContainer) ...[
                       Container(
                         width: double.infinity,
@@ -1088,7 +989,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                                 allProducts: allProducts ?? [],
                                 franchiseeSettings: franchiseeSettings ?? {},
                                 onUpdateChildPrice: (child, newPrice) {
-                                  // Géré par le composant
                                 },
                               ),
                             );
@@ -1097,7 +997,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       ),
                       const Divider(height: 20),
                     ],
-
                     Text("Prix et Taxes", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     TextFormField(
@@ -1105,7 +1004,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       autofocus: true,
                       decoration: InputDecoration(
                         labelText: "Prix TTC (€)",
-                        // Affiche le prix par défaut du franchiseur si RIEN n'est saisi
                         hintText: "Conseillé : ${product.price?.toStringAsFixed(2)} €",
                         helperText: "Laissez vide pour le prix franchiseur",
                         prefixIcon: const Icon(Icons.euro),
@@ -1127,9 +1025,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       ],
                     ),
                     SwitchListTile(title: const Text("Masquer prix (Carte)"), value: hidePrice, onChanged: (v) => setStateDialog(() => hidePrice = v), contentPadding: EdgeInsets.zero),
-
                     const Divider(height: 24),
-
                     Text("Disponibilité", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 10),
                     Row(children: [
@@ -1146,9 +1042,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                           label: const Text("Effacer horaires", style: TextStyle(color: Colors.red)),
                         ),
                       ),
-
                     const Divider(height: 24),
-
                     if (product.options.isNotEmpty) ...[
                       Text("Options / Suppléments", style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
                       const SizedBox(height: 10),
@@ -1188,11 +1082,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
               onPressed: () async {
                 final String rawText = priceController.text.replaceAll(',', '.').trim();
                 final double? parsedPrice = double.tryParse(rawText);
-
-                // Préparation des données
                 String? startStr = startTime != null ? "${startTime!.hour}:${startTime!.minute.toString().padLeft(2,'0')}" : null;
                 String? endStr = endTime != null ? "${endTime!.hour}:${endTime!.minute.toString().padLeft(2,'0')}" : null;
-
                 Map<String, double> newOptionPrices = {};
                 optionControllers.forEach((key, controller) {
                   final String optText = controller.text.replaceAll(',', '.').trim();
@@ -1201,7 +1092,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                     if (val != null) newOptionPrices[key] = val;
                   }
                 });
-
                 final Map<String, dynamic> data = {
                   'vatRate': selectedVat,
                   'takeawayVatRate': selectedTakeawayVat,
@@ -1216,19 +1106,12 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                   'containerProductIds': product.containerProductIds,
                   'updatedAt': FieldValue.serverTimestamp(),
                 };
-
-                // --- LOGIQUE DE SUPPRESSION (Identique aux ingrédients) ---
                 if (rawText.isEmpty) {
-                  // L'utilisateur a tout effacé -> On supprime le champ 'price'
-                  // C'est cette suppression qui permet de récupérer le prix franchiseur
                   data['price'] = FieldValue.delete();
                 } else {
-                  // L'utilisateur a mis une valeur (même 0) -> On l'enregistre
                   data['price'] = parsedPrice ?? 0.0;
                 }
-
                 await menuRef.doc(product.productId).set(data, SetOptions(merge: true));
-
                 if (context.mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1242,11 +1125,6 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       ),
     );
   }}
-
-// =========================================================================
-// WIDGET CARTE PRODUIT - OPTIMISÉ (Stateless)
-// =========================================================================
-
 class FranchiseeProductCard extends StatelessWidget {
   final MasterProduct product;
   final FranchiseeMenuItem settings;
@@ -1257,7 +1135,6 @@ class FranchiseeProductCard extends StatelessWidget {
   final VoidCallback onConfirmDisable;
   final Function(bool) onToggleStock;
   final Function(bool) onToggleVisibility;
-
   const FranchiseeProductCard({
     super.key,
     required this.product,
@@ -1270,21 +1147,16 @@ class FranchiseeProductCard extends StatelessWidget {
     required this.onToggleStock,
     required this.onToggleVisibility,
   });
-
   @override
   Widget build(BuildContext context) {
     final bool isVisible = settings.isVisible;
     final bool isAvailable = settings.isAvailable;
     final bool hasHours = settings.availableStartTime != null;
-
     final String? imageUrl = product.photoUrl;
-
-    // --- COULEURS ET STYLE ---
     Color accentColor = Theme.of(context).primaryColor;
     IconData fallbackIcon = Icons.fastfood;
     String typeLabel = "";
     Color cardColor = isVisible ? Colors.white : Colors.grey.shade50;
-
     if (product.isContainer) {
       accentColor = Colors.indigo;
       fallbackIcon = Icons.folder;
@@ -1295,11 +1167,9 @@ class FranchiseeProductCard extends StatelessWidget {
       fallbackIcon = Icons.restaurant_menu;
       typeLabel = "Menu";
     }
-
     final bool hasComposition = product.isComposite ||
         product.sectionIds.isNotEmpty ||
         product.ingredientProductIds.isNotEmpty;
-
     return Card(
       elevation: 2,
       shadowColor: Colors.black12,
@@ -1316,7 +1186,6 @@ class FranchiseeProductCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // --- IMAGE ---
                 SizedBox(
                   width: 110,
                   child: Stack(
@@ -1331,7 +1200,6 @@ class FranchiseeProductCard extends StatelessWidget {
                         )
                       else
                         _buildPlaceholder(accentColor, fallbackIcon, isMissing: true),
-
                       if (!isVisible)
                         Container(
                           color: Colors.white.withOpacity(0.85),
@@ -1344,7 +1212,6 @@ class FranchiseeProductCard extends StatelessWidget {
                           alignment: Alignment.center,
                           child: const Icon(Icons.remove_shopping_cart, color: Colors.white, size: 30),
                         ),
-
                       if (typeLabel.isNotEmpty)
                         Positioned(
                           top: 0, left: 0,
@@ -1357,8 +1224,6 @@ class FranchiseeProductCard extends StatelessWidget {
                     ],
                   ),
                 ),
-
-                // --- CONTENU OPTIMISÉ ---
                 Expanded(
                   child: Padding(
                     padding: const EdgeInsets.all(12.0),
@@ -1383,7 +1248,6 @@ class FranchiseeProductCard extends StatelessWidget {
                           ],
                         ),
                         const Spacer(),
-                        // ✨ PRIX AFFICHÉ STATIQUEMENT (Pas d'input ici)
                         if (!product.isContainer)
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -1411,7 +1275,6 @@ class FranchiseeProductCard extends StatelessWidget {
                                   color: Colors.blue.shade700,
                                   bgColor: Colors.blue.shade50
                               ),
-
                             if (isVisible)
                               isAvailable
                                   ? _DetailChip(icon: Icons.check, label: "En Stock", color: Colors.green.shade700, bgColor: Colors.green.shade50)
@@ -1425,15 +1288,13 @@ class FranchiseeProductCard extends StatelessWidget {
               ],
             ),
           ),
-
-          // --- BARRE D'ACTIONS OPTIMISÉE ---
           if (isVisible) ...[
             const Divider(height: 1),
             IntrinsicHeight(
               child: Row(
                 children: [
                   Expanded(
-                    flex: 2, // Plus d'espace pour le bouton principal
+                    flex: 2, 
                     child: InkWell(
                       onTap: onTapConfig,
                       child: Padding(
@@ -1462,7 +1323,7 @@ class FranchiseeProductCard extends StatelessWidget {
                   ),
                   VerticalDivider(width: 1, indent: 8, endIndent: 8, color: Colors.grey.shade300),
                   Expanded(
-                    flex: 1, // Bouton rapide pour le stock
+                    flex: 1, 
                     child: InkWell(
                       onTap: () => onToggleStock(!isAvailable),
                       child: Container(
@@ -1487,7 +1348,6 @@ class FranchiseeProductCard extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildPlaceholder(Color color, IconData icon, {bool isMissing = false}) {
     return Container(
       color: Colors.grey.shade100,
@@ -1503,7 +1363,6 @@ class FranchiseeProductCard extends StatelessWidget {
     );
   }
 }
-
 class _DetailChip extends StatelessWidget {
   final IconData icon;
   final String label;

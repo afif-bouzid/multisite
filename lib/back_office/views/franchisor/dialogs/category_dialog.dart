@@ -8,37 +8,30 @@ import '../../../../core/constants.dart';
 import '../../../../core/repository/repository.dart';
 import '../image_input_card.dart';
 import '/models.dart';
-
 const List<String> _kLocalPalette = [
   '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#2196F3',
   '#03A9F4', '#00BCD4', '#009688', '#4CAF50', '#8BC34A',
   '#CDDC39', '#FFC107', '#FF9800', '#FF5722', '#795548',
   '#9E9E9E', '#607D8B', '#000000'
 ];
-
 class KioskView extends StatefulWidget {
   const KioskView({super.key});
-
   @override
   State<KioskView> createState() => _KioskViewState();
 }
-
 class _KioskViewState extends State<KioskView> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late Stream<List<KioskCategory>> _categoriesStream;
-
   @override
   void initState() {
     super.initState();
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
     _categoriesStream = FranchiseRepository().getKioskCategoriesStream(uid);
   }
-
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
     return Scaffold(
       key: _scaffoldKey,
       backgroundColor: const Color(0xFFF5F7FA),
@@ -51,13 +44,10 @@ class _KioskViewState extends State<KioskView> {
           if (snapshot.hasError) {
             return const Center(child: Text("Erreur de chargement", style: TextStyle(color: Colors.red)));
           }
-
           final categories = List<KioskCategory>.from(snapshot.data ?? []);
-
           if (categories.isEmpty) {
             return _buildEmptyState(context, uid);
           }
-
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -111,7 +101,6 @@ class _KioskViewState extends State<KioskView> {
       ),
     );
   }
-
   Widget _buildEmptyState(BuildContext context, String uid) {
     return Center(
       child: Column(
@@ -147,7 +136,6 @@ class _KioskViewState extends State<KioskView> {
       ),
     );
   }
-
   Widget _buildHeaderInfo(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -171,13 +159,11 @@ class _KioskViewState extends State<KioskView> {
     );
   }
 }
-
 class CategoryCard extends StatefulWidget {
   final KioskCategory category;
   final int index;
   final FranchiseRepository repository;
   final String franchisorId;
-
   const CategoryCard({
     super.key,
     required this.category,
@@ -185,14 +171,11 @@ class CategoryCard extends StatefulWidget {
     required this.repository,
     required this.franchisorId,
   });
-
   @override
   State<CategoryCard> createState() => _CategoryCardState();
 }
-
 class _CategoryCardState extends State<CategoryCard> {
   late Stream<List<KioskFilter>> _filtersStream;
-
   @override
   void initState() {
     super.initState();
@@ -204,7 +187,6 @@ class _CategoryCardState extends State<CategoryCard> {
         .snapshots()
         .map((snapshot) => snapshot.docs.map((doc) => KioskFilter.fromFirestore(doc)).toList());
   }
-
   void _confirmDeleteCategory(BuildContext context) async {
     final confirm = await showDialog<bool>(
         context: context,
@@ -220,7 +202,6 @@ class _CategoryCardState extends State<CategoryCard> {
       await widget.repository.deleteKioskCategory(widget.category.id);
     }
   }
-
   void _showFilterDialog(BuildContext context, {KioskFilter? filter}) {
     showDialog(
       context: context,
@@ -230,7 +211,6 @@ class _CategoryCardState extends State<CategoryCard> {
       ),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<KioskFilter>>(
@@ -238,7 +218,6 @@ class _CategoryCardState extends State<CategoryCard> {
       builder: (context, snapshot) {
         final filters = snapshot.data ?? [];
         final bool canDelete = filters.isEmpty;
-
         return Container(
           margin: const EdgeInsets.only(bottom: 16),
           decoration: BoxDecoration(
@@ -348,7 +327,6 @@ class _CategoryCardState extends State<CategoryCard> {
       },
     );
   }
-
   Widget _buildEmptyFilterState() {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -359,7 +337,6 @@ class _CategoryCardState extends State<CategoryCard> {
       ),
     );
   }
-
   Widget _buildFilterList(List<KioskFilter> filters) {
     return ReorderableListView.builder(
       shrinkWrap: true,
@@ -385,7 +362,6 @@ class _CategoryCardState extends State<CategoryCard> {
       },
     );
   }
-
   Widget _buildFilterRow(KioskFilter filter, int index) {
     Color seedColor;
     if (filter.color != null && filter.color!.isNotEmpty) {
@@ -397,7 +373,6 @@ class _CategoryCardState extends State<CategoryCard> {
     } else {
       seedColor = Colors.blue;
     }
-
     return Container(
       key: ValueKey(filter.id),
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -467,29 +442,20 @@ class _CategoryCardState extends State<CategoryCard> {
     );
   }
 }
-
-// --- BOÎTE DE DIALOGUE CATÉGORIE AVEC CROIX ---
-
 class CategoryEditorDialog extends StatefulWidget {
   final KioskCategory? category;
   final String franchisorId;
-
   const CategoryEditorDialog({super.key, this.category, required this.franchisorId});
-
   @override
   State<CategoryEditorDialog> createState() => _CategoryEditorDialogState();
 }
-
 class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   bool _isLoading = false;
-
-  // Variables Image (avec logique croix)
   XFile? _imageFile;
   String? _displayUrl;
   String? _originalUrl;
-
   @override
   void initState() {
     super.initState();
@@ -499,20 +465,15 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
       _originalUrl = widget.category!.imageUrl;
     }
   }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
     try {
       final repo = FranchiseRepository();
-
-      // LOGIQUE SUPPRESSION : Si pas de fichier et URL vide, on envoie "" pour supprimer
       String finalUrlParam = "";
       if (_imageFile == null && (_displayUrl != null && _displayUrl!.isNotEmpty)) {
         finalUrlParam = _displayUrl!;
       }
-
       await repo.saveKioskCategory(
         id: widget.category?.id,
         name: _nameController.text.trim(),
@@ -521,7 +482,6 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
         existingImageUrl: _originalUrl,
         imageUrl: finalUrlParam,
       );
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
@@ -529,7 +489,6 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -539,7 +498,6 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // --- WIDGET AVEC LA CROIX ---
             ImageInputCard(
               label: "Image",
               imageFile: _imageFile,
@@ -550,7 +508,7 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
                 if (img != null) setState(() { _imageFile = img; _displayUrl = ""; });
               },
               onRemove: () {
-                setState(() { _imageFile = null; _displayUrl = ""; }); // La croix vide l'URL
+                setState(() { _imageFile = null; _displayUrl = ""; }); 
               },
             ),
             const SizedBox(height: 20),
@@ -572,30 +530,21 @@ class _CategoryEditorDialogState extends State<CategoryEditorDialog> {
     );
   }
 }
-
-// --- BOÎTE DE DIALOGUE FILTRE (SOUS-CATÉGORIE) AVEC CROIX ---
-
 class FilterEditorDialog extends StatefulWidget {
   final String categoryId;
   final KioskFilter? filter;
-
   const FilterEditorDialog({super.key, required this.categoryId, this.filter});
-
   @override
   State<FilterEditorDialog> createState() => _FilterEditorDialogState();
 }
-
 class _FilterEditorDialogState extends State<FilterEditorDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   String? _selectedColor;
   bool _isLoading = false;
-
-  // Variables Image (avec logique croix)
   XFile? _imageFile;
   String? _displayUrl;
   String? _originalUrl;
-
   @override
   void initState() {
     super.initState();
@@ -606,20 +555,15 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
       _originalUrl = widget.filter!.imageUrl;
     }
   }
-
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
-
     try {
       final repo = FranchiseRepository();
-
-      // LOGIQUE SUPPRESSION
       String finalUrlParam = "";
       if (_imageFile == null && (_displayUrl != null && _displayUrl!.isNotEmpty)) {
         finalUrlParam = _displayUrl!;
       }
-
       await repo.saveKioskFilter(
         categoryId: widget.categoryId,
         filterId: widget.filter?.id,
@@ -630,7 +574,6 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
         existingImageUrl: _originalUrl,
         imageUrl: finalUrlParam,
       );
-
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
@@ -638,7 +581,6 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -650,7 +592,6 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // --- WIDGET AVEC LA CROIX ---
               Center(
                 child: ImageInputCard(
                   label: "Icône",
@@ -662,7 +603,7 @@ class _FilterEditorDialogState extends State<FilterEditorDialog> {
                     if (img != null) setState(() { _imageFile = img; _displayUrl = ""; });
                   },
                   onRemove: () {
-                    setState(() { _imageFile = null; _displayUrl = ""; }); // La croix vide l'URL
+                    setState(() { _imageFile = null; _displayUrl = ""; }); 
                   },
                 ),
               ),

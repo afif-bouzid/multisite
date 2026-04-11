@@ -1,26 +1,20 @@
 import 'package:flutter/material.dart';
 import '../../../models.dart';
-
 class ContainerSelectionDialog extends StatelessWidget {
   final Product containerProduct;
-  final List<Product> allProducts; // Tout le catalogue pour retrouver les enfants
-  final Function(Product) onProductSelected; // Callback quand on choisit un item
-
+  final List<Product> allProducts; 
+  final Function(Product) onProductSelected; 
   const ContainerSelectionDialog({
     Key? key,
     required this.containerProduct,
     required this.allProducts,
     required this.onProductSelected,
   }) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
-    // 1. On filtre le catalogue pour trouver les vrais objets produits
-    // qui correspondent aux IDs stockés dans le conteneur.
     final List<Product> childrenProducts = allProducts
         .where((p) => containerProduct.containerProductIds.contains(p.id))
         .toList();
-
     return AlertDialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
       title: Row(
@@ -34,13 +28,13 @@ class ContainerSelectionDialog extends StatelessWidget {
         ],
       ),
       content: SizedBox(
-        width: 600, // Largeur forcée pour le confort sur tablette/POS
+        width: 600, 
         height: 400,
         child: childrenProducts.isEmpty
             ? const Center(child: Text("Ce dossier est vide."))
             : GridView.builder(
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, // 3 colonnes dans la modale
+            crossAxisCount: 3, 
             childAspectRatio: 0.8,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
@@ -48,12 +42,9 @@ class ContainerSelectionDialog extends StatelessWidget {
           itemCount: childrenProducts.length,
           itemBuilder: (context, index) {
             final product = childrenProducts[index];
-            // On réutilise la carte produit mais en mode "lecture seule" ou simplifiée
-            // Ici on fait une carte simple interne pour la modale
             return InkWell(
               onTap: () {
                 onProductSelected(product);
-                // Optionnel : Navigator.of(context).pop(); // Décommenter pour fermer après 1 clic
               },
               child: Card(
                 elevation: 2,
@@ -104,36 +95,25 @@ class ContainerSelectionDialog extends StatelessWidget {
     );
   }
 }
-
-/// --------------------------------------------------------------------------
-/// CLASSE 2 : LA CARTE PRODUIT (DANS LA GRILLE PRINCIPALE)
-/// Gère intelligemment le clic : Ajout Panier OU Ouverture Dossier
-/// --------------------------------------------------------------------------
 class FranchiseeProductCard extends StatelessWidget {
   final Product product;
-  final List<Product> allProducts; // Nécessaire pour passer au dialog
-  final Function(Product) onAddToCart; // L'action d'ajout au panier
-
+  final List<Product> allProducts; 
+  final Function(Product) onAddToCart; 
   const FranchiseeProductCard({
     Key? key,
     required this.product,
     required this.allProducts,
     required this.onAddToCart,
   }) : super(key: key);
-
   void _handleTap(BuildContext context) {
     if (product.isContainer) {
-      // CAS A : C'est un conteneur -> On ouvre la modale
       showDialog(
         context: context,
         builder: (context) => ContainerSelectionDialog(
           containerProduct: product,
           allProducts: allProducts,
           onProductSelected: (selectedChild) {
-            // Quand on clique sur un produit DANS le dossier, on l'ajoute au panier
             onAddToCart(selectedChild);
-
-            // Feedback visuel rapide (Optionnel)
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text("${selectedChild.name} ajouté !"),
@@ -144,18 +124,14 @@ class FranchiseeProductCard extends StatelessWidget {
         ),
       );
     } else {
-      // CAS B : C'est un produit normal -> On l'ajoute directement
       onAddToCart(product);
     }
   }
-
   @override
   Widget build(BuildContext context) {
-    // Design distinct pour les dossiers
     final isFolder = product.isContainer;
     final cardColor = isFolder ? Colors.orange.shade50 : Colors.white;
     final borderColor = isFolder ? Colors.orange.shade200 : Colors.grey.shade200;
-
     return InkWell(
       onTap: () => _handleTap(context),
       child: Card(
@@ -168,7 +144,6 @@ class FranchiseeProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // IMAGE
             Expanded(
               flex: 3,
               child: Stack(
@@ -207,7 +182,6 @@ class FranchiseeProductCard extends StatelessWidget {
                 ],
               ),
             ),
-            // INFO TEXTE
             Expanded(
               flex: 2,
               child: Padding(

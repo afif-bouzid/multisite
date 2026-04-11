@@ -2,7 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '/models.dart';
-
 class FranchiseeProductCard extends StatelessWidget {
   final MasterProduct product;
   final FranchiseeMenuItem? settings;
@@ -12,7 +11,6 @@ class FranchiseeProductCard extends StatelessWidget {
   final VoidCallback onTapCard;
   final Function(bool) onToggleSwitch;
   final VoidCallback onToggleStock;
-
   const FranchiseeProductCard({
     super.key,
     required this.product,
@@ -24,20 +22,14 @@ class FranchiseeProductCard extends StatelessWidget {
     required this.onToggleSwitch,
     required this.onToggleStock,
   });
-
   @override
   Widget build(BuildContext context) {
-    // Récupération des états
     final bool isVisible = settings?.isVisible ?? false;
     final bool isAvailable = settings?.isAvailable ?? true;
     final double price = settings?.price ?? 0.0;
-
-    // --- DISTINCTION VISUELLE ---
-    // Si c'est un conteneur, on applique un style "Dossier" (Orange)
     final bool isContainer = product.isContainer;
     final Color cardColor = isContainer ? Colors.orange.shade50 : Colors.white;
     final Color borderColor = isContainer ? Colors.orange.shade200 : Colors.grey.shade200;
-
     return Card(
       elevation: 2,
       margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 0),
@@ -53,7 +45,6 @@ class FranchiseeProductCard extends StatelessWidget {
           padding: const EdgeInsets.all(12.0),
           child: Row(
             children: [
-              // --- 1. IMAGE OU ICONE ---
               Container(
                 width: 60,
                 height: 60,
@@ -74,8 +65,6 @@ class FranchiseeProductCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 16),
-
-              // --- 2. INFORMATIONS PRINCIPALES ---
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -91,8 +80,6 @@ class FranchiseeProductCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
-
-                    // --- AFFICHAGE PRIX ou LABEL DOSSIER ---
                     if (isContainer)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -118,8 +105,6 @@ class FranchiseeProductCard extends StatelessWidget {
                           color: Colors.blueGrey,
                         ),
                       ),
-
-                    // Petit indicateur si masqué sur la borne mais actif
                     if (isVisible && (settings?.hidePriceOnCard ?? false) && !isContainer)
                       const Text(
                         "Prix masqué sur carte",
@@ -128,12 +113,9 @@ class FranchiseeProductCard extends StatelessWidget {
                   ],
                 ),
               ),
-
-              // --- 3. ACTIONS (Switch & Stock) ---
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // Switch ON/OFF (Visible)
                   Row(
                     children: [
                       Text(
@@ -151,8 +133,6 @@ class FranchiseeProductCard extends StatelessWidget {
                       ),
                     ],
                   ),
-
-                  // Bouton Stock (Uniquement si visible)
                   if (isVisible)
                     InkWell(
                       onTap: onToggleStock,
@@ -187,7 +167,6 @@ class FranchiseeProductCard extends StatelessWidget {
       ),
     );
   }
-
   Widget _buildFallbackIcon(bool isContainer) {
     return Center(
       child: Icon(

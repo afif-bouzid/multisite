@@ -1,11 +1,8 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 import 'dart:io';
-
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-
 import '../../models.dart';
-
 class PosLocalConfig {
   String franchiseeId;
   String franchisorId;
@@ -13,7 +10,6 @@ class PosLocalConfig {
   String receiptPrinterIp;
   String kitchenPrinterIp;
   bool isAutoPrintEnabled;
-
   PosLocalConfig({
     this.franchiseeId = "",
     this.franchisorId = "",
@@ -22,7 +18,6 @@ class PosLocalConfig {
     this.kitchenPrinterIp = "",
     this.isAutoPrintEnabled = false,
   });
-
   Map<String, dynamic> toJson() => {
         'franchiseeId': franchiseeId,
         'franchisorId': franchisorId,
@@ -31,7 +26,6 @@ class PosLocalConfig {
         'kitchenPrinterIp': kitchenPrinterIp,
         'isAutoPrintEnabled': isAutoPrintEnabled,
       };
-
   factory PosLocalConfig.fromJson(Map<String, dynamic> json) {
     return PosLocalConfig(
       franchiseeId: json['franchiseeId'] ?? "",
@@ -43,15 +37,12 @@ class PosLocalConfig {
     );
   }
 }
-
 class LocalConfigService {
   static const String _printerConfigKey = 'printer_config';
   static const String _receiptConfigKey = 'receipt_config';
-
   Future<PrinterConfig> getPrinterConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final String? jsonString = prefs.getString(_printerConfigKey);
-
     if (jsonString != null) {
       try {
         return PrinterConfig.fromFirestore(json.decode(jsonString));
@@ -61,13 +52,11 @@ class LocalConfigService {
     }
     return PrinterConfig();
   }
-
   Future<void> savePrinterConfig(PrinterConfig config) async {
     final prefs = await SharedPreferences.getInstance();
     String jsonString = json.encode(config.toMap());
     await prefs.setString(_printerConfigKey, jsonString);
   }
-
   Future<ReceiptConfig> getReceiptConfig() async {
     final prefs = await SharedPreferences.getInstance();
     final String? jsonString = prefs.getString(_receiptConfigKey);
@@ -88,7 +77,6 @@ class LocalConfigService {
         showVatDetails: true,
         printReceiptOnPayment: true);
   }
-
   Future<void> saveReceiptConfig(ReceiptConfig config) async {
     final prefs = await SharedPreferences.getInstance();
     String jsonString = json.encode(config.toMap());

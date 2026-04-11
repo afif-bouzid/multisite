@@ -1,20 +1,14 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
-// --- IMPORTS ---
-// Vérifiez que ces chemins correspondent bien à votre structure
 import '../../../../../core/repository/repository.dart';
 import '../../../../models.dart';
 import '../../../../../core/services/printing_service.dart';
 import '../../../../../core/services/local_config_service.dart';
 import '../../../../../core/auth_provider.dart';
-
 class SessionTransactionsDialog extends StatelessWidget {
   final List<Transaction> transactions;
-
   const SessionTransactionsDialog({super.key, required this.transactions});
-
   Icon _getPaymentIcon(Map<String, dynamic> methods) {
     if (methods.keys.length > 1) {
       return const Icon(Icons.splitscreen_outlined, color: Colors.blueGrey);
@@ -27,7 +21,6 @@ class SessionTransactionsDialog extends StatelessWidget {
     }
     return const Icon(Icons.payment, color: Colors.blueGrey);
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -43,16 +36,11 @@ class SessionTransactionsDialog extends StatelessWidget {
             final transaction = transactions[index];
             final time = DateFormat('HH:mm')
                 .format(transaction.timestamp.toLocal());
-
-            // Sécurisation : total ou totalAmount
             final double totalVal = (transaction as dynamic).total ??
                 (transaction as dynamic).totalAmount ?? 0.0;
-
-            // Affichage ID court
             final String idShort = transaction.id.length > 4
                 ? transaction.id.substring(0, 4)
                 : transaction.id;
-
             return Card(
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ExpansionTile(
@@ -68,7 +56,6 @@ class SessionTransactionsDialog extends StatelessWidget {
                   final price = item is Map ? (item['price'] ?? 0.0) : (item as dynamic).price;
                   final qty = item is Map ? (item['quantity'] ?? 1) : (item as dynamic).quantity;
                   final double itemTotal = (double.parse(price.toString()) * int.parse(qty.toString()));
-
                   return ListTile(
                     dense: true,
                     title: Text("${qty}x $name"),
@@ -89,65 +76,45 @@ class SessionTransactionsDialog extends StatelessWidget {
     );
   }
 }
-
 class TransactionDetailDialog extends StatefulWidget {
   final Transaction transaction;
-
   const TransactionDetailDialog({super.key, required this.transaction});
-
   @override
   State<TransactionDetailDialog> createState() =>
       _TransactionDetailDialogState();
 }
-
 class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
   bool _isReprinting = false;
-
-  /// Fonction utilitaire pour convertir n'importe quel Item (Map ou Objet) en Map propre
-  /// Cela évite les erreurs de type "dynamic" dans le service d'impression
   Map<String, dynamic> _safeItemToMap(dynamic item) {
     if (item is Map) {
       return Map<String, dynamic>.from(item);
     }
-    // Si c'est un objet (CartItem, Product, etc.), on essaie de le convertir
     try {
       return (item as dynamic).toMap();
     } catch (_) {
-      // Fallback manuel si .toMap() n'existe pas
       return {
         'name': (item as dynamic).name,
         'quantity': (item as dynamic).quantity,
         'price': (item as dynamic).price,
-        'options': (item as dynamic).selectedOptions, // Ou 'options'
+        'options': (item as dynamic).selectedOptions, 
         'removedIngredientNames': (item as dynamic).removedIngredientNames,
       };
     }
   }
-
   Future<void> _handleReprint(BuildContext context,
       {required bool isKitchen}) async {
     setState(() => _isReprinting = true);
     try {
       final localConfig = await LocalConfigService().getPrinterConfig();
-
       if (isKitchen) {
-        // --- IMPRESSION TICKET CUISINE ---
-
-        // 1. ID Sécurisé (4 caractères)
         final String safeId = widget.transaction.id.length >= 4
             ? widget.transaction.id.substring(0, 4)
             : widget.transaction.id;
-
-        // 2. Conversion PROPRE des articles en Liste de Maps
         final List<Map<String, dynamic>> cleanItems = widget.transaction.items
             .map((item) => _safeItemToMap(item))
             .toList();
-
         debugPrint("Envoi Cuisine: ${cleanItems.length} articles (ID: $safeId)");
-
         if (cleanItems.isEmpty) throw Exception("Liste articles vide");
-
-        // --- DEBUT DE LA MODIFICATION ---
         String orderTypeStr = "on_site";
         try {
           String typeRaw = (widget.transaction as dynamic).orderType.toString().toLowerCase();
@@ -155,50 +122,38 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
             orderTypeStr = "takeaway";
           }
         } catch(_) {}
-        // --- FIN DE LA MODIFICATION ---
-
         await PrintingService().printKitchenTicketSafe(
           printerConfig: localConfig,
           itemsToPrint: cleanItems,
           identifier: safeId,
           isReprint: true,
-          orderType: orderTypeStr, // <-- AJOUT DU PARAMETRE ICI
+          orderType: orderTypeStr, 
         );
       } else {
-        // --- IMPRESSION TICKET CAISSE ---
         final receiptConfig = await LocalConfigService().getReceiptConfig();
-
-        // A. Récupération Utilisateur (Provider) robuste
         final authProvider = Provider.of<AuthProvider>(context, listen: false);
         dynamic user;
         try { user = (authProvider as dynamic).franchiseUser; } catch(_) {}
         if (user == null) try { user = (authProvider as dynamic).user; } catch(_) {}
         if (user == null) try { user = (authProvider as dynamic).currentUser; } catch(_) {}
         if (user == null) try { user = (authProvider as dynamic).franchisee; } catch(_) {}
-
-        // B. Préparation Transaction (Map)
         Map<String, dynamic> transactionMap = {};
         try {
           transactionMap = (widget.transaction as dynamic).toMap();
         } catch (_) {
-          // Fallback construction manuelle si toMap manque
           transactionMap = {
             'id': widget.transaction.id,
             'total': (widget.transaction as dynamic).total ?? 0.0,
             'paymentMethods': widget.transaction.paymentMethods,
             'timestamp': widget.transaction.timestamp.toIso8601String(),
             'orderType': (widget.transaction as dynamic).orderType,
-            // On utilise aussi les items nettoyés pour la caisse
             'items': widget.transaction.items.map((item) => _safeItemToMap(item)).toList(),
           };
         }
-
         if (transactionMap['id'] != null && transactionMap['id'].toString().length < 8) {
           transactionMap['id'] = transactionMap['id'].toString().padRight(8, ' ');
         }
-
         debugPrint("Envoi Caisse: ID ${transactionMap['id']}");
-
         await PrintingService().printReceipt(
           printerConfig: localConfig,
           transaction: transactionMap,
@@ -206,7 +161,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
           receiptConfig: receiptConfig,
         );
       }
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -233,24 +187,18 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
       if (mounted) setState(() => _isReprinting = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     const primaryColor = Color(0xFF5E35B1);
     final shortId = widget.transaction.id.length > 6
         ? widget.transaction.id.substring(0, 6)
         : widget.transaction.id;
-
     final bool isTakeaway = (widget.transaction as dynamic).orderType.toString().toLowerCase().contains('takeaway');
     final orderTypeLabel = isTakeaway ? 'À Emporter' : 'Sur Place';
-
     final paymentLabel = _getPaymentMethodLabel(widget.transaction.paymentMethods);
-
     final double totalVal = (widget.transaction as dynamic).total ??
         (widget.transaction as dynamic).totalAmount ?? 0.0;
-
     final double subTotalVal = (widget.transaction as dynamic).subTotal ?? (totalVal / 1.1);
-
     return Dialog(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -261,7 +209,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // HEADER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -279,8 +226,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
               ],
             ),
             const Divider(thickness: 1.5, color: primaryColor),
-
-            // CONTENU SCROLLABLE
             Flexible(
               child: SingleChildScrollView(
                 child: Column(
@@ -301,7 +246,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                         "Type",
                         orderTypeLabel,
                         Colors.black87),
-
                     const SizedBox(height: 20),
                     const Text("Articles",
                         style: TextStyle(
@@ -309,17 +253,13 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                             fontWeight: FontWeight.bold,
                             color: primaryColor)),
                     const SizedBox(height: 10),
-
-                    // LISTE DES ARTICLES
                     ...widget.transaction.items.map((item) {
                       final name =                                    item is Map ? item['name'] : (item as dynamic).name;
                       final quantity = item is Map ? (item['quantity'] ?? 1) : (item as dynamic).quantity;
                       final price = item is Map ? (item['price'] ?? 0.0) : (item as dynamic).price;
                       final double itemTotal = (double.parse(price.toString()) * int.parse(quantity.toString()));
-
                       List<dynamic> optionsGroups = [];
                       List<dynamic> removedIngredients = [];
-
                       if (item is Map) {
                         optionsGroups = item['options'] as List<dynamic>? ?? [];
                         removedIngredients = item['removedIngredientNames'] as List<dynamic>? ?? [];
@@ -327,7 +267,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                         try { optionsGroups = (item as dynamic).selectedOptions ?? []; } catch (_) {}
                         try { removedIngredients = (item as dynamic).removedIngredientNames ?? []; } catch (_) {}
                       }
-
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 12.0),
                         child: Column(
@@ -382,12 +321,8 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                 ),
               ),
             ),
-
             const SizedBox(height: 10),
-
-            // TOTAUX
             _buildSummaryRow("Sous-total", subTotalVal, false),
-
             const SizedBox(height: 10),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -414,10 +349,7 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
                         color: Colors.grey, fontWeight: FontWeight.w600)),
               ],
             ),
-
             const Divider(thickness: 1.5, height: 30),
-
-            // BOUTONS D'ACTION
             const Text("Actions Rapides",
                 style: TextStyle(
                     fontSize: 14,
@@ -471,7 +403,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
       ),
     );
   }
-
   Widget _buildInfoRow(IconData icon, String label, String value, Color color) {
     return Row(
       children: [
@@ -483,7 +414,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
       ],
     );
   }
-
   Widget _buildSummaryRow(String label, double value, bool isBold,
       {Color? color}) {
     return Padding(
@@ -503,7 +433,6 @@ class _TransactionDetailDialogState extends State<TransactionDetailDialog> {
       ),
     );
   }
-
   String _getPaymentMethodLabel(Map<String, dynamic> methods) {
     if (methods.isEmpty) return 'Inconnu';
     return methods.entries.map((e) {

@@ -1,21 +1,15 @@
-// FILE: lib/backoffice/franchisee/franchisee_product_edit_view.dart
 import 'package:flutter/material.dart';
-
 import '../../../models.dart';
-
-/// Vue permettant au franchisé de configurer un produit (ou un conteneur)
 class FranchiseeProductEditView extends StatelessWidget {
-  final Product product; // Le produit (qui peut être un conteneur)
-  final List<Product> allFranchiseeProducts; // Tous les produits DU FRANCHISÉ (pour trouver les enfants)
-  final Function(Product, double) onUpdatePrice; // Fonction pour sauvegarder le prix en base
-
+  final Product product; 
+  final List<Product> allFranchiseeProducts; 
+  final Function(Product, double) onUpdatePrice; 
   const FranchiseeProductEditView({
     super.key,
     required this.product,
     required this.allFranchiseeProducts,
     required this.onUpdatePrice,
   });
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -24,10 +18,8 @@ class FranchiseeProductEditView extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            // Si c'est un produit normal, on édite son prix
             if (!product.isContainer)
               _buildPriceEditor(context, product),
-
             if (product.isContainer) ...[
               const Text(
                 "Ce produit est un dossier. Voici ce qu'il contient :",
@@ -63,14 +55,11 @@ class FranchiseeProductEditView extends StatelessWidget {
       ),
     );
   }
-
-  // Récupère les vrais objets produits enfants grâce aux IDs
   List<Product> _getContainerChildren() {
     return allFranchiseeProducts
         .where((p) => product.containerProductIds?.contains(p.id) ?? false)
         .toList();
   }
-
   Widget _buildPriceEditor(BuildContext context, Product p) {
     return ListTile(
       title: const Text("Prix de vente"),
@@ -78,7 +67,6 @@ class FranchiseeProductEditView extends StatelessWidget {
       onTap: () => _showPriceDialog(context, p),
     );
   }
-
   void _showPriceDialog(BuildContext context, Product p) {
     final controller = TextEditingController(text: p.price.toString());
     showDialog(
@@ -94,7 +82,7 @@ class FranchiseeProductEditView extends StatelessWidget {
           TextButton(
             onPressed: () {
               final newPrice = double.tryParse(controller.text.replaceAll(',', '.')) ?? 0.0;
-              onUpdatePrice(p, newPrice); // Sauvegarde
+              onUpdatePrice(p, newPrice); 
               Navigator.pop(ctx);
             },
             child: const Text("Valider"),

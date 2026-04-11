@@ -1,6 +1,4 @@
-// --- GESTION DES IMPORTS ---
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -8,53 +6,38 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
-
 import 'package:ouiborne/core/repository/repository.dart';
 import 'package:ouiborne/core/auth_provider.dart';
-// Alias 'model' pour éviter les conflits avec Firestore
 import 'package:ouiborne/models.dart' as model;
-
 enum DateFilter { today, yesterday, thisWeek, custom }
-
 class MobileStatsView extends StatefulWidget {
   const MobileStatsView({super.key});
-
   @override
   State<MobileStatsView> createState() => _MobileStatsViewState();
 }
-
 class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderStateMixin {
   final _repository = FranchiseRepository();
-
-  // États
   DateFilter _currentFilter = DateFilter.today;
   late DateTimeRange _selectedRange;
-
-  // Animations
   late AnimationController _liveController;
   late AnimationController _statusController;
-
   @override
   void initState() {
     super.initState();
     _applyFilter(DateFilter.today);
-
     _liveController = AnimationController(duration: const Duration(seconds: 1), vsync: this)..repeat(reverse: true);
     _statusController = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat(reverse: true);
   }
-
   @override
   void dispose() {
     _liveController.dispose();
     _statusController.dispose();
     super.dispose();
   }
-
   void _applyFilter(DateFilter filter) async {
     final now = DateTime.now();
     DateTime start;
     DateTime end;
-
     switch (filter) {
       case DateFilter.today:
         start = DateTime(now.year, now.month, now.day);
@@ -88,24 +71,18 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         } else { return; }
         break;
     }
-
     setState(() {
       _currentFilter = filter;
       _selectedRange = DateTimeRange(start: start, end: end);
     });
   }
-
   bool get _isLive => _currentFilter == DateFilter.today;
-
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<AuthProvider>(context).franchiseUser;
-
     if (user == null) return const Scaffold(body: Center(child: CircularProgressIndicator(color: Colors.black)));
-
     return Scaffold(
-      backgroundColor: const Color(0xFFF2F2F7), // Gris Premium
-
+      backgroundColor: const Color(0xFFF2F2F7), 
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _generatePdfAndShare(context, user),
         backgroundColor: Colors.black,
@@ -114,41 +91,29 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         label: const Text("EXPORTER LE PDF", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
-
       body: StreamBuilder<List<model.Transaction>>(
         stream: _repository.getTransactionsInDateRange(user.uid, startDate: _selectedRange.start, endDate: _selectedRange.end),
         builder: (context, snapshot) {
-
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator(color: Colors.black));
           }
-
           final transactions = snapshot.data ?? [];
-
-          // --- CALCULS ---
           double caTotal = 0;
           double tvaTotal = 0;
           Map<String, int> productQty = {};
           Map<String, double> productRev = {};
-
           double cbComptoire = 0;
           double cbBorne = 0;
           double especes = 0;
           double ticketsResto = 0;
-
           for (var t in transactions) {
             caTotal += t.total;
             tvaTotal += t.vatTotal;
-
-            // Détection Borne
             String typeCmd = t.orderType.toString().toLowerCase();
             bool isKiosk = typeCmd.contains('kiosk') || typeCmd.contains('borne');
-
-            // Paiements
             t.paymentMethods.forEach((method, val) {
               double amount = (val as num).toDouble();
               String key = method.toLowerCase();
-
               if (key.contains('cb') || key.contains('carte') || key.contains('visa') || key.contains('master')) {
                 if (isKiosk) {
                   cbBorne += amount;
@@ -163,30 +128,23 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 cbComptoire += amount;
               }
             });
-
-            // Produits
             for (var item in t.items) {
               final name = item['name']?.toString() ?? 'Article Inconnu';
               final qty = int.tryParse(item['quantity'].toString()) ?? 1;
               final price = double.tryParse(item['price'].toString()) ?? 0.0;
-
               productQty[name] = (productQty[name] ?? 0) + qty;
               productRev[name] = (productRev[name] ?? 0) + (price * qty);
             }
           }
-
           final count = transactions.length;
           final panierMoyen = count > 0 ? caTotal / count : 0.0;
           final sortedProducts = productQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-
           return CustomScrollView(
             physics: const BouncingScrollPhysics(),
             slivers: [
               _buildSliverAppBar(user.companyName ?? "Dashboard"),
-
               if (_isLive)
                 SliverToBoxAdapter(child: _buildLiveStoreStatus(user.uid)),
-
               SliverToBoxAdapter(
                 child: Container(
                   height: 50,
@@ -203,7 +161,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   ),
                 ),
               ),
-
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -211,13 +168,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                     children: [
                       _buildBigStatCard(caTotal, count, panierMoyen),
                       const SizedBox(height: 24),
-
                       Row(children: [
                         Text("VENTILATION DES ENCAISSEMENTS", style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
                       ]),
                       const SizedBox(height: 12),
                       _buildPaymentGrid(cbComptoire, cbBorne, especes, ticketsResto),
-
                       const SizedBox(height: 30),
                       Row(children: [
                         Text("TOP PRODUITS", style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1.0)),
@@ -229,7 +184,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   ),
                 ),
               ),
-
               sortedProducts.isEmpty
                   ? const SliverFillRemaining(child: Center(child: Text("Aucune vente sur cette période", style: TextStyle(color: Colors.grey))))
                   : AnimationLimiter(
@@ -260,9 +214,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
-  // --- WIDGETS ---
-
   Widget _buildLiveStoreStatus(String shopId) {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -275,13 +226,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       builder: (context, snapshot) {
         bool isOpen = false;
         String cashierName = "Fermé";
-
         if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
           isOpen = true;
           final data = snapshot.data!.docs.first.data() as Map<String, dynamic>;
           cashierName = data['openerName'] ?? data['cashierName'] ?? "Caissier";
         }
-
         return Container(
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -325,7 +274,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       },
     );
   }
-
   Widget _buildPaymentGrid(double cbC, double cbB, double esp, double tr) {
     return Column(
       children: [
@@ -347,7 +295,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ],
     );
   }
-
   Widget _paymentCard(String label, double amount, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -377,7 +324,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
   Widget _buildSliverAppBar(String title) {
     return SliverAppBar(
       expandedHeight: 60.0,
@@ -398,7 +344,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
   Widget _buildFilterChip(String label, DateFilter filter, {bool isIcon = false}) {
     final isSelected = _currentFilter == filter;
     return GestureDetector(
@@ -421,7 +366,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
   Widget _buildBigStatCard(double ca, int count, double panier) {
     return Container(
       padding: const EdgeInsets.all(24),
@@ -448,7 +392,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
   Widget _kpiItem(IconData icon, String val, String label) {
     return Column(
       children: [
@@ -458,7 +401,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ],
     );
   }
-
   Widget _buildProductTile(int index, String name, int qty, double revenue) {
     Color badgeColor;
     Color textColor = Colors.white;
@@ -466,7 +408,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     else if (index == 1) { badgeColor = const Color(0xFFC0C0C0); textColor = Colors.black; }
     else if (index == 2) { badgeColor = const Color(0xFFCD7F32); }
     else { badgeColor = Colors.grey.shade100; textColor = Colors.black54; }
-
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
@@ -487,22 +428,17 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       ),
     );
   }
-
-  // --- PDF GENERATION CORRIGÉE ---
   Future<void> _generatePdfAndShare(BuildContext context, model.FranchiseUser user) async {
     showDialog(context: context, barrierDismissible: false, builder: (_) => const Center(child: CircularProgressIndicator(color: Colors.white)));
     try {
       final txs = await _repository.getTransactionsInDateRange(user.uid, startDate: _selectedRange.start, endDate: _selectedRange.end).first;
-
       double ttc = 0;
       double cbC = 0, cbB = 0, esp = 0, tr = 0;
       Map<String, int> products = {};
-
       for (var t in txs) {
         ttc += t.total;
         String typeCmd = t.orderType.toString().toLowerCase();
         bool isKiosk = typeCmd.contains('kiosk') || typeCmd.contains('borne');
-
         t.paymentMethods.forEach((method, val) {
           double v = (val as num).toDouble();
           String k = method.toLowerCase();
@@ -511,28 +447,21 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
           else if (k.contains('ticket') || k.contains('resto') || k.contains('tr')) tr += v;
           else cbC += v;
         });
-
         for (var i in t.items) {
           String n = i['name']?.toString() ?? 'Inconnu';
           products[n] = (products[n] ?? 0) + (int.tryParse(i['quantity'].toString()) ?? 1);
         }
       }
-
-      // CORRECTION: On prépare la liste de listes AVANT le widget PDF
       final sortedEntries = products.entries.toList()
         ..sort((a, b) => b.value.compareTo(a.value));
-
-      // Conversion en Liste de Liste de String
       final topProductsData = sortedEntries
           .take(20)
           .map((e) => [e.key, "${e.value}"])
           .toList();
-
       final pdf = pw.Document();
       String dateText = _currentFilter == DateFilter.today
           ? "Aujourd'hui (${DateFormat('dd/MM').format(_selectedRange.start)})"
           : "${DateFormat('dd/MM').format(_selectedRange.start)} au ${DateFormat('dd/MM').format(_selectedRange.end)}";
-
       pdf.addPage(pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           build: (context) => [
@@ -568,7 +497,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
             pw.SizedBox(height: 20),
             pw.Text("Top 20 Produits", style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 14)),
             pw.SizedBox(height: 10),
-            // UTILISATION DE LA LISTE PRÉPARÉE
             pw.Table.fromTextArray(
               headers: ['Produit', 'Quantité'],
               data: topProductsData,
@@ -576,7 +504,6 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
             ),
           ]
       ));
-
       Navigator.pop(context);
       await Printing.sharePdf(bytes: await pdf.save(), filename: 'Stats.pdf');
     } catch (e) {

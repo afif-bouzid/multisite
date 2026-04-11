@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../../../../core/auth_provider.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/printing_service.dart';
@@ -10,10 +9,8 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '/models.dart';
 import 'transaction_dialogs.dart';
-
 class ActiveSessionPaidHistoryView extends StatelessWidget {
   const ActiveSessionPaidHistoryView({super.key});
-
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
@@ -30,7 +27,6 @@ class ActiveSessionPaidHistoryView extends StatelessWidget {
           );
         }
         final activeSession = snapshot.data!;
-
         return SessionTransactionsDetailView(
           session: activeSession,
           repository: repository,
@@ -39,17 +35,14 @@ class ActiveSessionPaidHistoryView extends StatelessWidget {
     );
   }
 }
-
 class SessionTransactionsDetailView extends StatelessWidget {
   final TillSession session;
   final FranchiseRepository repository;
-
   const SessionTransactionsDetailView({
     super.key,
     required this.session,
     required this.repository,
   });
-
   @override
   Widget build(BuildContext context) {
     return StreamBuilder<List<Transaction>>(
@@ -67,11 +60,9 @@ class SessionTransactionsDetailView extends StatelessWidget {
                   child: Text("Aucune commande payée dans cette session.")));
         }
         final transactions = snapshot.data!;
-
         double totalSales = transactions.fold(0.0, (sum, t) => sum + t.total);
         int totalOrders = transactions.length;
         String openTime = DateFormat('HH:mm').format(session.openingTime);
-
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -113,13 +104,8 @@ class SessionTransactionsDetailView extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final transaction = transactions[index];
                   final shortId = transaction.id.substring(0, 6);
-
-                  // --- LOGIQUE D'AFFICHAGE MISE À JOUR ---
-                  // Si un identifiant (A-001, Table 12) existe, on l'affiche en GROS
-                  // Sinon, on affiche le Ticket ID
                   String mainTitle = transaction.identifier;
                   String subTitle = "Ticket #$shortId";
-
                   if (mainTitle.isEmpty) {
                     mainTitle = "Ticket #$shortId";
                     subTitle = DateFormat('dd/MM/yy HH:mm')
@@ -128,7 +114,6 @@ class SessionTransactionsDetailView extends StatelessWidget {
                     subTitle +=
                         " - ${DateFormat('HH:mm').format(transaction.timestamp)}";
                   }
-
                   final orderTypeLabel = transaction.orderType ==
                           OrderType.takeaway.toString().split('.').last
                       ? 'À Emporter'
@@ -138,12 +123,10 @@ class SessionTransactionsDetailView extends StatelessWidget {
                   final primaryColor =
                       isTakeaway ? AppColors.bkBlue : AppColors.bkGreen;
                   final lightAccentColor = primaryColor.withOpacity(0.12);
-
                   return Card(
                     elevation: 0,
                     margin:
                         const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-                    // Marge corrigée
                     color: Colors.white,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
@@ -171,7 +154,6 @@ class SessionTransactionsDetailView extends StatelessWidget {
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    // AFFICHAGE PRINCIPAL (A-001 ou Table 12)
                                     Text(mainTitle,
                                         style: AppTextStyles.headlineSmall
                                             .copyWith(
@@ -216,29 +198,21 @@ class SessionTransactionsDetailView extends StatelessWidget {
     );
   }
 }
-
-
-
 class TillCloseForm extends StatefulWidget {
   final TillSession session;
-
   const TillCloseForm({super.key, required this.session});
-
   @override
   State<TillCloseForm> createState() => _TillCloseFormState();
 }
-
 class _TillCloseFormState extends State<TillCloseForm> {
   final _formKey = GlobalKey<FormState>();
   final _finalCashController = TextEditingController();
   bool _isLoading = false;
-
   @override
   void initState() {
     super.initState();
     _finalCashController.text = widget.session.initialCash.toStringAsFixed(2);
   }
-
   Future<void> _closeTill() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -259,7 +233,6 @@ class _TillCloseFormState extends State<TillCloseForm> {
       setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Card(

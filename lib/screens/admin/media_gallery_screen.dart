@@ -1,29 +1,22 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // Assurez-vous d'avoir ce package
-import 'package:cached_network_image/cached_network_image.dart'; // Assurez-vous d'avoir ce package
+import 'package:image_picker/image_picker.dart'; 
+import 'package:cached_network_image/cached_network_image.dart'; 
 import '../../core/repository/repository.dart';
 import '../../models.dart';
-
 class MediaGalleryScreen extends StatefulWidget {
   final String franchisorId;
-
   const MediaGalleryScreen({super.key, required this.franchisorId});
-
   @override
   State<MediaGalleryScreen> createState() => _MediaGalleryScreenState();
 }
-
 class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
   final FranchiseRepository _repo = FranchiseRepository();
   bool _isLoading = false;
-
-  /// Fonction pour ouvrir le dialogue d'ajout de média
   Future<void> _showAddMediaDialog() async {
     final nameController = TextEditingController();
     String selectedType = 'image';
     XFile? selectedFile;
-    XFile? selectedThumb; // Pour les vidéos (optionnel)
-
+    XFile? selectedThumb; 
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -53,14 +46,12 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                     onChanged: (val) {
                       setDialogState(() {
                         selectedType = val!;
-                        selectedFile = null; // Reset file on type change
+                        selectedFile = null; 
                       });
                     },
                     decoration: const InputDecoration(labelText: "Type de média"),
                   ),
                   const SizedBox(height: 20),
-
-                  // Sélection du Fichier Principal
                   OutlinedButton.icon(
                     icon: Icon(selectedType == 'image' ? Icons.image : Icons.videocam),
                     label: Text(selectedFile == null
@@ -82,8 +73,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                       }
                     },
                   ),
-
-                  // Optionnel : Sélection Miniature pour Vidéo
                   if (selectedType == 'video') ...[
                     const SizedBox(height: 10),
                     OutlinedButton.icon(
@@ -111,7 +100,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                 onPressed: (selectedFile == null || nameController.text.isEmpty)
                     ? null
                     : () async {
-                  Navigator.pop(context); // Ferme le dialog
+                  Navigator.pop(context); 
                   _uploadMedia(
                       nameController.text,
                       selectedType,
@@ -127,7 +116,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       ),
     );
   }
-
   Future<void> _uploadMedia(String name, String type, XFile file, XFile? thumb) async {
     setState(() => _isLoading = true);
     try {
@@ -153,7 +141,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,9 +167,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
               if (!snapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-
               final medias = snapshot.data!;
-
               if (medias.isEmpty) {
                 return const Center(
                   child: Column(
@@ -195,7 +180,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                   ),
                 );
               }
-
               return GridView.builder(
                 padding: const EdgeInsets.all(16),
                 gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -268,7 +252,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       ),
     );
   }
-
   Widget _buildMediaPreview(KioskMedia media) {
     if (media.type == 'image') {
       return CachedNetworkImage(
@@ -278,7 +261,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
         errorWidget: (_, __, ___) => const Icon(Icons.broken_image),
       );
     } else {
-      // Pour la vidéo, on affiche la miniature ou une icône
       if (media.thumbnailUrl != null) {
         return Stack(
           fit: StackFit.expand,
@@ -294,7 +276,6 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       );
     }
   }
-
   void _confirmDelete(KioskMedia media) {
     showDialog(
       context: context,

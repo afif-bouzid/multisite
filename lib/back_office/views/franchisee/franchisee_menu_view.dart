@@ -5,14 +5,11 @@ import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
 class FranchiseeMenuView extends StatefulWidget {
   const FranchiseeMenuView({super.key});
-
   @override
   State<FranchiseeMenuView> createState() => _FranchiseeMenuViewState();
 }
-
 class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
   final _searchController = TextEditingController();
   String _searchQuery = "";
@@ -21,7 +18,6 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
   bool _isLoading = true;
   StreamSubscription? _menuSub;
   StreamSubscription? _masterSub;
-
   @override
   void initState() {
     super.initState();
@@ -30,7 +26,6 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       setState(() => _searchQuery = _searchController.text.trim().toLowerCase());
     });
   }
-
   @override
   void dispose() {
     _menuSub?.cancel();
@@ -38,19 +33,14 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
     _searchController.dispose();
     super.dispose();
   }
-
   void _loadData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.franchiseUser;
-
     if (user == null || user.franchisorId == null) {
       if (mounted) setState(() => _isLoading = false);
       return;
     }
-
     final repo = FranchiseRepository();
-
-    // 1. Charger Master
     _masterSub = repo.getMasterProductsStream(user.franchisorId!).listen((products) {
       if (mounted) {
         products.sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
@@ -58,8 +48,6 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
         if (_franchiseeMenu.isNotEmpty) setState(() => _isLoading = false);
       }
     });
-
-    // 2. Charger Config Franchisé
     _menuSub = repo.getFranchiseeMenuStream(user.uid).listen((menuItems) {
       final map = <String, FranchiseeMenuItem>{};
       for (var item in menuItems) map[item.masterProductId] = item;
@@ -71,19 +59,15 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       }
     });
   }
-
-  /// Filtre (on ne cache rien pour le moment pour voir tout ce qui se passe)
   List<MasterProduct> _getFilteredList() {
     return _masterProducts.where((p) {
       if (_searchQuery.isNotEmpty) return p.name.toLowerCase().contains(_searchQuery);
       return true;
     }).toList();
   }
-
   @override
   Widget build(BuildContext context) {
     final filteredList = _getFilteredList();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(title: const Text("Menu & Prix (DEBUG)"), backgroundColor: Colors.red.shade100, elevation: 0, iconTheme: const IconThemeData(color: Colors.black)),
@@ -110,11 +94,7 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
               itemBuilder: (context, index) {
                 final master = filteredList[index];
                 final config = _franchiseeMenu[master.productId];
-
-                // --- TEST DE DÉTECTION ---
-                // On vérifie le booléen OU si la liste des enfants n'est pas vide
                 final bool isTrulyContainer = master.isContainer || master.containerProductIds.isNotEmpty;
-
                 if (isTrulyContainer) {
                   return _buildContainerCard(master);
                 } else {
@@ -127,22 +107,20 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       ),
     );
   }
-
-  /// CARTE CONTENEUR
   Widget _buildContainerCard(MasterProduct container) {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       elevation: 4,
-      color: Colors.orange.shade100, // Fond Orange foncé pour le debug
+      color: Colors.orange.shade100, 
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
         leading: Icon(Icons.folder, size: 40, color: Colors.orange.shade900),
         title: Text(
-          "${container.name} (DETECTÉ !)", // Texte de debug
+          "${container.name} (DETECTÉ !)", 
           style: TextStyle(fontWeight: FontWeight.bold, color: Colors.orange.shade900),
         ),
         subtitle: Text(
-          "isContainer: ${container.isContainer}\nIds: ${container.containerProductIds.length}", // Infos de debug
+          "isContainer: ${container.isContainer}\nIds: ${container.containerProductIds.length}", 
           style: const TextStyle(fontSize: 10),
         ),
         trailing: ElevatedButton(
@@ -152,19 +130,16 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       ),
     );
   }
-
-  /// CARTE STANDARD
   Widget _buildStandardProductCard(MasterProduct product, FranchiseeMenuItem? config) {
     final isVisible = config?.isVisible ?? false;
     final price = config?.price ?? 0.0;
-
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       elevation: 1,
       child: ListTile(
         leading: Icon(Icons.fastfood, color: Colors.grey.shade400),
         title: Text(product.name),
-        subtitle: Text("isContainer: ${product.isContainer}", style: const TextStyle(fontSize: 10, color: Colors.grey)), // Info de debug
+        subtitle: Text("isContainer: ${product.isContainer}", style: const TextStyle(fontSize: 10, color: Colors.grey)), 
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -180,10 +155,8 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       ),
     );
   }
-
   void _openContainerManager(MasterProduct container) {
     final children = _masterProducts.where((p) => container.containerProductIds.contains(p.id)).toList();
-
     showModalBottomSheet(
       context: context,
       builder: (ctx) => Container(
@@ -202,10 +175,7 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
       ),
     );
   }
-
-  // (Le reste est inchangé pour le test)
   Future<void> _showPriceDialog(MasterProduct master, double currentPrice) async {}
   void _updateConfig(MasterProduct master, bool isVisible, bool isAvailable, double price) {
-    // ... update logique
   }
 }

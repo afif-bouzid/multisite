@@ -12,15 +12,12 @@ import '../../../core/auth_provider.dart';
 import '../../../core/constants.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
-
 enum ProductTypeFilter { simple, container, ingredients }
-
 class CatalogueView extends StatefulWidget {
   const CatalogueView({super.key});
   @override
   State<CatalogueView> createState() => _CatalogueViewState();
 }
-
 class _CatalogueViewState extends State<CatalogueView> {
   final _searchController = TextEditingController();
   List<MasterProduct> _allProducts = [];
@@ -30,23 +27,19 @@ class _CatalogueViewState extends State<CatalogueView> {
   List<KioskCategory> _cachedKioskCategories = [];
   Map<String, String> _kioskFilterNames = {};
   Map<String, String> _filterToCategoryMap = {};
-
   String _searchQuery = '';
   ProductTypeFilter _productTypeFilter = ProductTypeFilter.simple;
   String? _selectedKioskCategoryId;
   String? _selectedSubFilterId;
   String? _selectedBackOfficeFilterId;
-
   bool _isLoading = true;
   bool _areSectionsLoaded = false;
   final List<StreamSubscription> _subscriptions = [];
-
   @override
   void initState() {
     super.initState();
     final repo = FranchiseRepository();
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
-
     _subscriptions.add(repo.getMasterProductsStream(uid).listen((products) {
       if (mounted) {
         products.sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
@@ -56,7 +49,6 @@ class _CatalogueViewState extends State<CatalogueView> {
         });
       }
     }));
-
     _subscriptions.add(repo.getSectionsStream(uid).listen((sections) {
       final map = <String, String>{};
       for (var s in sections) {
@@ -70,7 +62,6 @@ class _CatalogueViewState extends State<CatalogueView> {
         });
       }
     }));
-
     _subscriptions.add(repo.getKioskCategoriesStream(uid).listen((cats) {
       final filterMap = <String, String>{};
       final catMap = <String, String>{};
@@ -88,23 +79,19 @@ class _CatalogueViewState extends State<CatalogueView> {
         });
       }
     }));
-
     _subscriptions.add(repo.getFiltersStream(uid).listen((filters) {
       if (mounted) setState(() => _cachedFilters = filters);
     }));
-
     _searchController.addListener(() {
       setState(() => _searchQuery = _searchController.text.trim());
     });
   }
-
   @override
   void dispose() {
     _searchController.dispose();
     for (var sub in _subscriptions) sub.cancel();
     super.dispose();
   }
-
   Color _getColorFromHex(String hexColor) {
     try {
       hexColor = hexColor.toUpperCase().replaceAll("#", "");
@@ -116,7 +103,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       return Colors.grey;
     }
   }
-
   List<MasterProduct> _getFilteredProducts() {
     return _allProducts.where((product) {
       if (_searchQuery.isNotEmpty) {
@@ -134,7 +120,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       return true;
     }).toList();
   }
-
   bool _matchesProductType(MasterProduct product) {
     switch (_productTypeFilter) {
       case ProductTypeFilter.simple:
@@ -145,7 +130,6 @@ class _CatalogueViewState extends State<CatalogueView> {
         return product.isIngredient;
     }
   }
-
   bool _matchesKioskCategory(MasterProduct product) {
     bool belongsToCategory = product.kioskFilterIds.any((fId) =>
     _filterToCategoryMap[fId] == _selectedKioskCategoryId
@@ -156,7 +140,6 @@ class _CatalogueViewState extends State<CatalogueView> {
     }
     return true;
   }
-
   void _onReorder(int oldIndex, int newIndex, List<MasterProduct> currentList) async {
     setState(() {
       if (newIndex > oldIndex) newIndex -= 1;
@@ -165,12 +148,10 @@ class _CatalogueViewState extends State<CatalogueView> {
     });
     await FranchiseRepository().updateMasterProductsOrder(currentList);
   }
-
   @override
   Widget build(BuildContext context) {
     final filteredList = _getFilteredProducts();
     final repository = FranchiseRepository();
-
     return Scaffold(
       backgroundColor: const Color(0xFFF4F5F9),
       body: Column(
@@ -206,7 +187,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildTopHeader() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
@@ -275,7 +255,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildBigFilterBtn(String label, IconData icon, ProductTypeFilter type) {
     final isSelected = _productTypeFilter == type;
     return InkWell(
@@ -315,7 +294,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildCategoryTabs() {
     return Container(
       color: Colors.white,
@@ -331,7 +309,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildTabItem(String label, String? catId) {
     final isSelected = _selectedKioskCategoryId == catId;
     return InkWell(
@@ -356,7 +333,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildSubCategoryBar() {
     final category = _cachedKioskCategories.firstWhere((c) => c.id == _selectedKioskCategoryId, orElse: () => KioskCategory(id: '', name: '', filters: [], position: 0));
     if (category.filters.isEmpty) return const SizedBox.shrink();
@@ -374,7 +350,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildSubFilterChip(String label, String? filterId) {
     final isSelected = _selectedSubFilterId == filterId;
     return Padding(
@@ -392,7 +367,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildProductList(List<MasterProduct> list, FranchiseRepository repo) {
     if (_selectedKioskCategoryId == null) {
       return ListView.builder(
@@ -420,12 +394,10 @@ class _CatalogueViewState extends State<CatalogueView> {
       },
     );
   }
-
   Widget _buildSubCategoryHeaderIfNeeded(MasterProduct current, int index, List<MasterProduct> list) {
     if (_selectedKioskCategoryId == null) return const SizedBox.shrink();
     String currentSubCatName = "Autres / Non classés";
     String currentSubCatId = "others";
-
     for (var id in current.kioskFilterIds) {
       if (_filterToCategoryMap[id] == _selectedKioskCategoryId) {
         currentSubCatName = _kioskFilterNames[id]?.split('>').last.trim() ?? "Autres";
@@ -433,7 +405,6 @@ class _CatalogueViewState extends State<CatalogueView> {
         break;
       }
     }
-
     String? prevSubCatId;
     if (index > 0) {
       final prev = list[index - 1];
@@ -445,7 +416,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       }
       prevSubCatId ??= "others";
     }
-
     if (currentSubCatId != prevSubCatId) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
@@ -483,16 +453,13 @@ class _CatalogueViewState extends State<CatalogueView> {
     }
     return const SizedBox.shrink();
   }
-
   Widget _buildProductCard(MasterProduct product, FranchiseRepository repo, {required bool enableDrag, Key? key, required int index}) {
     final bool isIngredient = product.isIngredient;
     final bool isContainer = product.isContainer;
     String? kioskLabel;
-
     final productFilters = _cachedFilters
         .where((f) => product.filterIds.contains(f.id))
         .toList();
-
     if (product.kioskFilterIds.isNotEmpty) {
       for (var id in product.kioskFilterIds) {
         if (_kioskFilterNames.containsKey(id)) {
@@ -501,7 +468,6 @@ class _CatalogueViewState extends State<CatalogueView> {
         }
       }
     }
-
     return Container(
       key: key,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
@@ -532,7 +498,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: Colors.grey.shade200),
-                      // SOLUTION WEB : NetworkImage classique si on est sur Chrome
                       image: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
                           ? DecorationImage(
                           image: kIsWeb
@@ -576,7 +541,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                               letterSpacing: -0.5
                           )
                       ),
-
                       if (productFilters.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(top: 6.0, bottom: 6.0),
@@ -605,9 +569,7 @@ class _CatalogueViewState extends State<CatalogueView> {
                             }).toList(),
                           ),
                         ),
-
                       const SizedBox(height: 8),
-
                       if (kioskLabel != null)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -618,7 +580,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                               style: TextStyle(fontSize: 12, color: Colors.purple.shade800, fontWeight: FontWeight.bold)
                           ),
                         ),
-
                       if (!product.isContainer && product.description != null && product.description!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8.0),
@@ -629,7 +590,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                               overflow: TextOverflow.ellipsis
                           ),
                         ),
-
                       if (product.isContainer)
                         Container(
                           margin: const EdgeInsets.only(bottom: 12),
@@ -701,7 +661,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-
                               if (!_areSectionsLoaded)
                                 const Padding(
                                   padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -718,7 +677,6 @@ class _CatalogueViewState extends State<CatalogueView> {
                             ],
                           ),
                         ),
-
                       if (!isIngredient && (product.price ?? 0) > 0)
                         Text(
                             "${product.price!.toStringAsFixed(2)} €",
@@ -759,7 +717,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   Widget _buildStepArrow(String sectionId, int index, int total) {
     ProductSection section;
     try {
@@ -767,13 +724,10 @@ class _CatalogueViewState extends State<CatalogueView> {
     } catch (e) {
       section = ProductSection(id: '0', sectionId: sectionId, title: '?', selectionMin: 0, selectionMax: 0, type: 'checkbox', items: [], filterIds: []);
     }
-
     final bool isFirst = index == 0;
     final bool isLast = index == total - 1;
-
     Color sectionColor = _getSectionTypeColor(section.type);
     Color textColor = Colors.white;
-
     return ClipPath(
       clipper: ArrowClipper(isFirst: isFirst, isLast: isLast),
       child: Container(
@@ -834,28 +788,24 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   IconData _getSectionIcon(String? type) {
     final t = type?.toLowerCase() ?? '';
     if (t.contains('radio') || t.contains('unique')) return Icons.radio_button_checked;
     if (t.contains('increment') || t.contains('quantity')) return Icons.exposure_plus_1;
     return Icons.check_box;
   }
-
   String _getTypeLabel(String? type) {
     final t = type?.toLowerCase() ?? '';
     if (t.contains('radio') || t.contains('unique')) return "Unique";
     if (t.contains('quantity')) return "Qté";
     return "Checkbox";
   }
-
   Color _getSectionTypeColor(String? type) {
     final t = type?.toLowerCase() ?? '';
     if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE67E22);
     if (t.contains('quantity')) return const Color(0xFF27AE60);
     return const Color(0xFF2980B9);
   }
-
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -872,7 +822,6 @@ class _CatalogueViewState extends State<CatalogueView> {
       ),
     );
   }
-
   void _deleteProduct(BuildContext context, FranchiseRepository repo, MasterProduct product) async {
     final confirm = await showDialog<bool>(
         context: context,
@@ -889,20 +838,16 @@ class _CatalogueViewState extends State<CatalogueView> {
     }
   }
 }
-
 class ArrowClipper extends CustomClipper<Path> {
   final bool isFirst;
   final bool isLast;
   final double arrowWidth = 14.0;
-
   ArrowClipper({required this.isFirst, required this.isLast});
-
   @override
   Path getClip(Size size) {
     Path path = Path();
     final w = size.width;
     final h = size.height;
-
     if (isFirst) {
       path.moveTo(0, 0);
     } else {
@@ -910,9 +855,7 @@ class ArrowClipper extends CustomClipper<Path> {
       path.lineTo(arrowWidth, h / 2);
       path.lineTo(0, h);
     }
-
     path.lineTo(0, h);
-
     if (isLast) {
       path.lineTo(w, h);
       path.lineTo(w, 0);
@@ -921,22 +864,18 @@ class ArrowClipper extends CustomClipper<Path> {
       path.lineTo(w, h / 2);
       path.lineTo(w - arrowWidth, 0);
     }
-
     path.close();
     return path;
   }
-
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
-
 class ProductFormView extends StatefulWidget {
   final MasterProduct? productToEdit;
   final bool isDuplicating;
   final String? preselectedFilterId;
   final List<ProductSection> preloadedSections;
   final List<MasterProduct> allProducts;
-
   const ProductFormView({
     super.key,
     this.productToEdit,
@@ -945,21 +884,17 @@ class ProductFormView extends StatefulWidget {
     this.preloadedSections = const [],
     this.allProducts = const [],
   });
-
   @override
   State<ProductFormView> createState() => _ProductFormViewState();
 }
-
 class _ProductFormViewState extends State<ProductFormView> with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
-
   XFile? _imageFile;
   Uint8List? _imageBytes;
   String? _displayUrl;
-
   bool _isComposite = false;
   bool _isIngredient = false;
   bool _isContainer = false;
@@ -972,17 +907,13 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
   List<ProductFilter> _loadedFilters = [];
   List<KioskCategory> _loadedKioskCategories = [];
   final List<StreamSubscription> _subscriptions = [];
-
   List<String> _ingredientProductIds = [];
-
   @override
   void initState() {
     super.initState();
     _allAvailableSections = List.from(widget.preloadedSections);
-
     final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
     final repository = FranchiseRepository();
-
     _subscriptions.add(repository.getFiltersStream(uid).listen((data) {
       if(mounted) setState(() => _loadedFilters = data);
     }));
@@ -992,7 +923,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     _subscriptions.add(repository.getSectionsStream(uid).listen((sections) {
       if(mounted) setState(() => _allAvailableSections = sections);
     }));
-
     if (widget.productToEdit != null) {
       final p = widget.productToEdit!;
       _nameController.text = p.name;
@@ -1005,7 +935,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       if (!widget.isDuplicating) _displayUrl = p.photoUrl;
       _selectedFilterIds = List.from(p.filterIds);
       _selectedKioskFilterIds = List.from(p.kioskFilterIds);
-
       if (p.sectionIds.isNotEmpty) {
         _associatedSections = [];
         for (var sid in p.sectionIds) {
@@ -1020,34 +949,31 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       }
     }
   }
-
   @override
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
-    for(var s in _subscriptions) s.cancel();
+    for(var s in _subscriptions) {
+      s.cancel();
+    }
     super.dispose();
   }
-
   Future<void> _pickImage() async {
-    FilePickerResult? result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: ['png', 'jpg', 'jpeg'],
-      withData: true,
-    );
+    final ImagePicker picker = ImagePicker();
 
-    if (result != null && result.files.single.bytes != null) {
-      final file = result.files.single;
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      final bytes = await pickedFile.readAsBytes();
 
       setState(() {
-        _imageBytes = file.bytes;
-        _imageFile = XFile.fromData(file.bytes!, name: file.name, mimeType: 'image/png');
+        _imageBytes = bytes;
+        _imageFile = pickedFile; // pickedFile est déjà de type XFile, donc plus besoin de XFile.fromData()
         _displayUrl = null;
       });
     }
   }
-
   void _showStepPicker() async {
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
     List<SectionGroup> groups = [];
@@ -1055,9 +981,7 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       final repo = FranchiseRepository();
       groups = await repo.getSectionGroupsStream(user.uid).first;
     } catch (_) {}
-
     if (!mounted) return;
-
     final result = await showDialog<Map<String, dynamic>>(
       context: context,
       builder: (ctx) => _StepSelectionDialog(
@@ -1065,7 +989,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         availableGroups: groups,
       ),
     );
-
     if (result != null) {
       setState(() {
         if (result['type'] == 'section') {
@@ -1092,7 +1015,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       });
     }
   }
-
   void _showProductLinkPicker() async {
     final List<String>? resultIds = await showDialog<List<String>>(
       context: context,
@@ -1103,7 +1025,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
         availableFilters: _loadedFilters,
       ),
     );
-
     if (resultIds != null && resultIds.isNotEmpty) {
       setState(() {
         for (var id in resultIds) {
@@ -1114,42 +1035,35 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       });
     }
   }
-
   void _showIngredientPicker() async {
     final availableIngredients = widget.allProducts
         .where((p) => p.isIngredient && !_ingredientProductIds.contains(p.productId))
         .toList();
-
     if (availableIngredients.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Aucun autre ingrédient disponible.")));
       return;
     }
-
     final String? result = await showDialog<String>(
       context: context,
       builder: (ctx) => _IngredientSearchDialog(ingredients: availableIngredients),
     );
-
     if (result != null) {
       setState(() {
         _ingredientProductIds.add(result);
       });
     }
   }
-
   @override
   Widget build(BuildContext context) {
     List<Widget> tabs = [ const Tab(text: "Détails") ];
     List<Widget> views = [ _buildDetailsTab() ];
-
     if (!_isIngredient) {
       tabs.add(const Tab(text: "Contenu & Étapes"));
       views.add(_buildContentTab());
       tabs.add(const Tab(text: "Borne"));
       views.add(_buildKioskTab());
     }
-
     return DefaultTabController(
       length: tabs.length,
       child: Scaffold(
@@ -1192,7 +1106,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ),
     );
   }
-
   Widget _buildDetailsTab() {
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1209,7 +1122,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                     decoration: BoxDecoration(
                       color: Colors.transparent,
                       borderRadius: BorderRadius.circular(16),
-                      // SOLUTION WEB : kIsWeb gère NetworkImage pour la transparence parfaite
                       image: _imageBytes != null
                           ? DecorationImage(
                           image: MemoryImage(_imageBytes!),
@@ -1354,12 +1266,10 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ],
     );
   }
-
   Widget _buildContentTab() {
     if (_isContainer) return _buildContainerManager();
     return _buildSectionsManager();
   }
-
   Widget _buildContainerManager() {
     return Container(
       color: const Color(0xFFF5F7FA),
@@ -1410,7 +1320,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(8),
                           color: Colors.transparent,
-                          // SOLUTION WEB
                           image: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
                               ? DecorationImage(
                               image: kIsWeb
@@ -1434,7 +1343,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ),
     );
   }
-
   Widget _buildSectionsManager() {
     return Container(
       color: const Color(0xFFF5F7FA),
@@ -1494,7 +1402,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ),
     );
   }
-
   Widget _buildSectionHeader({required String title, required String subtitle, required IconData icon, required Color color, required Widget action}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1511,7 +1418,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ],
     );
   }
-
   Widget _buildEmptyState(String message) {
     return Container(
       padding: const EdgeInsets.all(32),
@@ -1520,7 +1426,6 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       child: Column(children: [Icon(Icons.inbox_rounded, size: 48, color: Colors.grey.shade300), const SizedBox(height: 12), Text(message, style: TextStyle(color: Colors.grey.shade500))]),
     );
   }
-
   Widget _buildKioskTab() {
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1545,14 +1450,12 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
       ],
     );
   }
-
   Future<void> _saveProduct() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
     final repo = FranchiseRepository();
     List<String> finalIngredientsIds = (!_isContainer && !_isIngredient) ? _ingredientProductIds : [];
     List<String> finalSectionIds = (!_isContainer && !_isIngredient) ? _associatedSections.map((s) => s.sectionId).toList() : [];
-
     try {
       await repo.saveProduct(
         product: widget.isDuplicating ? null : widget.productToEdit,
@@ -1580,23 +1483,18 @@ class _ProductFormViewState extends State<ProductFormView> with SingleTickerProv
     }
   }
 }
-
 class _IngredientSearchDialog extends StatefulWidget {
   final List<MasterProduct> ingredients;
   const _IngredientSearchDialog({required this.ingredients});
-
   @override
   State<_IngredientSearchDialog> createState() => _IngredientSearchDialogState();
 }
-
 class _IngredientSearchDialogState extends State<_IngredientSearchDialog> {
   final TextEditingController _searchController = TextEditingController();
   String _query = "";
-
   @override
   Widget build(BuildContext context) {
     final filtered = widget.ingredients.where((i) => i.name.toLowerCase().contains(_query.toLowerCase())).toList();
-
     return AlertDialog(
       title: const Text("Ajouter un ingrédient"),
       content: SizedBox(
@@ -1626,7 +1524,6 @@ class _IngredientSearchDialogState extends State<_IngredientSearchDialog> {
                   return ListTile(
                     leading: CircleAvatar(
                       backgroundColor: Colors.grey.shade100,
-                      // SOLUTION WEB
                       backgroundImage: (ing.photoUrl?.isNotEmpty ?? false)
                           ? (kIsWeb
                           ? NetworkImage(ing.photoUrl!) as ImageProvider
@@ -1649,33 +1546,26 @@ class _IngredientSearchDialogState extends State<_IngredientSearchDialog> {
     );
   }
 }
-
 class _StepSelectionDialog extends StatefulWidget {
   final List<ProductSection> availableSections;
   final List<SectionGroup> availableGroups;
-
   const _StepSelectionDialog({required this.availableSections, required this.availableGroups});
-
   @override
   State<_StepSelectionDialog> createState() => _StepSelectionDialogState();
 }
-
 class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _query = "";
-
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
   }
-
   @override
   Widget build(BuildContext context) {
     final filteredSections = widget.availableSections.where((s) => s.title.toLowerCase().contains(_query.toLowerCase())).toList();
     final filteredGroups = widget.availableGroups.where((g) => g.name.toLowerCase().contains(_query.toLowerCase())).toList();
-
     return AlertDialog(
       title: const Text("Ajouter une Étape"),
       content: SizedBox(
@@ -1694,7 +1584,6 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
               onChanged: (val) => setState(() => _query = val),
             ),
             const SizedBox(height: 16),
-
             Container(
               decoration: BoxDecoration(color: Colors.grey.shade100, borderRadius: BorderRadius.circular(12)),
               child: TabBar(
@@ -1706,7 +1595,6 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
               ),
             ),
             const SizedBox(height: 12),
-
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -1753,13 +1641,11 @@ class _StepSelectionDialogState extends State<_StepSelectionDialog> with SingleT
     );
   }
 }
-
 class ContainerSelectionDialog extends StatefulWidget {
   final List<MasterProduct> allProducts;
   final List<String> alreadyLinkedIds;
   final String? currentProductId;
   final List<ProductFilter> availableFilters;
-
   const ContainerSelectionDialog({
     super.key,
     required this.allProducts,
@@ -1767,16 +1653,13 @@ class ContainerSelectionDialog extends StatefulWidget {
     this.currentProductId,
     this.availableFilters = const [],
   });
-
   @override
   State<ContainerSelectionDialog> createState() => _ContainerSelectionDialogState();
 }
-
 class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
   String _searchQuery = '';
   String? _selectedFilterId;
   final List<String> _tempSelectedIds = [];
-
   @override
   Widget build(BuildContext context) {
     final filteredProducts = widget.allProducts.where((p) {
@@ -1792,7 +1675,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
       }
       return true;
     }).toList();
-
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -1870,7 +1752,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                   itemBuilder: (ctx, i) {
                     final prod = filteredProducts[i];
                     final isSelected = _tempSelectedIds.contains(prod.id);
-
                     return CheckboxListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                       activeColor: Colors.orange.shade800,
@@ -1881,7 +1762,6 @@ class _ContainerSelectionDialogState extends State<ContainerSelectionDialog> {
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(8),
-                          // SOLUTION WEB
                           image: (prod.photoUrl?.isNotEmpty ?? false)
                               ? DecorationImage(
                               image: kIsWeb

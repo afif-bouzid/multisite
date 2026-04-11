@@ -1,37 +1,29 @@
-﻿import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/auth_provider.dart';
 import '../../../core/repository/repository.dart';
-
 class TeamManagementView extends StatefulWidget {
   const TeamManagementView({super.key});
-
   @override
   State<TeamManagementView> createState() => _TeamManagementViewState();
 }
-
 class _TeamManagementViewState extends State<TeamManagementView> {
   final FranchiseRepository _repository = FranchiseRepository();
-
   void _showAddEmployeeDialog() {
     showDialog(
       context: context,
       builder: (ctx) => _AddEmployeeDialog(repository: _repository),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final franchisee = authProvider.franchiseUser;
-
     if (franchisee == null || !franchisee.isFranchisee) {
       return const Scaffold(
           body: Center(child: Text("Accès réservé au Responsable.")));
     }
-
     return Scaffold(
       appBar: AppBar(title: const Text("Mes Employés")),
       body: StreamBuilder<QuerySnapshot>(
@@ -44,7 +36,6 @@ class _TeamManagementViewState extends State<TeamManagementView> {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(
               child: Text(
@@ -53,9 +44,7 @@ class _TeamManagementViewState extends State<TeamManagementView> {
                   style: TextStyle(color: Colors.grey)),
             );
           }
-
           final employees = snapshot.data!.docs;
-
           return ListView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: employees.length,
@@ -87,7 +76,6 @@ class _TeamManagementViewState extends State<TeamManagementView> {
                           ],
                         ),
                       );
-
                       if (confirm == true) {
                         await FirebaseFirestore.instance
                             .collection('users')
@@ -110,36 +98,28 @@ class _TeamManagementViewState extends State<TeamManagementView> {
     );
   }
 }
-
 class _AddEmployeeDialog extends StatefulWidget {
   final FranchiseRepository repository;
-
   const _AddEmployeeDialog({required this.repository});
-
   @override
   State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
 }
-
 class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passController = TextEditingController();
   bool _loading = false;
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
-
     final auth = Provider.of<AuthProvider>(context, listen: false);
-
     final error = await widget.repository.createEmployee(
       managerId: auth.franchiseUser!.uid,
       name: _nameController.text.trim(),
       email: _emailController.text.trim(),
       password: _passController.text.trim(),
     );
-
     if (mounted) {
       setState(() => _loading = false);
       if (error == null) {
@@ -152,7 +132,6 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
       }
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
