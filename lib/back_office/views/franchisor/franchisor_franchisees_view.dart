@@ -1,14 +1,131 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart'; // Nécessaire pour formater la date dans les dialogues
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
+
 class FranchiseesView extends StatelessWidget {
   const FranchiseesView({super.key});
+
+  // --- FONCTION DE RESET AVEC SÉLECTION DE DATE PRÉCISE ---
+  void _resetFranchisee(BuildContext context, FranchiseUser franchisee) async {
+    // 1. Sélection de la date de début de comptabilité
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+      helpText: "Choisir la date de début de la nouvelle compta",
+      cancelText: "Annuler",
+      confirmText: "Suivant",
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Colors.orange, // Couleur du sélecteur
+              onPrimary: Colors.white,
+              onSurface: Colors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate == null) return; // L'utilisateur a annulé
+
+    // On règle l'heure à 00:00:00 pour inclure toute la journée choisie
+    final DateTime resetDateTime =
+        DateTime(pickedDate.year, pickedDate.month, pickedDate.day);
+
+    // 2. Confirmation finale avec affichage de la date choisie
+    if (!context.mounted) return;
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("🔄 Confirmation du Reset",
+            style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(
+            "La comptabilité de '${franchisee.companyName}' repartira du :\n"
+            "${DateFormat('dd/MM/yyyy').format(resetDateTime)} à 00:00.\n\n"
+            "- Les chiffres avant cette date seront masqués.\n"
+            "- Les commandes en attente avant cette date seront supprimées.\n"
+            "- La session de caisse sera réinitialisée."),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child:
+                  const Text("Annuler", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Valider la date"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!context.mounted) return;
+
+      // Affichage d'un loader
+      showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => const Center(
+              child: CircularProgressIndicator(color: Colors.white)));
+
+      try {
+        final firestore = FirebaseFirestore.instance;
+        final batch = firestore.batch();
+
+        // 1. Suppression des commandes fantômes antérieures à la date choisie uniquement
+        final pendingOrders = await firestore
+            .collection('users')
+            .doc(franchisee.uid)
+            .collection('pending_orders')
+            .where('timestamp', isLessThan: Timestamp.fromDate(resetDateTime))
+            .get();
+
+        for (var doc in pendingOrders.docs) {
+          batch.delete(doc.reference);
+        }
+
+        // 2. Mise à jour de la date de référence et fermeture de session
+        batch.update(firestore.collection('users').doc(franchisee.uid), {
+          'accountingResetDate': Timestamp.fromDate(resetDateTime),
+          'isSessionOpen': false,
+        });
+
+        await batch.commit();
+
+        if (!context.mounted) return;
+        Navigator.pop(context); // Fermer le loader
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Comptabilité réinitialisée à la date choisie."),
+          backgroundColor: Colors.green,
+        ));
+      } catch (e) {
+        if (!context.mounted) return;
+        Navigator.pop(context); // Fermer le loader
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("Erreur technique : $e"),
+          backgroundColor: Colors.red,
+        ));
+      }
+    }
+  }
+
   void _deleteFranchisee(BuildContext context, FranchiseRepository repository,
       FranchiseUser franchisee) async {
     final emailConfirmationController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
@@ -49,7 +166,7 @@ class FranchiseesView extends StatelessWidget {
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
               child:
-              const Text("Annuler", style: TextStyle(color: Colors.grey))),
+                  const Text("Annuler", style: TextStyle(color: Colors.grey))),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -66,6 +183,7 @@ class FranchiseesView extends StatelessWidget {
         ],
       ),
     );
+
     if (confirmed == true) {
       if (!context.mounted) return;
       showDialog(
@@ -79,7 +197,9 @@ class FranchiseesView extends StatelessWidget {
                     SizedBox(width: 20),
                     Text("Suppression en cours...")
                   ]))));
+
       final error = await repository.deleteFranchiseeAccount(franchisee.uid);
+
       if (!context.mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -90,11 +210,13 @@ class FranchiseesView extends StatelessWidget {
       ));
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
     final uid =
         Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: StreamBuilder<List<FranchiseUser>>(
@@ -115,12 +237,14 @@ class FranchiseesView extends StatelessWidget {
                   const SizedBox(height: 16),
                   Text("Aucun franchisé pour le moment.",
                       style:
-                      TextStyle(color: Colors.grey.shade500, fontSize: 16)),
+                          TextStyle(color: Colors.grey.shade500, fontSize: 16)),
                 ],
               ),
             );
           }
+
           final franchisees = snapshot.data!;
+
           return ListView.separated(
             padding: const EdgeInsets.all(16.0),
             itemCount: franchisees.length,
@@ -196,6 +320,14 @@ class FranchiseesView extends StatelessWidget {
                       ),
                       Row(
                         children: [
+                          // --- BOUTON RESET (AVEC SÉLECTEUR DE DATE) ---
+                          _buildActionButton(
+                            icon: Icons.restart_alt_rounded,
+                            color: Colors.orange.shade400,
+                            onTap: () => _resetFranchisee(context, franchisee),
+                          ),
+                          const SizedBox(width: 8),
+                          // --- BOUTON MODIFIER ---
                           _buildActionButton(
                             icon: Icons.edit_rounded,
                             color: Colors.blue.shade400,
@@ -206,6 +338,7 @@ class FranchiseesView extends StatelessWidget {
                                         franchiseeToEdit: franchisee))),
                           ),
                           const SizedBox(width: 8),
+                          // --- BOUTON SUPPRIMER ---
                           _buildActionButton(
                             icon: Icons.delete_forever_rounded,
                             color: Colors.red.shade300,
@@ -236,10 +369,11 @@ class FranchiseesView extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildActionButton(
       {required IconData icon,
-        required Color color,
-        required VoidCallback onTap}) {
+      required Color color,
+      required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(50),
@@ -254,12 +388,15 @@ class FranchiseesView extends StatelessWidget {
     );
   }
 }
+
 class FranchiseeFormView extends StatefulWidget {
   final FranchiseUser? franchiseeToEdit;
   const FranchiseeFormView({super.key, this.franchiseeToEdit});
+
   @override
   State<FranchiseeFormView> createState() => _FranchiseeFormViewState();
 }
+
 class _FranchiseeFormViewState extends State<FranchiseeFormView> {
   final _formKey = GlobalKey<FormState>();
   final _companyNameController = TextEditingController();
@@ -270,9 +407,11 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   late bool _isEditing;
+
   bool _moduleKioskEnabled = true;
   bool _moduleClickAndCollectEnabled = false;
   bool _moduleDealsEnabled = true;
+
   @override
   void initState() {
     super.initState();
@@ -290,6 +429,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       _moduleDealsEnabled = franchisee.enabledModules['deals'] ?? true;
     }
   }
+
   @override
   void dispose() {
     _companyNameController.dispose();
@@ -300,16 +440,20 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
     _passwordController.dispose();
     super.dispose();
   }
+
   Future<void> _saveFranchisee() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
+
     final repository = FranchiseRepository();
     final String? result;
+
     final Map<String, bool> enabledModules = {
       'kiosk': _moduleKioskEnabled,
       'click_and_collect': _moduleClickAndCollectEnabled,
       'deals': _moduleDealsEnabled,
     };
+
     if (_isEditing) {
       result = await repository.updateFranchiseeDetails(
         uid: widget.franchiseeToEdit!.uid,
@@ -330,7 +474,9 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
         enabledModules: enabledModules,
       );
     }
+
     if (!mounted) return;
+
     if (result == null) {
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -342,27 +488,29 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text("Erreur: $result"), backgroundColor: Colors.red));
     }
+
     if (mounted) {
       setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       appBar: AppBar(
         title:
-        Text(_isEditing ? "Modifier un Franchisé" : "Créer un Franchisé"),
+            Text(_isEditing ? "Modifier un Franchisé" : "Créer un Franchisé"),
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 8.0),
             child: TextButton.icon(
               icon: _isLoading
                   ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 2, color: Colors.blue))
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.blue))
                   : const Icon(Icons.check, color: Colors.blue),
               label: Text("Sauvegarder",
                   style: TextStyle(
@@ -477,9 +625,9 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
                         border: const OutlineInputBorder()),
                     keyboardType: TextInputType.emailAddress,
                     validator: (v) =>
-                    (v == null || v.isEmpty || !v.contains('@'))
-                        ? "Email invalide"
-                        : null,
+                        (v == null || v.isEmpty || !v.contains('@'))
+                            ? "Email invalide"
+                            : null,
                   ),
                   if (!_isEditing) ...[
                     const SizedBox(height: 16),
@@ -519,7 +667,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: const Text("Accès à la configuration borne."),
                     secondary:
-                    const Icon(Icons.touch_app, color: Colors.black87),
+                        const Icon(Icons.touch_app, color: Colors.black87),
                     value: _moduleKioskEnabled,
                     onChanged: (value) =>
                         setState(() => _moduleKioskEnabled = value),
@@ -531,7 +679,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: const Text("Création d'offres spéciales."),
                     secondary:
-                    const Icon(Icons.local_offer, color: Colors.black87),
+                        const Icon(Icons.local_offer, color: Colors.black87),
                     value: _moduleDealsEnabled,
                     onChanged: (value) =>
                         setState(() => _moduleDealsEnabled = value),
@@ -543,7 +691,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
                         style: TextStyle(fontWeight: FontWeight.bold)),
                     subtitle: const Text("Gestion commandes en ligne."),
                     secondary:
-                    const Icon(Icons.shopping_bag, color: Colors.black87),
+                        const Icon(Icons.shopping_bag, color: Colors.black87),
                     value: _moduleClickAndCollectEnabled,
                     onChanged: (value) =>
                         setState(() => _moduleClickAndCollectEnabled = value),
@@ -562,6 +710,7 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
       ),
     );
   }
+
   Widget _buildSectionTitle(String title) {
     return Padding(
       padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
@@ -573,23 +722,27 @@ class _FranchiseeFormViewState extends State<FranchiseeFormView> {
     );
   }
 }
+
 class FranchiseeEmployeesSection extends StatelessWidget {
   final String franchiseeId;
   final FranchiseRepository repository = FranchiseRepository();
+
   FranchiseeEmployeesSection({super.key, required this.franchiseeId});
+
   void _showAddEmployeeDialog(BuildContext context) {
     final nameController = TextEditingController();
     final emailController = TextEditingController();
     final passwordController = TextEditingController();
     final formKey = GlobalKey<FormState>();
     bool isLoading = false;
+
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (context, setState) => AlertDialog(
           title: const Text("Ajouter un employé"),
           shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           content: Form(
             key: formKey,
             child: Column(
@@ -634,30 +787,30 @@ class FranchiseeEmployeesSection extends StatelessWidget {
               onPressed: isLoading
                   ? null
                   : () async {
-                if (formKey.currentState!.validate()) {
-                  setState(() => isLoading = true);
-                  String? error = await repository.createEmployee(
-                    managerId: franchiseeId,
-                    name: nameController.text.trim(),
-                    email: emailController.text.trim(),
-                    password: passwordController.text.trim(),
-                  );
-                  setState(() => isLoading = false);
-                  if (context.mounted) {
-                    if (error == null) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text("Employé créé !"),
-                              backgroundColor: Colors.green));
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text(error),
-                          backgroundColor: Colors.red));
-                    }
-                  }
-                }
-              },
+                      if (formKey.currentState!.validate()) {
+                        setState(() => isLoading = true);
+                        String? error = await repository.createEmployee(
+                          managerId: franchiseeId,
+                          name: nameController.text.trim(),
+                          email: emailController.text.trim(),
+                          password: passwordController.text.trim(),
+                        );
+                        setState(() => isLoading = false);
+                        if (context.mounted) {
+                          if (error == null) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text("Employé créé !"),
+                                    backgroundColor: Colors.green));
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text(error),
+                                backgroundColor: Colors.red));
+                          }
+                        }
+                      }
+                    },
               child: const Text("Ajouter"),
             ),
           ],
@@ -665,6 +818,7 @@ class FranchiseeEmployeesSection extends StatelessWidget {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -728,12 +882,12 @@ class FranchiseeEmployeesSection extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final employee = snapshot.data![index];
                   return ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     leading: CircleAvatar(
                       backgroundColor: Colors.grey.shade100,
-                      child:
-                      Icon(Icons.badge_outlined, color: Colors.grey.shade600),
+                      child: Icon(Icons.badge_outlined,
+                          color: Colors.grey.shade600),
                     ),
                     title: Text(employee.companyName ?? "Sans nom",
                         style: const TextStyle(fontWeight: FontWeight.bold)),

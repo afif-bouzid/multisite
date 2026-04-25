@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:ouiborne/screens/login/quick_login_screen.dart';
 import 'package:provider/provider.dart';
+
+// --- IMPORTS DES VUES DU PROJET ---
 import 'back_office/views/franchisee/franchisee_about_view.dart';
 import 'back_office/views/franchisee/franchisee_catalogue_view.dart';
 import 'back_office/views/franchisee/franchisee_dashboard_view.dart';
@@ -20,18 +23,31 @@ import 'core/cart_provider.dart';
 import 'core/firebase_options.dart';
 import 'core/providers/update_provider.dart';
 import 'core/theme/app_colors.dart';
+
+// --- IMPORT DE LA VUE MOBILE STATS ---
+import 'back_office/views/franchisee/mobile_stats_view.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   PaintingBinding.instance.imageCache.maximumSizeBytes = 1024 * 1024 * 600;
   PaintingBinding.instance.imageCache.maximumSize = 5000;
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+    cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+  );
+
   await initializeDateFormatting('fr_FR', null);
   runApp(const MyApp());
 }
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -44,11 +60,13 @@ class MyApp extends StatelessWidget {
         builder: (context, auth, child) {
           if (auth.isLoading) {
             return const MaterialApp(
+              debugShowCheckedModeBanner: false,
               home: Scaffold(body: Center(child: CircularProgressIndicator())),
             );
           }
           return MaterialApp.router(
             title: 'Ouiborne Caisse',
+            debugShowCheckedModeBanner: false,
             builder: (context, child) {
               return AppScaler(
                 scale: 0.80,
@@ -118,21 +136,24 @@ class MyApp extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   textStyle: const TextStyle(
-                      fontWeight: FontWeight.bold, fontSize: 18),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      inherit: false),
                 ),
               ),
             ),
             routerConfig: AppRouter(authProvider: auth).router,
-            debugShowCheckedModeBanner: false,
           );
         },
       ),
     );
   }
 }
+
 class AppRouter {
   final AuthProvider authProvider;
   late final GoRouter router;
+
   AppRouter({required this.authProvider}) {
     router = GoRouter(
       refreshListenable: authProvider,
@@ -141,6 +162,12 @@ class AppRouter {
         GoRoute(
             path: '/login',
             builder: (context, state) => const QuickLoginScreen()),
+        GoRoute(
+            path: '/launcher',
+            builder: (context, state) => const AppLauncher()),
+        GoRoute(
+            path: '/mobile_stats',
+            builder: (context, state) => const MobileStatsView()),
         GoRoute(
             path: '/franchisor_dashboard',
             builder: (context, state) => const FranchisorDashboardView()),
@@ -178,86 +205,150 @@ class AppRouter {
       ],
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.firebaseUser != null;
-        final isLoggingIn = state.matchedLocation == '/login';
+
+        // Compatibilité avec les différentes versions de GoRouter
+        final String location = state.uri.toString();
+        final isLoggingIn = location == '/login';
+
+        final user = authProvider.franchiseUser;
+
+        // 1. Si l'utilisateur n'est pas connecté, le forcer sur /login
         if (!isLoggedIn) return isLoggingIn ? null : '/login';
+
+        // 2. Gestion de la redirection au moment précis de la connexion
         if (isLoggingIn && isLoggedIn) {
-          if (authProvider.franchiseUser?.isFranchisor == true) {
+          if (user?.isFranchisor == true) {
             return '/franchisor_dashboard';
-          } else {
-            return '/franchisee_dashboard';
+          }
+          // 🔥 CORRECTION ICI : On vérifie 'isAssociate' OU 'isEmployee'
+          else if (user?.isAssociate == true || user?.isEmployee == true) {
+            return '/mobile_stats';
+          }
+          else {
+            return '/launcher'; // Le franchisé (patron) atterrit sur le Launcher
           }
         }
+
+        // 3. Aucune redirection forcée par la suite.
         return null;
       },
     );
   }
 }
-class LoginView extends StatefulWidget {
-  const LoginView({super.key});
-  @override
-  State<LoginView> createState() => _LoginViewState();
-}
-class _LoginViewState extends State<LoginView> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String? _errorMessage;
+
+// ----------------------------------------------------------------
+// WIDGET : APP LAUNCHER (SÉLECTEUR DE MODE)
+// ----------------------------------------------------------------
+class AppLauncher extends StatelessWidget {
+  const AppLauncher({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: AppColors.bkOffWhite,
       body: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Card(
-            elevation: 4,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.restaurant_menu,
+                size: 80, color: AppColors.bkBlack),
+            const SizedBox(height: 20),
+            const Text(
+              "OUIBORNE",
+              style: TextStyle(
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
+                color: AppColors.bkBlack,
+                letterSpacing: 2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              "SÉLECTION DU MODE DE TRAVAIL",
+              style: TextStyle(
+                  fontSize: 16, color: AppColors.bkBlack, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 60),
+            _buildModeButton(
+              context,
+              title: "ACCÉDER À LA CAISSE",
+              subtitle: "Vente, encaissement et commandes",
+              icon: Icons.tablet_android,
+              color: AppColors.bkYellow,
+              textColor: AppColors.bkBlack,
+              onTap: () => context.go('/franchisee_dashboard'),
+            ),
+            const SizedBox(height: 25),
+            _buildModeButton(
+              context,
+              title: "STATS EN DIRECT",
+              subtitle: "Suivi du CA et commandes à distance",
+              icon: Icons.query_stats,
+              color: AppColors.bkBlack,
+              textColor: AppColors.bkYellow,
+              onTap: () => context.go('/mobile_stats'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModeButton(
+      BuildContext context, {
+        required String title,
+        required String subtitle,
+        required IconData icon,
+        required Color color,
+        required Color textColor,
+        required VoidCallback onTap,
+      }) {
+    return Container(
+      width: 450,
+      height: 110,
+      decoration: BoxDecoration(
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          )
+        ],
+      ),
+      child: ElevatedButton(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: textColor,
+          shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          textStyle: const TextStyle(inherit: false),
+        ),
+        onPressed: onTap,
+        child: Row(
+          children: [
+            Icon(icon, size: 40),
+            const SizedBox(width: 20),
+            Expanded(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Connexion Back-Office',
-                      style:
-                      TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 32),
-                  TextField(
-                      controller: _emailController,
-                      decoration: const InputDecoration(
-                          labelText: 'Email',
-                          prefixIcon: Icon(Icons.email_outlined))),
-                  const SizedBox(height: 16),
-                  TextField(
-                      controller: _passwordController,
-                      decoration: const InputDecoration(
-                          labelText: 'Mot de passe',
-                          prefixIcon: Icon(Icons.lock_outline)),
-                      obscureText: true),
-                  if (_errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16.0),
-                      child: Text(_errorMessage!,
-                          style: const TextStyle(color: Colors.red)),
-                    ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () async {
-                        final authProvider =
-                        Provider.of<AuthProvider>(context, listen: false);
-                        final error = await authProvider.signIn(
-                            _emailController.text.trim(),
-                            _passwordController.text.trim());
-                        if (error != null) {
-                          setState(() => _errorMessage = error);
-                        }
-                      },
-                      child: const Text('Se connecter'),
-                    ),
-                  ),
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          inherit: false)),
+                  Text(subtitle,
+                      style: TextStyle(
+                          fontSize: 14,
+                          color: textColor.withOpacity(0.7),
+                          inherit: false)),
                 ],
               ),
             ),
-          ),
+            Icon(Icons.arrow_forward_ios, size: 18, color: textColor),
+          ],
         ),
       ),
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../services/update_service.dart';
+
 class UpdateProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _hasUpdate = false;
@@ -31,6 +32,7 @@ class UpdateProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
   Future<void> downloadAndInstallUpdate() async {
     if (_apkUrl == null || _isLoading) return;
     _isLoading = true;

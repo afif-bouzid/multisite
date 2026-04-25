@@ -4,6 +4,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
+
 class SectionsView extends StatelessWidget {
   const SectionsView({super.key});
   @override
@@ -59,13 +60,14 @@ class SectionsView extends StatelessWidget {
         icon: const Icon(Icons.add),
         label: const Text("Nouvelle Section",
             style: TextStyle(fontWeight: FontWeight.bold)),
-        onPressed: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-                builder: (context) => const SectionFormView())),
-      ),    );
+        onPressed: () => Navigator.push(context,
+            MaterialPageRoute(builder: (context) => const SectionFormView())),
+      ),
+    );
   }
-  Widget _buildSectionCard(BuildContext context, ProductSection section, FranchiseRepository repo) {
+
+  Widget _buildSectionCard(
+      BuildContext context, ProductSection section, FranchiseRepository repo) {
     return Container(
       decoration: BoxDecoration(
           color: Colors.white,
@@ -93,7 +95,8 @@ class SectionsView extends StatelessWidget {
                   Expanded(
                     child: Text(
                       section.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: const TextStyle(
+                          fontWeight: FontWeight.bold, fontSize: 16),
                     ),
                   ),
                   Row(
@@ -116,23 +119,23 @@ class SectionsView extends StatelessWidget {
                           final confirm = await showDialog<bool>(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text("Supprimer ?"),
-                                content: Text(
-                                    "Supprimer la section '${section.title}' ?"),
-                                actions: [
-                                  TextButton(
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, false),
-                                      child: const Text("Annuler")),
-                                  ElevatedButton(
-                                      style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.red,
-                                          foregroundColor: Colors.white),
-                                      onPressed: () =>
-                                          Navigator.pop(ctx, true),
-                                      child: const Text("Supprimer"))
-                                ],
-                              ));
+                                    title: const Text("Supprimer ?"),
+                                    content: Text(
+                                        "Supprimer la section '${section.title}' ?"),
+                                    actions: [
+                                      TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, false),
+                                          child: const Text("Annuler")),
+                                      ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white),
+                                          onPressed: () =>
+                                              Navigator.pop(ctx, true),
+                                          child: const Text("Supprimer"))
+                                    ],
+                                  ));
                           if (confirm == true) {
                             await repo.deleteSection(section.sectionId);
                           }
@@ -155,7 +158,8 @@ class SectionsView extends StatelessWidget {
                   ),
                   _buildInfoBadge(
                     icon: Icons.unfold_more_rounded,
-                    label: "Choix : ${section.selectionMin} - ${section.selectionMax}",
+                    label:
+                        "Choix : ${section.selectionMin} - ${section.selectionMax}",
                     color: Colors.grey.shade700,
                     bgColor: Colors.grey.shade100,
                   ),
@@ -173,10 +177,11 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildActionButton(
       {required IconData icon,
-        required Color color,
-        required VoidCallback onTap}) {
+      required Color color,
+      required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(50),
@@ -191,6 +196,7 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
+
   Widget _buildInfoBadge({
     required IconData icon,
     required String label,
@@ -223,34 +229,51 @@ class SectionsView extends StatelessWidget {
       ),
     );
   }
+
   String _getTypeLabel(String type) {
     final t = type.toLowerCase();
     if (t.contains('radio') || t.contains('unique')) return 'Choix Unique';
     if (t.contains('check') || t.contains('multi')) return 'Choix Multiples';
-    if (t.contains('quantity') || t.contains('increment')) return 'Quantité (Compteur)';
+    if (t.contains('quantity') || t.contains('increment')) {
+      return 'Quantité (Compteur)';
+    }
     return 'Standard';
   }
+
   Color _getTypeColor(String type) {
     final t = type.toLowerCase();
-    if (t.contains('radio') || t.contains('unique')) return const Color(0xFFE65100);
-    if (t.contains('check') || t.contains('multi')) return const Color(0xFF1565C0);
-    if (t.contains('quantity') || t.contains('increment')) return const Color(0xFF2E7D32);
+    if (t.contains('radio') || t.contains('unique')) {
+      return const Color(0xFFE65100);
+    }
+    if (t.contains('check') || t.contains('multi')) {
+      return const Color(0xFF1565C0);
+    }
+    if (t.contains('quantity') || t.contains('increment')) {
+      return const Color(0xFF2E7D32);
+    }
     return Colors.grey.shade800;
   }
+
   IconData _getTypeIcon(String type) {
     final t = type.toLowerCase();
-    if (t.contains('radio') || t.contains('unique')) return Icons.radio_button_checked;
+    if (t.contains('radio') || t.contains('unique')) {
+      return Icons.radio_button_checked;
+    }
     if (t.contains('check') || t.contains('multi')) return Icons.check_box;
-    if (t.contains('quantity') || t.contains('increment')) return Icons.exposure_plus_1;
+    if (t.contains('quantity') || t.contains('increment')) {
+      return Icons.exposure_plus_1;
+    }
     return Icons.widgets;
   }
 }
+
 class SectionFormView extends StatefulWidget {
   final ProductSection? sectionToEdit;
   const SectionFormView({super.key, this.sectionToEdit});
   @override
   State<SectionFormView> createState() => _SectionFormViewState();
 }
+
 class _SectionFormViewState extends State<SectionFormView> {
   final _formKey = GlobalKey<FormState>();
   final _titleController = TextEditingController();
@@ -276,6 +299,7 @@ class _SectionFormViewState extends State<SectionFormView> {
     }
     _preloadData();
   }
+
   Future<void> _preloadData() async {
     final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser;
     if (user == null) return;
@@ -298,6 +322,7 @@ class _SectionFormViewState extends State<SectionFormView> {
       }
     }
   }
+
   @override
   void dispose() {
     _titleController.dispose();
@@ -305,10 +330,12 @@ class _SectionFormViewState extends State<SectionFormView> {
     _maxController.dispose();
     super.dispose();
   }
+
   Future<void> _saveSection() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSaving = true);
-    final user = Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
+    final user =
+        Provider.of<AuthProvider>(context, listen: false).firebaseUser!;
     final newSection = ProductSection(
       id: widget.sectionToEdit?.id ?? '',
       sectionId: widget.sectionToEdit?.sectionId ?? const Uuid().v4(),
@@ -331,6 +358,7 @@ class _SectionFormViewState extends State<SectionFormView> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
   void _openProductPicker() async {
     if (_isDataLoading) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -368,6 +396,7 @@ class _SectionFormViewState extends State<SectionFormView> {
       });
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -380,10 +409,10 @@ class _SectionFormViewState extends State<SectionFormView> {
           IconButton(
             icon: _isSaving
                 ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.black))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.black))
                 : const Icon(Icons.check),
             onPressed: _isSaving ? null : _saveSection,
           )
@@ -421,7 +450,7 @@ class _SectionFormViewState extends State<SectionFormView> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: _type,
+                          initialValue: _type,
                           decoration: const InputDecoration(
                               labelText: "Type de choix",
                               border: OutlineInputBorder()),
@@ -481,11 +510,13 @@ class _SectionFormViewState extends State<SectionFormView> {
                 Row(
                   children: [
                     const Text("Produits de la section",
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        style: TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(width: 8),
                     if (_isDataLoading)
                       const SizedBox(
-                        width: 12, height: 12,
+                        width: 12,
+                        height: 12,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                   ],
@@ -531,21 +562,27 @@ class _SectionFormViewState extends State<SectionFormView> {
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     elevation: 1,
                     child: ListTile(
-                      leading: const Icon(Icons.drag_handle, color: Colors.grey),
+                      leading:
+                          const Icon(Icons.drag_handle, color: Colors.grey),
                       title: Text(item.product.name,
                           style: const TextStyle(fontWeight: FontWeight.w500)),
                       subtitle: item.product.isIngredient
-                          ? const Text("Ingrédient (Non vendable)", style: TextStyle(fontSize: 12, color: Colors.orange))
+                          ? const Text("Ingrédient (Non vendable)",
+                              style:
+                                  TextStyle(fontSize: 12, color: Colors.orange))
                           : null,
                       trailing: SizedBox(
                         width: 140,
                         child: Row(
                           children: [
-                            const Text("+ ", style: TextStyle(color: Colors.grey)),
+                            const Text("+ ",
+                                style: TextStyle(color: Colors.grey)),
                             Expanded(
                               child: TextFormField(
                                 initialValue: item.supplementPrice.toString(),
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
                                 decoration: const InputDecoration(
                                   isDense: true,
                                   suffixText: "€",
@@ -580,6 +617,7 @@ class _SectionFormViewState extends State<SectionFormView> {
     );
   }
 }
+
 class ProductPickerDialog extends StatefulWidget {
   final List<MasterProduct> availableProducts;
   final List<ProductFilter> availableFilters;
@@ -595,6 +633,7 @@ class ProductPickerDialog extends StatefulWidget {
   @override
   State<ProductPickerDialog> createState() => _ProductPickerDialogState();
 }
+
 class _ProductPickerDialogState extends State<ProductPickerDialog>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -623,12 +662,14 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       });
     });
   }
+
   @override
   void dispose() {
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
   }
+
   void _toggleProduct(MasterProduct product) {
     setState(() {
       if (_selectedProducts.any((p) => p.productId == product.productId)) {
@@ -638,6 +679,7 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       }
     });
   }
+
   List<MasterProduct> _filterProducts(List<MasterProduct> source) {
     return source.where((p) {
       if (_selectedFilterId != null) {
@@ -645,22 +687,24 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
           return false;
         }
       }
-      if (_searchQuery.isNotEmpty && !p.name.toLowerCase().contains(_searchQuery)) {
+      if (_searchQuery.isNotEmpty &&
+          !p.name.toLowerCase().contains(_searchQuery)) {
         return false;
       }
       return true;
     }).toList();
   }
+
   @override
   Widget build(BuildContext context) {
     final List<MasterProduct> vendables =
-    widget.availableProducts.where((p) => !p.isIngredient).toList();
+        widget.availableProducts.where((p) => !p.isIngredient).toList();
     final List<MasterProduct> nonVendables =
-    widget.availableProducts.where((p) => p.isIngredient).toList();
-    final currentTabProducts = _tabController.index == 0 ? vendables : nonVendables;
-    final Set<String> presentFilterIds = currentTabProducts
-        .expand((p) => p.filterIds)
-        .toSet();
+        widget.availableProducts.where((p) => p.isIngredient).toList();
+    final currentTabProducts =
+        _tabController.index == 0 ? vendables : nonVendables;
+    final Set<String> presentFilterIds =
+        currentTabProducts.expand((p) => p.filterIds).toSet();
     final List<ProductFilter> activeFilters = widget.availableFilters
         .where((f) => presentFilterIds.contains(f.id))
         .toList();
@@ -681,15 +725,15 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                  icon: const Icon(Icons.clear),
-                  onPressed: () => _searchController.clear(),
-                )
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => _searchController.clear(),
+                      )
                     : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
                 contentPadding:
-                const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
+                    const EdgeInsets.symmetric(vertical: 0, horizontal: 12),
               ),
             ),
             const SizedBox(height: 16),
@@ -734,7 +778,9 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                         },
                         selectedColor: Colors.black,
                         labelStyle: TextStyle(
-                          color: _selectedFilterId == null ? Colors.white : Colors.black,
+                          color: _selectedFilterId == null
+                              ? Colors.white
+                              : Colors.black,
                         ),
                       ),
                     ),
@@ -758,11 +804,10 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                           backgroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               side: BorderSide(color: Colors.grey.shade300),
-                              borderRadius: BorderRadius.circular(20)
-                          ),
+                              borderRadius: BorderRadius.circular(20)),
                         ),
                       );
-                    }).toList(),
+                    }),
                   ],
                 ),
               ),
@@ -797,6 +842,7 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       ],
     );
   }
+
   Widget _buildProductList(List<MasterProduct> products) {
     if (products.isEmpty) {
       return Center(
@@ -816,7 +862,8 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
       separatorBuilder: (c, i) => const Divider(height: 1),
       itemBuilder: (context, index) {
         final product = products[index];
-        final isSelected = _selectedProducts.any((p) => p.productId == product.productId);
+        final isSelected =
+            _selectedProducts.any((p) => p.productId == product.productId);
         return InkWell(
           onTap: () => _toggleProduct(product),
           child: Padding(
@@ -829,19 +876,20 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                   decoration: BoxDecoration(
                     color: Colors.grey.shade200,
                     borderRadius: BorderRadius.circular(8),
-                    image: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
+                    image: (product.photoUrl != null &&
+                            product.photoUrl!.isNotEmpty)
                         ? DecorationImage(
-                      image: NetworkImage(product.photoUrl!),
-                      fit: BoxFit.cover,
-                    )
+                            image: NetworkImage(product.photoUrl!),
+                            fit: BoxFit.cover,
+                          )
                         : null,
                   ),
                   child: (product.photoUrl == null || product.photoUrl!.isEmpty)
                       ? Icon(
-                    product.isIngredient ? Icons.kitchen : Icons.fastfood,
-                    size: 20,
-                    color: Colors.grey,
-                  )
+                          product.isIngredient ? Icons.kitchen : Icons.fastfood,
+                          size: 20,
+                          color: Colors.grey,
+                        )
                       : null,
                 ),
                 const SizedBox(width: 12),
@@ -849,7 +897,8 @@ class _ProductPickerDialogState extends State<ProductPickerDialog>
                   child: Text(
                     product.name,
                     style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight:
+                          isSelected ? FontWeight.bold : FontWeight.normal,
                       fontSize: 14,
                     ),
                   ),

@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,9 +5,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../models.dart';
+
 class FranchiseRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -24,7 +23,7 @@ class FranchiseRepository {
   }) async {
     try {
       final docRef =
-      FirebaseFirestore.instance.collection('product_filters').doc(id);
+          FirebaseFirestore.instance.collection('product_filters').doc(id);
       await docRef.set({
         'id': id,
         'createdBy': franchisorId,
@@ -36,12 +35,14 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> deleteFilter(String filterId) async {
     await FirebaseFirestore.instance
         .collection('product_filters')
         .doc(filterId)
         .delete();
   }
+
   Future<void> addProductFilter(String uid, String name) async {
     final id = const Uuid().v4();
     await _firestore.collection('product_filters').doc(id).set({
@@ -51,6 +52,7 @@ class FranchiseRepository {
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
+
   Future<String> uploadUniversalFile(XFile file, String path) async {
     final ref = _storage.ref().child(path);
     final Uint8List data = await file.readAsBytes();
@@ -58,6 +60,7 @@ class FranchiseRepository {
     await ref.putData(data, metadata);
     return await ref.getDownloadURL();
   }
+
   Future<String?> uploadImage(XFile imageFile, String path) async {
     try {
       final ref = _storage.ref(path);
@@ -102,6 +105,7 @@ class FranchiseRepository {
       return null;
     }
   }
+
   Future<void> updateKioskScreensaver(
       String franchiseeId, List<String> urls) async {
     try {
@@ -114,11 +118,12 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> updateGlobalButtonImages(
       String franchisorId, String? dineInUrl, String? takeawayUrl) async {
     try {
       final docSnap =
-      await _firestore.collection('users').doc(franchisorId).get();
+          await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
@@ -146,13 +151,14 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> deleteGlobalButtonImage(
       String franchisorId, String typeKey) async {
     final String fieldName =
-    (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
+        (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
     try {
       final docSnap =
-      await _firestore.collection('users').doc(franchisorId).get();
+          await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final url = docSnap.data()?[fieldName] as String?;
         if (url != null) {
@@ -167,6 +173,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> addMasterMedia({
     required String name,
     required String type,
@@ -197,10 +204,11 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> deleteMasterMedia(String mediaId) async {
     try {
       final docSnap =
-      await _firestore.collection('kiosk_medias').doc(mediaId).get();
+          await _firestore.collection('kiosk_medias').doc(mediaId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
@@ -215,6 +223,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Stream<List<KioskMedia>> getAvailableKioskMedias(String franchisorId) {
     return _firestore
         .collection('kiosk_medias')
@@ -222,8 +231,9 @@ class FranchiseRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
+            snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
   }
+
   Future<void> setKioskActiveMedia(
       String franchiseeId, KioskMedia media) async {
     await _firestore
@@ -242,6 +252,7 @@ class FranchiseRepository {
       'screensaverUrl': media.url,
     });
   }
+
   Future<void> saveKioskWelcomeConfig({
     required String mediaType,
     required String mediaUrl,
@@ -259,18 +270,18 @@ class FranchiseRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-  _performChunkedQuery(
-      Query collectionQuery, String field, List<dynamic> ids) async {
+      _performChunkedQuery(
+          Query collectionQuery, String field, List<dynamic> ids) async {
     if (ids.isEmpty) {
       return [];
     }
     final List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
     for (var i = 0; i < ids.length; i += 30) {
-      final sublist =
-      ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
+      final sublist = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
       futures.add(collectionQuery.where(field, whereIn: sublist).get()
-      as Future<QuerySnapshot<Map<String, dynamic>>>);
+          as Future<QuerySnapshot<Map<String, dynamic>>>);
     }
     final snapshots = await Future.wait(futures);
     final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
@@ -279,6 +290,7 @@ class FranchiseRepository {
     }
     return docs;
   }
+
   Future<List<MasterProduct>> getFranchiseeEnabledProducts(
       String franchiseeId, String franchisorId) async {
     final menuSnapshot = await _firestore
@@ -295,11 +307,12 @@ class FranchiseRepository {
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId);
     final productDocs =
-    await _performChunkedQuery(baseQuery, 'productId', productIds);
+        await _performChunkedQuery(baseQuery, 'productId', productIds);
     return productDocs
         .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
         .toList();
   }
+
   Stream<List<MasterProduct>> getFranchiseeVisibleProductsStream(
       String franchiseeId, String franchisorId) {
     return _firestore
@@ -318,7 +331,7 @@ class FranchiseRepository {
           .collection('master_products')
           .where('createdBy', isEqualTo: franchisorId);
       final productDocs =
-      await _performChunkedQuery(baseQuery, 'productId', productIds);
+          await _performChunkedQuery(baseQuery, 'productId', productIds);
       final products = productDocs
           .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
           .toList();
@@ -329,6 +342,7 @@ class FranchiseRepository {
           .toList();
     });
   }
+
   Future<void> updateFranchiseeMenuOrder(
       String franchiseeId, List<String> orderedProductIds) async {
     final batch = _firestore.batch();
@@ -342,6 +356,7 @@ class FranchiseRepository {
     }
     await batch.commit();
   }
+
   Future<String?> createFranchisee({
     required String email,
     required String password,
@@ -379,7 +394,7 @@ class FranchiseRepository {
         if (masterProductsSnapshot.docs.isNotEmpty) {
           for (final productDoc in masterProductsSnapshot.docs) {
             final product =
-            MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
+                MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
             final newMenuItemRef = _firestore
                 .collection('users')
                 .doc(newUser.uid)
@@ -428,6 +443,7 @@ class FranchiseRepository {
       return 'Une erreur est survenue: $e';
     }
   }
+
   Future<String?> createEmployee({
     required String managerId,
     required String email,
@@ -437,7 +453,7 @@ class FranchiseRepository {
     FirebaseApp? secondaryApp;
     try {
       final managerDoc =
-      await _firestore.collection('users').doc(managerId).get();
+          await _firestore.collection('users').doc(managerId).get();
       if (!managerDoc.exists) return "Erreur : Compte manager introuvable.";
       final String franchisorId = managerDoc.get('franchisorId');
       final Map<String, dynamic> enabledModules =
@@ -448,7 +464,7 @@ class FranchiseRepository {
       );
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
       UserCredential userCredential =
-      await secondaryAuth.createUserWithEmailAndPassword(
+          await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -475,6 +491,7 @@ class FranchiseRepository {
       await secondaryApp?.delete();
     }
   }
+
   Future<String?> updateFranchiseeDetails({
     required String uid,
     required String companyName,
@@ -496,6 +513,7 @@ class FranchiseRepository {
       return 'Une erreur est survenue lors de la mise à jour: $e';
     }
   }
+
   Stream<List<FranchiseUser>> getFranchiseesForFranchisor(String franchisorId) {
     return _firestore
         .collection('users')
@@ -503,9 +521,10 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-        .toList());
+            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
+
   Stream<List<FranchiseUser>> getFranchiseesStream(String franchisorId) {
     return _firestore
         .collection('users')
@@ -513,9 +532,10 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-        .toList());
+            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
+
   Stream<List<FranchiseUser>> getStoreEmployeesStream(String storeId) {
     return _firestore
         .collection('users')
@@ -523,12 +543,14 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'employee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-        .toList());
+            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
+
   Future<void> deleteEmployee(String employeeId) async {
     await _firestore.collection('users').doc(employeeId).delete();
   }
+
   Future<String?> deleteFranchiseeAccount(String franchiseeId) async {
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
@@ -550,6 +572,7 @@ class FranchiseRepository {
       return "Une erreur inattendue est survenue.";
     }
   }
+
   Stream<List<KioskCategory>> getKioskCategoriesStream(String userId,
       {String? masterId}) {
     final targetId = masterId ?? userId;
@@ -562,7 +585,7 @@ class FranchiseRepository {
       List<KioskCategory> categories = [];
       for (var doc in snapshot.docs) {
         final filtersSnapshot =
-        await doc.reference.collection('filters').orderBy('position').get();
+            await doc.reference.collection('filters').orderBy('position').get();
         final filters = filtersSnapshot.docs
             .map((filterDoc) => KioskFilter.fromFirestore(filterDoc))
             .toList();
@@ -571,6 +594,7 @@ class FranchiseRepository {
       return categories;
     });
   }
+
   Future<void> saveKioskCategory({
     String? id,
     required String name,
@@ -605,20 +629,22 @@ class FranchiseRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
   Future<void> updateKioskCategoriesOrder(
       List<KioskCategory> sortedCategories) async {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedCategories.length; i++) {
       final docRef =
-      _firestore.collection('kiosk_categories').doc(sortedCategories[i].id);
+          _firestore.collection('kiosk_categories').doc(sortedCategories[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
   }
+
   Future<void> deleteKioskCategory(String categoryId) async {
     try {
       final docSnap =
-      await _firestore.collection('kiosk_categories').doc(categoryId).get();
+          await _firestore.collection('kiosk_categories').doc(categoryId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null && data['imageUrl'] != null) {
@@ -630,6 +656,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> saveKioskFilter({
     required String categoryId,
     String? filterId,
@@ -674,6 +701,7 @@ class FranchiseRepository {
         .doc(categoryId)
         .update({'updatedAt': FieldValue.serverTimestamp()});
   }
+
   Future<void> deleteKioskFilter(
       {required String categoryId, required String filterId}) async {
     try {
@@ -703,6 +731,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> updateKioskFiltersOrder(
       String categoryId, List<KioskFilter> filters) async {
     final batch = FirebaseFirestore.instance.batch();
@@ -716,14 +745,16 @@ class FranchiseRepository {
     }
     await batch.commit();
   }
+
   Stream<List<ProductFilter>> getFiltersStream(String franchisorId) {
     return _firestore
         .collection('product_filters')
         .where('createdBy', isEqualTo: franchisorId)
         .snapshots()
         .map((snapshot) =>
-        snapshot.docs.map(ProductFilter.fromFirestore).toList());
+            snapshot.docs.map(ProductFilter.fromFirestore).toList());
   }
+
   Future<void> addFilter(String name, String? color) async =>
       await _firestore.collection('product_filters').add({
         'name': name,
@@ -758,7 +789,7 @@ class FranchiseRepository {
         final supplementPrices = {
           for (var itemDoc in itemDocs)
             itemDoc.data()['productId']:
-            (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+                (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
         };
         List<SectionItem> sectionItems = [];
         if (productIds.isNotEmpty) {
@@ -769,7 +800,7 @@ class FranchiseRepository {
           final productMap = {
             for (var doc in productDocs)
               doc.data()['productId']:
-              MasterProduct.fromFirestore(doc.data(), doc.id)
+                  MasterProduct.fromFirestore(doc.data(), doc.id)
           };
           for (var pid in productIds) {
             final product = productMap[pid];
@@ -786,6 +817,7 @@ class FranchiseRepository {
       return sections;
     });
   }
+
   Future<List<ProductSection>> getSectionsForProduct(
       String franchisorId, List<String> sectionIds) async {
     if (sectionIds.isEmpty) return [];
@@ -814,7 +846,7 @@ class FranchiseRepository {
       final supplementPrices = {
         for (var itemDoc in itemDocs)
           itemDoc.data()['productId']:
-          (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+              (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
       };
       List<SectionItem> sectionItems = [];
       if (productIds.isNotEmpty) {
@@ -823,7 +855,7 @@ class FranchiseRepository {
         final productMap = {
           for (var doc in productDocs)
             doc.data()['productId']:
-            MasterProduct.fromFirestore(doc.data(), doc.id)
+                MasterProduct.fromFirestore(doc.data(), doc.id)
         };
         for (var pid in productIds) {
           final product = productMap[pid];
@@ -839,10 +871,11 @@ class FranchiseRepository {
     }
     return sectionIds
         .map((id) => fetchedSections.firstWhere((s) => s.sectionId == id,
-        orElse: () => ProductSection(id: '', sectionId: '')))
+            orElse: () => ProductSection(id: '', sectionId: '')))
         .where((s) => s.sectionId.isNotEmpty)
         .toList();
   }
+
   Future<void> saveSection(ProductSection section) async {
     final batch = _firestore.batch();
     final sectionQuery = await _firestore
@@ -886,6 +919,7 @@ class FranchiseRepository {
     }
     await batch.commit();
   }
+
   Future<void> deleteSection(String sectionId) async {
     final batch = _firestore.batch();
     final sectionQuery = await _firestore
@@ -904,6 +938,7 @@ class FranchiseRepository {
     }
     await batch.commit();
   }
+
   Stream<List<SectionGroup>> getSectionGroupsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
@@ -912,14 +947,15 @@ class FranchiseRepository {
     if (filterIds.isNotEmpty) {
       query = query.where('filterIds', arrayContainsAny: filterIds);
     }
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map(SectionGroup.fromFirestore).toList());
+    return query.snapshots().map(
+        (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
   }
+
   Future<void> saveSectionGroup(
       {String? groupId,
-        required String name,
-        required List<String> sectionIds,
-        required List<String> filterIds}) async {
+      required String name,
+      required List<String> sectionIds,
+      required List<String> filterIds}) async {
     final docRef = groupId != null
         ? _firestore.collection('section_groups').doc(groupId)
         : _firestore.collection('section_groups').doc();
@@ -930,6 +966,7 @@ class FranchiseRepository {
       'filterIds': filterIds
     }, SetOptions(merge: true));
   }
+
   Future<void> deleteSectionGroup(String groupId) async =>
       await _firestore.collection('section_groups').doc(groupId).delete();
   Future<void> duplicateSectionGroup(SectionGroup group) async {
@@ -942,6 +979,7 @@ class FranchiseRepository {
       'filterIds': group.filterIds,
     }, SetOptions(merge: true));
   }
+
   Stream<List<MasterProduct>> getMasterProductsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
@@ -951,11 +989,11 @@ class FranchiseRepository {
       query = query.where('filterIds', arrayContainsAny: filterIds);
     }
     return query.snapshots().map((snapshot) => snapshot.docs
-        .map((doc) =>
-        MasterProduct.fromFirestore(
+        .map((doc) => MasterProduct.fromFirestore(
             doc.data() as Map<String, dynamic>, doc.id))
         .toList());
   }
+
   Future<void> saveProduct({
     MasterProduct? product,
     required String name,
@@ -982,7 +1020,8 @@ class FranchiseRepository {
     final productId = product?.productId ?? const Uuid().v4();
     String? finalPhotoUrl = photoUrl;
     if (imageFile != null) {
-      final String path = 'products/${productId}_${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
+      final String path =
+          'products/${productId}_${DateTime.now().millisecondsSinceEpoch}_${imageFile.name}';
       if (existingPhotoUrl != null && existingPhotoUrl.isNotEmpty) {
         await _deleteFileFromUrl(existingPhotoUrl);
       }
@@ -1051,13 +1090,14 @@ class FranchiseRepository {
       }
     }
   }
+
   Future<void> deleteMasterProduct(MasterProduct product) async {
     if (product.photoUrl != null && product.photoUrl!.isNotEmpty) {
       await _deleteFileFromUrl(product.photoUrl);
     }
     final batch = _firestore.batch();
     final masterProductRef =
-    _firestore.collection('master_products').doc(product.id);
+        _firestore.collection('master_products').doc(product.id);
     batch.delete(masterProductRef);
     final franchiseesSnapshot = await _firestore
         .collection('users')
@@ -1080,29 +1120,36 @@ class FranchiseRepository {
     }
     await batch.commit();
   }
-  Future<void> savePendingOrder(
-      String franchiseeId,
-      String identifier,
-      List<CartItem> items,
-      double total,
-      {String source = 'pos', String orderType = 'onSite', bool isPaid = false, String paymentMethod = ''}
-      ) async {
-    final itemsAsMap = items.map((item) => {
-      'masterProductId': item.product.id,
-      'basePrice': item.price,
-      'quantity': item.quantity,
-      'vatRate': item.vatRate,
-      'isSentToKitchen': item.isSentToKitchen,
-      'selectedOptions': item.selectedOptions.entries.map((entry) => {
-        'sectionId': entry.key,
-        'items': entry.value.map((sectionItem) => {
-          'masterProductId': sectionItem.product.id,
-          'supplementPrice': sectionItem.supplementPrice,
-        }).toList(),
-      }).toList(),
-      'removedIngredientProductIds': item.removedIngredientProductIds,
-      'removedIngredientNames': item.removedIngredientNames,
-    }).toList();
+
+  Future<void> savePendingOrder(String franchiseeId, String identifier,
+      List<CartItem> items, double total,
+      {String source = 'pos',
+      String orderType = 'onSite',
+      bool isPaid = false,
+      String paymentMethod = ''}) async {
+    final itemsAsMap = items
+        .map((item) => {
+              'masterProductId': item.product.id,
+              'basePrice': item.price,
+              'quantity': item.quantity,
+              'vatRate': item.vatRate,
+              'isSentToKitchen': item.isSentToKitchen,
+              'selectedOptions': item.selectedOptions.entries
+                  .map((entry) => {
+                        'sectionId': entry.key,
+                        'items': entry.value
+                            .map((sectionItem) => {
+                                  'masterProductId': sectionItem.product.id,
+                                  'supplementPrice':
+                                      sectionItem.supplementPrice,
+                                })
+                            .toList(),
+                      })
+                  .toList(),
+              'removedIngredientProductIds': item.removedIngredientProductIds,
+              'removedIngredientNames': item.removedIngredientNames,
+            })
+        .toList();
     await _firestore.collection('pending_orders').add({
       'franchiseeId': franchiseeId,
       'identifier': identifier,
@@ -1112,22 +1159,27 @@ class FranchiseRepository {
       'source': source,
       'orderType': orderType,
       'isPaid': isPaid,
-      'paymentMethod': paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
+      'paymentMethod':
+          paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
       'status': isPaid ? 'paid' : 'pending',
     });
   }
+
   Stream<List<PendingOrder>> getPendingOrdersStream(String franchiseeId) {
     return _firestore
         .collection('pending_orders')
         .where('franchiseeId', isEqualTo: franchiseeId)
         .orderBy('timestamp', descending: true)
         .snapshots()
-        .map((snapshot) =>
-        snapshot.docs.map((doc) => PendingOrder.fromFirestore(doc)).toList());
+        .map((snapshot) => snapshot.docs
+            .map((doc) => PendingOrder.fromFirestore(doc))
+            .toList());
   }
+
   Future<void> deletePendingOrder(String orderId) async {
     await _firestore.collection('pending_orders').doc(orderId).delete();
   }
+
   Stream<List<TillSession>> getFranchiseeSessions(String franchiseeId,
       {DateTime? startDate, DateTime? endDate}) {
     Query query = _firestore
@@ -1141,9 +1193,10 @@ class FranchiseRepository {
       query = query.where('openingTime',
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
     }
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map(TillSession.fromFirestore).toList());
+    return query.snapshots().map(
+        (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
   }
+
   Stream<List<Transaction>> getSessionTransactions(String sessionId) =>
       _firestore
           .collection('transactions')
@@ -1151,7 +1204,7 @@ class FranchiseRepository {
           .orderBy('timestamp', descending: true)
           .snapshots()
           .map((snapshot) =>
-          snapshot.docs.map(Transaction.fromFirestore).toList());
+              snapshot.docs.map(Transaction.fromFirestore).toList());
   Stream<List<Transaction>> getTransactionsInDateRange(String franchiseeId,
       {DateTime? startDate, DateTime? endDate, int limit = 100}) {
     Query query = _firestore
@@ -1166,9 +1219,10 @@ class FranchiseRepository {
     }
     query = query.orderBy('timestamp', descending: true);
     query = query.limit(limit);
-    return query.snapshots().map((snapshot) =>
-        snapshot.docs.map(Transaction.fromFirestore).toList());
+    return query.snapshots().map(
+        (snapshot) => snapshot.docs.map(Transaction.fromFirestore).toList());
   }
+
   Stream<TillSession?> getActiveSession(String franchiseeId) {
     return _firestore
         .collection('sessions')
@@ -1177,9 +1231,10 @@ class FranchiseRepository {
         .limit(1)
         .snapshots()
         .map((snapshot) => snapshot.docs.isNotEmpty
-        ? TillSession.fromFirestore(snapshot.docs.first)
-        : null);
+            ? TillSession.fromFirestore(snapshot.docs.first)
+            : null);
   }
+
   Future<String> openTillSession(
       {required String franchiseeId, required double initialCash}) async {
     final activeSessionQuery = await _firestore
@@ -1202,6 +1257,7 @@ class FranchiseRepository {
     await docRef.set(newSession.toMap());
     return docRef.id;
   }
+
   Future<String?> closeTillSession(
       {required String sessionId, required double finalCash}) async {
     try {
@@ -1211,7 +1267,7 @@ class FranchiseRepository {
         'isClosed': true
       });
       final sessionDoc =
-      await _firestore.collection('sessions').doc(sessionId).get();
+          await _firestore.collection('sessions').doc(sessionId).get();
       final franchiseeId = sessionDoc.data()?['franchiseeId'];
       if (franchiseeId != null) {
         await _firestore
@@ -1226,6 +1282,7 @@ class FranchiseRepository {
       return e.toString();
     }
   }
+
   Future<String> generateNextGlobalOrderNumber(String franchiseeId) async {
     final counterRef = _firestore
         .collection('users')
@@ -1247,16 +1304,18 @@ class FranchiseRepository {
       return nextNumber.toString().padLeft(3, '0');
     });
   }
+
   Future<void> recordTransaction(Transaction transaction) async {
     await _firestore
         .collection('transactions')
         .doc(transaction.id)
         .set(transaction.toMap());
   }
+
   Future<void> reprintReceipt(String transactionId) async {
     try {
       final callable =
-      FirebaseFunctions.instance.httpsCallable('reprintReceipt');
+          FirebaseFunctions.instance.httpsCallable('reprintReceipt');
       await callable.call({'transactionId': transactionId});
     } catch (e) {
       if (kDebugMode) {
@@ -1265,10 +1324,11 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> reprintKitchenTicket(String transactionId) async {
     try {
       final callable =
-      FirebaseFunctions.instance.httpsCallable('reprintKitchenTicket');
+          FirebaseFunctions.instance.httpsCallable('reprintKitchenTicket');
       await callable.call({'transactionId': transactionId});
     } catch (e) {
       if (kDebugMode) {
@@ -1277,6 +1337,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Future<void> savePrinterConfig(
       String franchiseeId, PrinterConfig config) async {
     await _firestore
@@ -1286,6 +1347,7 @@ class FranchiseRepository {
         .doc('printer')
         .set(config.toMap());
   }
+
   Stream<PrinterConfig> getPrinterConfigStream(String franchiseeId) {
     return _firestore
         .collection('users')
@@ -1300,6 +1362,7 @@ class FranchiseRepository {
       return PrinterConfig();
     });
   }
+
   Future<void> saveReceiptConfig(
       String franchiseeId, ReceiptConfig config) async {
     await _firestore
@@ -1309,6 +1372,7 @@ class FranchiseRepository {
         .doc('receipt')
         .set(config.toMap());
   }
+
   Stream<ReceiptConfig> getReceiptConfigStream(String franchiseeId) {
     return _firestore
         .collection('users')
@@ -1327,18 +1391,20 @@ class FranchiseRepository {
           printReceiptOnPayment: true);
     });
   }
+
   Stream<List<FranchiseUser>> getTeamMembersStream(String storeId) {
     return _firestore
         .collection('users')
         .where(Filter.or(
-      Filter('uid', isEqualTo: storeId),
-      Filter('storeId', isEqualTo: storeId),
-    ))
+          Filter('uid', isEqualTo: storeId),
+          Filter('storeId', isEqualTo: storeId),
+        ))
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-        .toList());
+            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
+
   Future<void> _deleteFileFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
@@ -1352,20 +1418,24 @@ class FranchiseRepository {
       }
     }
   }
+
   Future<void> updateMasterProductsOrder(
       List<MasterProduct> sortedProducts) async {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedProducts.length; i++) {
-      final docRef = _firestore
-          .collection('master_products')
-          .doc(sortedProducts[i].id);
+      final docRef =
+          _firestore.collection('master_products').doc(sortedProducts[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
   }
+
   Future<String> addKioskCategory(String uid, String name) async {
     final id = const Uuid().v4();
-    await FirebaseFirestore.instance.collection('kiosk_categories').doc(id).set({
+    await FirebaseFirestore.instance
+        .collection('kiosk_categories')
+        .doc(id)
+        .set({
       'id': id,
       'name': name,
       'position': 999,
@@ -1375,6 +1445,7 @@ class FranchiseRepository {
     });
     return id;
   }
+
   Future<String> addKioskFilter(
       String uid, String categoryId, String filterName) async {
     final filterId = const Uuid().v4();
@@ -1395,6 +1466,7 @@ class FranchiseRepository {
         .update({'updatedAt': FieldValue.serverTimestamp()});
     return filterId;
   }
+
   Future<void> updateFranchiseeMenuItem({
     required String franchiseeId,
     required String masterProductId,
@@ -1422,6 +1494,7 @@ class FranchiseRepository {
       rethrow;
     }
   }
+
   Stream<List<FranchiseeMenuItem>> getFranchiseeMenuStream(
       String franchiseeId) {
     return _firestore
@@ -1430,7 +1503,7 @@ class FranchiseRepository {
         .collection('menu')
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
-        .toList());
+            .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
+            .toList());
   }
 }

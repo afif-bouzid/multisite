@@ -26,7 +26,8 @@ void main() async {
     if (line.startsWith('FILE PATH: ')) {
       // Si on avait un fichier précédent en mémoire, on le sauvegarde
       if (currentFilePath != null) {
-        await _saveFile(outputDir.path, currentFilePath, currentContent.toString());
+        await _saveFile(
+            outputDir.path, currentFilePath, currentContent.toString());
       }
 
       // Initialisation du nouveau fichier
@@ -39,7 +40,9 @@ void main() async {
       }
     }
     // Ignorer la ligne "==========" juste au-dessus du PROCHAIN "FILE PATH:"
-    else if (line.startsWith('=======') && i + 1 < lines.length && lines[i + 1].startsWith('FILE PATH: ')) {
+    else if (line.startsWith('=======') &&
+        i + 1 < lines.length &&
+        lines[i + 1].startsWith('FILE PATH: ')) {
       continue;
     }
     // Ajouter le contenu au fichier actuel (s'il y en a un de déclaré)
@@ -58,7 +61,8 @@ void main() async {
 }
 
 /// Crée les dossiers manquants et écrit le contenu dans le fichier
-Future<void> _saveFile(String baseDir, String relativePath, String content) async {
+Future<void> _saveFile(
+    String baseDir, String relativePath, String content) async {
   try {
     // relativePath contient déjà 'lib/fichier.dart' ou 'pubspec.yaml'
     final file = File('$baseDir/$relativePath');
@@ -67,7 +71,7 @@ Future<void> _saveFile(String baseDir, String relativePath, String content) asyn
     await file.parent.create(recursive: true);
 
     // Nettoyage des espaces/retours à la ligne en trop à la fin
-    await file.writeAsString(content.trim() + '\n');
+    await file.writeAsString('${content.trim()}\n');
     print('  -> Restauré/Écrasé : $relativePath');
   } catch (e) {
     print('⚠️ Erreur lors de la restauration de $relativePath : $e');

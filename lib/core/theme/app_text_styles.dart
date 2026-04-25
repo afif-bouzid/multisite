@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'app_colors.dart'; 
+import 'app_colors.dart';
+
 class AppTextStyles {
   static const String fontName = 'Flame';
   static const TextStyle titleLarge = TextStyle(

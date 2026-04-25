@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 class AppScaler extends StatelessWidget {
   final Widget child;
   final double scale;

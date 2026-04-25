@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '/models.dart';
+
 class FranchiseeContainerConfigDialog extends StatefulWidget {
   final MasterProduct containerProduct;
   final List<MasterProduct> allProducts;
@@ -17,6 +18,7 @@ class FranchiseeContainerConfigDialog extends StatefulWidget {
   State<FranchiseeContainerConfigDialog> createState() =>
       _FranchiseeContainerConfigDialogState();
 }
+
 class _FranchiseeContainerConfigDialogState
     extends State<FranchiseeContainerConfigDialog> {
   final Map<String, TextEditingController> _controllers = {};
@@ -25,6 +27,7 @@ class _FranchiseeContainerConfigDialogState
     super.initState();
     _initializeControllers();
   }
+
   void _initializeControllers() {
     final children = _getContainerChildren();
     for (var child in children) {
@@ -36,6 +39,7 @@ class _FranchiseeContainerConfigDialogState
           TextEditingController(text: currentPrice.toStringAsFixed(2));
     }
   }
+
   @override
   void dispose() {
     for (var c in _controllers.values) {
@@ -43,22 +47,24 @@ class _FranchiseeContainerConfigDialogState
     }
     super.dispose();
   }
+
   List<MasterProduct> _getContainerChildren() {
     if (widget.containerProduct.containerProductIds.isEmpty) return [];
     return widget.containerProduct.containerProductIds
         .map((childId) {
-      try {
-        return widget.allProducts.firstWhere(
+          try {
+            return widget.allProducts.firstWhere(
               (p) => p.id == childId,
-        );
-      } catch (e) {
-        print("Produit enfant introuvable pour l'ID: $childId");
-        return null;
-      }
-    })
-        .whereType<MasterProduct>() 
+            );
+          } catch (e) {
+            print("Produit enfant introuvable pour l'ID: $childId");
+            return null;
+          }
+        })
+        .whereType<MasterProduct>()
         .toList();
   }
+
   @override
   Widget build(BuildContext context) {
     final children = _getContainerChildren();
@@ -78,60 +84,58 @@ class _FranchiseeContainerConfigDialogState
         height: 400,
         child: children.isEmpty
             ? const Center(
-          child: Text(
-              "Ce conteneur semble vide ou les produits liés sont introuvables."),
-        )
+                child: Text(
+                    "Ce conteneur semble vide ou les produits liés sont introuvables."),
+              )
             : ListView.separated(
-          itemCount: children.length,
-          separatorBuilder: (c, i) => const Divider(),
-          itemBuilder: (context, index) {
-            final child = children[index];
-            final controller = _controllers[child.id];
-            return ListTile(
-              leading: Container(
-                width: 50,
-                height: 50,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(8),
-                  image: (child.photoUrl != null &&
-                      child.photoUrl!.isNotEmpty)
-                      ? DecorationImage(
-                      image:
-                      CachedNetworkImageProvider(child.photoUrl!),
-                      fit: BoxFit.cover)
-                      : null,
-                ),
-                child: (child.photoUrl == null ||
-                    child.photoUrl!.isEmpty)
-                    ? const Icon(Icons.fastfood,
-                    size: 20, color: Colors.grey)
-                    : null,
+                itemCount: children.length,
+                separatorBuilder: (c, i) => const Divider(),
+                itemBuilder: (context, index) {
+                  final child = children[index];
+                  final controller = _controllers[child.id];
+                  return ListTile(
+                    leading: Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                        image: (child.photoUrl != null &&
+                                child.photoUrl!.isNotEmpty)
+                            ? DecorationImage(
+                                image:
+                                    CachedNetworkImageProvider(child.photoUrl!),
+                                fit: BoxFit.cover)
+                            : null,
+                      ),
+                      child: (child.photoUrl == null || child.photoUrl!.isEmpty)
+                          ? const Icon(Icons.fastfood,
+                              size: 20, color: Colors.grey)
+                          : null,
+                    ),
+                    title: Text(child.name,
+                        style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text(child.isIngredient
+                        ? "Ingrédient / Produit Interne"
+                        : "Produit standard"),
+                    trailing: SizedBox(
+                      width: 100,
+                      child: TextField(
+                        controller: controller,
+                        keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true),
+                        decoration: const InputDecoration(
+                          labelText: "Prix €",
+                          border: OutlineInputBorder(),
+                          contentPadding:
+                              EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                        ),
+                        onChanged: (val) {},
+                      ),
+                    ),
+                  );
+                },
               ),
-              title: Text(child.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold)),
-              subtitle: Text(child.isIngredient
-                  ? "Ingrédient / Produit Interne"
-                  : "Produit standard"),
-              trailing: SizedBox(
-                width: 100,
-                child: TextField(
-                  controller: controller,
-                  keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: "Prix €",
-                    border: OutlineInputBorder(),
-                    contentPadding:
-                    EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                  ),
-                  onChanged: (val) {
-                  },
-                ),
-              ),
-            );
-          },
-        ),
       ),
       actions: [
         TextButton(
@@ -144,8 +148,8 @@ class _FranchiseeContainerConfigDialogState
               final ctrl = _controllers[child.id];
               if (ctrl != null) {
                 final double? newPrice =
-                double.tryParse(ctrl.text.replaceAll(',', '.'));
-                if (newPrice != null) {
+                    double.tryParse(ctrl.text.replaceAll(',', '.'));
+                if (newPrice != null && newPrice >= 0) {
                   widget.onUpdateChildPrice(child, newPrice);
                 }
               }

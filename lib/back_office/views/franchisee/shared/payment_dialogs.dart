@@ -1,29 +1,35 @@
 import 'package:flutter/material.dart';
+
 class CashPaymentDialog extends StatefulWidget {
   final double totalDue;
   const CashPaymentDialog({super.key, required this.totalDue});
   @override
   State<CashPaymentDialog> createState() => _CashPaymentDialogState();
 }
+
 class _CashPaymentDialogState extends State<CashPaymentDialog> {
   String _currentInput = "";
   double get _amountReceived {
     if (_currentInput.isEmpty) return 0.0;
     return double.tryParse(_currentInput.replaceAll(',', '.')) ?? 0.0;
   }
+
   void _onNumber(String num) {
     if (num == '.' && _currentInput.contains('.')) return;
     setState(() => _currentInput += num);
   }
+
   void _onBackspace() {
     if (_currentInput.isNotEmpty) {
       setState(() =>
           _currentInput = _currentInput.substring(0, _currentInput.length - 1));
     }
   }
+
   void _onClear() {
     setState(() => _currentInput = "");
   }
+
   void _addCash(int amount) {
     double current = _amountReceived;
     setState(() {
@@ -33,6 +39,7 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
       }
     });
   }
+
   @override
   Widget build(BuildContext context) {
     final changeDue = _amountReceived - widget.totalDue;
@@ -52,7 +59,7 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
       ),
       content: SizedBox(
         width: 450,
-        height: 550, 
+        height: 550,
         child: Column(
           children: [
             Container(
@@ -149,12 +156,14 @@ class _CashPaymentDialogState extends State<CashPaymentDialog> {
     );
   }
 }
+
 class TicketPaymentDialog extends StatefulWidget {
   final double totalDue;
   const TicketPaymentDialog({super.key, required this.totalDue});
   @override
   State<TicketPaymentDialog> createState() => _TicketPaymentDialogState();
 }
+
 class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
   String _currentInput = "";
   @override
@@ -162,22 +171,25 @@ class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
     super.initState();
     _currentInput = "";
   }
+
   void _onNumber(String num) {
     if (num == '.' && _currentInput.contains('.')) return;
     setState(() => _currentInput += num);
   }
+
   void _onBackspace() {
     if (_currentInput.isNotEmpty) {
       setState(() =>
           _currentInput = _currentInput.substring(0, _currentInput.length - 1));
     }
   }
+
   void _onClear() => setState(() => _currentInput = "");
   @override
   Widget build(BuildContext context) {
     final amount = double.tryParse(_currentInput) ?? 0.0;
     final remaining = widget.totalDue - amount;
-    final bool isOverPaid = remaining < -0.01; 
+    final bool isOverPaid = remaining < -0.01;
     final double displayValue = isOverPaid ? (remaining * -1) : remaining;
     return AlertDialog(
       contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
@@ -302,12 +314,14 @@ class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
     );
   }
 }
+
 class MixedPaymentDialog extends StatefulWidget {
   final double totalDue;
   const MixedPaymentDialog({super.key, required this.totalDue});
   @override
   State<MixedPaymentDialog> createState() => _MixedPaymentDialogState();
 }
+
 class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
   String _cashInput = "";
   String _ticketInput = "";
@@ -318,6 +332,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
     double remainder = widget.totalDue - (_cashAmount + _ticketAmount);
     return remainder > 0 ? remainder : 0.0;
   }
+
   double get _changeDue {
     double totalGiven = _cashAmount + _ticketAmount;
     if (totalGiven > widget.totalDue) {
@@ -325,12 +340,14 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
     }
     return 0.0;
   }
+
   void _onNumber(String num) {
     if (num == '.' && _getCurrentInput().contains('.')) return;
     setState(() {
       _updateCurrentInput(_getCurrentInput() + num);
     });
   }
+
   void _onBackspace() {
     String current = _getCurrentInput();
     if (current.isNotEmpty) {
@@ -339,15 +356,18 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       });
     }
   }
+
   void _onClear() {
     setState(() {
       _updateCurrentInput("");
     });
   }
+
   String _getCurrentInput() {
     if (_selectedField == 'cash') return _cashInput;
     return _ticketInput;
   }
+
   void _updateCurrentInput(String val) {
     if (_selectedField == 'cash') {
       _cashInput = val;
@@ -355,6 +375,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       _ticketInput = val;
     }
   }
+
   Widget _buildReadOnlyField(
       String label, IconData icon, double value, Color color) {
     return Container(
@@ -384,6 +405,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       ),
     );
   }
+
   Widget _buildEditableField(
       String id, String label, IconData icon, String value, Color color) {
     final isSelected = _selectedField == id;
@@ -425,6 +447,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final bool showChange = _changeDue > 0;
@@ -508,6 +531,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
     );
   }
 }
+
 class Numpad extends StatelessWidget {
   final Function(String) onNumber;
   final VoidCallback onBackspace;
@@ -542,6 +566,7 @@ class Numpad extends StatelessWidget {
       ],
     );
   }
+
   Widget _btn(String label) {
     return Material(
       color: Colors.white,
@@ -562,6 +587,7 @@ class Numpad extends StatelessWidget {
       ),
     );
   }
+
   Widget _actionBtn(String label, Color bg, Color text, VoidCallback tap) {
     return Material(
       color: bg,
@@ -578,6 +604,7 @@ class Numpad extends StatelessWidget {
     );
   }
 }
+
 class AzertyKeyboard extends StatelessWidget {
   final Function(String) onInput;
   final VoidCallback onBackspace;
@@ -613,6 +640,7 @@ class AzertyKeyboard extends StatelessWidget {
       ],
     );
   }
+
   Widget _row(List<String> keys, {bool pad = false}) {
     return Expanded(
       child: Row(
@@ -625,6 +653,7 @@ class AzertyKeyboard extends StatelessWidget {
       ),
     );
   }
+
   Widget _keyBtn(String label) {
     return Material(
       color: Colors.white,
@@ -645,6 +674,7 @@ class AzertyKeyboard extends StatelessWidget {
       ),
     );
   }
+
   Widget _actionBtn(String label,
       {Color? color, Color? textColor, required VoidCallback onTap}) {
     return Material(

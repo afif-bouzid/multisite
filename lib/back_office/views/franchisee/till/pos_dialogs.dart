@@ -7,6 +7,7 @@ import '../../../../../core/repository/repository.dart';
 import '../../../../../core/theme/app_colors.dart';
 import '../../../../core/services/printing_service.dart';
 import '/models.dart';
+
 class PosData {
   final List<MasterProduct> products;
   final Map<String, FranchiseeMenuItem> menuSettings;
@@ -23,6 +24,7 @@ class PosData {
     required this.printerConfig,
   });
 }
+
 class PosOptionSelectorDialog extends StatelessWidget {
   final MasterProduct product;
   final FranchiseeMenuItem settings;
@@ -142,6 +144,7 @@ class PosOptionSelectorDialog extends StatelessWidget {
     );
   }
 }
+
 class CompositeProductDialog extends StatefulWidget {
   final MasterProduct product;
   final String franchiseeId;
@@ -165,6 +168,7 @@ class CompositeProductDialog extends StatefulWidget {
   @override
   State<CompositeProductDialog> createState() => _CompositeProductDialogState();
 }
+
 class _CompositeProductDialogState extends State<CompositeProductDialog> {
   late List<ProductSection> _relevantSections = [];
   ProductOption? _selectedOption;
@@ -196,12 +200,13 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       _loadBaseIngredients();
     }
   }
+
   void _loadSections() {
     setState(() => _isLoadingSections = true);
     final List<String> sectionsToDisplayIds =
-    _selectedOption != null && _selectedOption!.sectionIds.isNotEmpty
-        ? _selectedOption!.sectionIds
-        : widget.product.sectionIds;
+        _selectedOption != null && _selectedOption!.sectionIds.isNotEmpty
+            ? _selectedOption!.sectionIds
+            : widget.product.sectionIds;
     List<ProductSection> sections = widget.allSections
         .where((s) => sectionsToDisplayIds.contains(s.sectionId))
         .toList();
@@ -217,6 +222,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       _isLoadingSections = false;
     });
   }
+
   Widget _buildOptionsSelector() {
     if (widget.product.options.isEmpty) return const SizedBox.shrink();
     return Container(
@@ -241,10 +247,9 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
               if (selected) {
                 setState(() {
                   _selectedOption = option;
-                  _selectedOptions
-                      .clear(); 
+                  _selectedOptions.clear();
                 });
-                _loadSections(); 
+                _loadSections();
               }
             },
           );
@@ -252,6 +257,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       ),
     );
   }
+
   Future<void> _loadBaseIngredients() async {
     setState(() => _isLoadingIngredients = true);
     try {
@@ -276,6 +282,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       if (mounted) setState(() => _isLoadingIngredients = false);
     }
   }
+
   Future<void> _loadSupplementOverrides() async {
     try {
       final overridesSnapshot = await FirebaseFirestore.instance
@@ -287,17 +294,19 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
           .get();
       if (mounted) {
         setState(() => _supplementOverrides = {
-          for (var doc in overridesSnapshot.docs)
-            doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
-        });
+              for (var doc in overridesSnapshot.docs)
+                doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
+            });
       }
     } catch (_) {}
   }
+
   void _onOptionSelected(ProductSection section, SectionItem item) {
     setState(() {
       final sectionId = section.sectionId;
-      if (!_selectedOptions.containsKey(sectionId))
+      if (!_selectedOptions.containsKey(sectionId)) {
         _selectedOptions[sectionId] = [];
+      }
       List<SectionItem> selections = _selectedOptions[sectionId]!;
       final isSelected = selections.any((i) => i.product.id == item.product.id);
       if (section.type == 'radio') {
@@ -315,6 +324,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       }
     });
   }
+
   void _onIncrementOption(ProductSection section, SectionItem item, int delta) {
     setState(() {
       final sectionId = section.sectionId;
@@ -331,11 +341,12 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
         }
       } else if (qty > 0) {
         final index =
-        selections.indexWhere((i) => i.product.id == item.product.id);
+            selections.indexWhere((i) => i.product.id == item.product.id);
         if (index != -1) selections.removeAt(index);
       }
     });
   }
+
   void _showMaxSnackBar(int max) {
     ScaffoldMessenger.of(context).clearSnackBars();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -346,15 +357,19 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       duration: const Duration(milliseconds: 1500),
     ));
   }
+
   double _getFinalSupplementPrice(SectionItem item) =>
       _supplementOverrides[item.product.productId] ?? item.supplementPrice;
   bool _areMinimumsMet() {
     for (var section in _relevantSections) {
       if ((_selectedOptions[section.sectionId]?.length ?? 0) <
-          section.selectionMin) return false;
+          section.selectionMin) {
+        return false;
+      }
     }
     return true;
   }
+
   void _validateAndClose() {
     double currentTotal =
         widget.basePrice + (_selectedOption?.priceOverride ?? 0.0);
@@ -376,6 +391,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
     );
     Navigator.pop(context, cartItem);
   }
+
   @override
   Widget build(BuildContext context) {
     double screenHeight = MediaQuery.of(context).size.height;
@@ -437,16 +453,16 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                       padding: const EdgeInsets.only(top: 4.0),
                       child: _removedIngredientProductIds.isEmpty
                           ? const Text("Recette Standard",
-                          style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold))
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold))
                           : Text(
-                          "SANS : ${_baseIngredients.where((p) => _removedIngredientProductIds.contains(p.productId)).map((p) => p.name).join(", ")}",
-                          style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16)),
+                              "SANS : ${_baseIngredients.where((p) => _removedIngredientProductIds.contains(p.productId)).map((p) => p.name).join(", ")}",
+                              style: const TextStyle(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16)),
                     ),
                     trailing: FilledButton.icon(
                       style: FilledButton.styleFrom(
@@ -483,7 +499,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                         child: Text(
                             "Aucune option disponible pour cette configuration.",
                             style:
-                            TextStyle(color: Colors.grey, fontSize: 18)))),
+                                TextStyle(color: Colors.grey, fontSize: 18)))),
               StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
                     .collection('users')
@@ -554,7 +570,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                             shrinkWrap: true,
                             physics: const NeverScrollableScrollPhysics(),
                             gridDelegate:
-                            const SliverGridDelegateWithFixedCrossAxisCount(
+                                const SliverGridDelegateWithFixedCrossAxisCount(
                               crossAxisCount: 3,
                               childAspectRatio: 2.6,
                               crossAxisSpacing: 16,
@@ -570,12 +586,13 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                               bool isSelected = false;
                               if (section.type == 'increment') {
                                 qty = selections
-                                    .where((i) => i.product.id == item.product.id)
+                                    .where(
+                                        (i) => i.product.id == item.product.id)
                                     .length;
                                 isSelected = qty > 0;
                               } else {
-                                isSelected = selections
-                                    .any((i) => i.product.id == item.product.id);
+                                isSelected = selections.any(
+                                    (i) => i.product.id == item.product.id);
                               }
                               final maxReached =
                                   selections.length >= section.selectionMax;
@@ -635,9 +652,8 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
           width: 250,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: _areMinimumsMet()
-                  ? AppColors.bkYellow
-                  : Colors.grey.shade300,
+              backgroundColor:
+                  _areMinimumsMet() ? AppColors.bkYellow : Colors.grey.shade300,
               foregroundColor: AppColors.bkBlack,
               elevation: 4,
               shape: RoundedRectangleBorder(
@@ -649,7 +665,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
               children: [
                 const Text("AJOUTER",
                     style:
-                    TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+                        TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
                 if (currentTotal > 0) ...[
                   const VerticalDivider(
                       width: 24, thickness: 1, color: Colors.black26),
@@ -664,6 +680,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       ],
     );
   }
+
   Widget _buildOptionCard({
     required ProductSection section,
     required SectionItem item,
@@ -700,15 +717,15 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                   padding: const EdgeInsets.only(right: 12),
                   child: section.type == 'radio'
                       ? Icon(
-                      isSelected
-                          ? Icons.radio_button_checked
-                          : Icons.radio_button_off,
-                      color: isDisabled ? Colors.grey : Colors.black)
+                          isSelected
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          color: isDisabled ? Colors.grey : Colors.black)
                       : Icon(
-                      isSelected
-                          ? Icons.check_box
-                          : Icons.check_box_outline_blank,
-                      color: isDisabled ? Colors.grey : Colors.black),
+                          isSelected
+                              ? Icons.check_box
+                              : Icons.check_box_outline_blank,
+                          color: isDisabled ? Colors.grey : Colors.black),
                 ),
               Expanded(
                 child: Column(
@@ -722,10 +739,10 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                       style: TextStyle(
                         fontSize: 15,
                         fontWeight:
-                        isActive ? FontWeight.w900 : FontWeight.w600,
+                            isActive ? FontWeight.w900 : FontWeight.w600,
                         color: isDisabled ? Colors.grey : Colors.black,
                         decoration:
-                        !isAvailable ? TextDecoration.lineThrough : null,
+                            !isAvailable ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     if (!isAvailable)
@@ -748,7 +765,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     _buildIncBtn(Icons.remove, quantity > 0,
-                            () => _onIncrementOption(section, item, -1),
+                        () => _onIncrementOption(section, item, -1),
                         isRed: true),
                     SizedBox(
                         width: 32,
@@ -758,7 +775,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
                                     fontWeight: FontWeight.bold,
                                     fontSize: 18)))),
                     _buildIncBtn(Icons.add, !isDisabled && isAvailable,
-                            () => _onIncrementOption(section, item, 1)),
+                        () => _onIncrementOption(section, item, 1)),
                   ],
                 )
             ],
@@ -767,6 +784,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
       ),
     );
   }
+
   Widget _buildIncBtn(IconData icon, bool enabled, VoidCallback onTap,
       {bool isRed = false}) {
     return InkWell(
@@ -786,6 +804,7 @@ class _CompositeProductDialogState extends State<CompositeProductDialog> {
     );
   }
 }
+
 class PaidOrdersHistoryDialog extends StatefulWidget {
   final String franchiseeId;
   const PaidOrdersHistoryDialog({super.key, required this.franchiseeId});
@@ -793,6 +812,7 @@ class PaidOrdersHistoryDialog extends StatefulWidget {
   State<PaidOrdersHistoryDialog> createState() =>
       _PaidOrdersHistoryDialogState();
 }
+
 class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
   final FranchiseRepository _repository = FranchiseRepository();
   @override
@@ -816,7 +836,7 @@ class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
                 const SizedBox(width: 12),
                 const Text("Historique Session en cours",
                     style:
-                    TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+                        TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close, size: 28),
@@ -872,7 +892,7 @@ class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
                                   ? tx.identifier
                                   : "Ticket #${tx.id.substring(0, 5).toUpperCase()}",
                               style:
-                              const TextStyle(fontWeight: FontWeight.bold),
+                                  const TextStyle(fontWeight: FontWeight.bold),
                             ),
                             subtitle: Text(
                                 DateFormat('dd/MM HH:mm').format(tx.timestamp)),
@@ -909,6 +929,7 @@ class _PaidOrdersHistoryDialogState extends State<PaidOrdersHistoryDialog> {
     );
   }
 }
+
 class TransactionDetailsDialog extends StatefulWidget {
   final Transaction transaction;
   const TransactionDetailsDialog({super.key, required this.transaction});
@@ -916,22 +937,24 @@ class TransactionDetailsDialog extends StatefulWidget {
   State<TransactionDetailsDialog> createState() =>
       _TransactionDetailsDialogState();
 }
+
 class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
   final FranchiseRepository _repository = FranchiseRepository();
   bool _isReprinting = false;
   static const Color primaryColor = AppColors.bkBlack;
-  Future<void> _handleReprint(BuildContext context, {required bool isKitchen}) async {
+  Future<void> _handleReprint(BuildContext context,
+      {required bool isKitchen}) async {
     if (mounted) setState(() => _isReprinting = true);
     try {
       final printingService = PrintingService();
       final Map<String, dynamic> printerConfig = {
-        'isBluetooth': true, 
+        'isBluetooth': true,
         'paperWidth': '80',
       };
       if (isKitchen) {
         await printingService.printKitchenTicketSafe(
           printerConfig: printerConfig,
-          itemsToPrint: widget.transaction.items, 
+          itemsToPrint: widget.transaction.items,
           identifier: widget.transaction.identifier.isNotEmpty
               ? widget.transaction.identifier
               : "TICKET",
@@ -940,9 +963,9 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
       } else {
         await printingService.printReceipt(
           printerConfig: printerConfig,
-          transaction: widget.transaction, 
-          franchisee: {}, 
-          receiptConfig: {}, 
+          transaction: widget.transaction,
+          franchisee: {},
+          receiptConfig: {},
         );
       }
       if (mounted) {
@@ -962,6 +985,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
       }
     }
   }
+
   Widget _buildInfoRow(
       IconData icon, String label, String value, Color valueColor) {
     return Row(
@@ -980,6 +1004,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
       ],
     );
   }
+
   Widget _buildSummaryRow(String label, double amount, bool isBold,
       {Color? color}) {
     return Padding(
@@ -998,6 +1023,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final shortId = widget.transaction.id.substring(0, 5).toUpperCase();
@@ -1114,7 +1140,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
                                         final subName = subOpt['name'] ?? '';
                                         final subPrice =
                                             (subOpt['supplementPrice'] as num?)
-                                                ?.toDouble() ??
+                                                    ?.toDouble() ??
                                                 0.0;
                                         return _buildOptionLine(
                                             subName, subPrice);
@@ -1216,7 +1242,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
                       ),
                       onPressed: () => _handleReprint(context, isKitchen: true),
                       icon:
-                      const Icon(Icons.soup_kitchen, color: Colors.orange),
+                          const Icon(Icons.soup_kitchen, color: Colors.orange),
                       label: const Text("Ticket Cuisine"),
                     ),
                   ),
@@ -1227,6 +1253,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
       ),
     );
   }
+
   Widget _buildOptionLine(String name, double price) {
     return Padding(
       padding: const EdgeInsets.only(left: 10),
@@ -1243,6 +1270,7 @@ class _TransactionDetailsDialogState extends State<TransactionDetailsDialog> {
     );
   }
 }
+
 class StockManagementDialog extends StatefulWidget {
   final String franchisorId;
   final String franchiseeId;
@@ -1258,6 +1286,7 @@ class StockManagementDialog extends StatefulWidget {
   @override
   State<StockManagementDialog> createState() => _StockManagementDialogState();
 }
+
 class _StockManagementDialogState extends State<StockManagementDialog> {
   List<MasterProduct> _products = [];
   List<ProductFilter> _filters = [];
@@ -1270,6 +1299,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
     super.initState();
     _loadData();
   }
+
   Future<void> _loadData() async {
     final repo = FranchiseRepository();
     try {
@@ -1289,6 +1319,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -1315,7 +1346,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                 const SizedBox(width: 12),
                 const Text("Gestion des Stocks & Ruptures",
                     style:
-                    TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                        TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 IconButton(
                     icon: const Icon(Icons.close, size: 32),
@@ -1329,19 +1360,19 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                     child: _buildTabButton(
                         "Produits Carte",
                         !_modeIngredients,
-                            () => setState(() {
-                          _modeIngredients = false;
-                          _selectedFilterId = null;
-                        }))),
+                        () => setState(() {
+                              _modeIngredients = false;
+                              _selectedFilterId = null;
+                            }))),
                 const SizedBox(width: 16),
                 Expanded(
                     child: _buildTabButton(
                         "Ingrédients",
                         _modeIngredients,
-                            () => setState(() {
-                          _modeIngredients = true;
-                          _selectedFilterId = null;
-                        }))),
+                        () => setState(() {
+                              _modeIngredients = true;
+                              _selectedFilterId = null;
+                            }))),
               ],
             ),
             const SizedBox(height: 20),
@@ -1366,7 +1397,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                       widget.menuSettings;
                   if (snapshot.hasData) {
                     activeSettings = Map.fromEntries(snapshot.data!.docs.map(
-                            (doc) => MapEntry(
+                        (doc) => MapEntry(
                             doc.id,
                             FranchiseeMenuItem.fromFirestore(
                                 doc.data() as Map<String, dynamic>))));
@@ -1391,7 +1422,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                   }).toList();
                   filtered.sort((a, b) => a.name.compareTo(b.name));
                   final activeFilters =
-                  filtered.expand((p) => p.filterIds).toSet();
+                      filtered.expand((p) => p.filterIds).toSet();
                   final visibleFilters = _filters
                       .where((f) => activeFilters.contains(f.id))
                       .toList();
@@ -1406,13 +1437,13 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                               _buildFilterChip(
                                   "Tout",
                                   _selectedFilterId == null,
-                                      () =>
+                                  () =>
                                       setState(() => _selectedFilterId = null)),
                               ...visibleFilters.map((f) => _buildFilterChip(
                                   f.name,
                                   _selectedFilterId == f.id,
-                                      () => setState(
-                                          () => _selectedFilterId = f.id))),
+                                  () => setState(
+                                      () => _selectedFilterId = f.id))),
                             ],
                           ),
                         ),
@@ -1420,122 +1451,122 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
                       Expanded(
                         child: filtered.isEmpty
                             ? Center(
-                            child: Text("Aucun produit trouvé",
-                                style: TextStyle(
-                                    color: Colors.grey.shade400,
-                                    fontSize: 18)))
+                                child: Text("Aucun produit trouvé",
+                                    style: TextStyle(
+                                        color: Colors.grey.shade400,
+                                        fontSize: 18)))
                             : ListView.builder(
-                          itemCount: filtered.length,
-                          itemBuilder: (context, index) {
-                            final product = filtered[index];
-                            final settings =
-                            activeSettings[product.productId];
-                            final isAvailable =
-                                settings?.isAvailable ?? false;
-                            return Card(
-                              elevation: 0,
-                              color: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                  side: BorderSide(
-                                      color: Colors.grey.shade200)),
-                              margin: const EdgeInsets.only(bottom: 12),
-                              child: Padding(
-                                padding: const EdgeInsets.all(12),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 60,
-                                      height: 60,
-                                      decoration: BoxDecoration(
-                                          color: Colors.grey.shade100,
-                                          borderRadius:
-                                          BorderRadius.circular(8)),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: (product
-                                          .photoUrl?.isNotEmpty ??
-                                          false)
-                                          ? CachedNetworkImage(
-                                          imageUrl: product.photoUrl!,
-                                          fit: BoxFit.cover)
-                                          : Icon(
-                                          product.isIngredient
-                                              ? Icons.blender
-                                              : Icons.fastfood,
-                                          color:
-                                          Colors.grey.shade400),
-                                    ),
-                                    const SizedBox(width: 16),
-                                    Expanded(
-                                      child: Text(product.name,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold,
-                                              fontSize: 16)),
-                                    ),
-                                    InkWell(
-                                      onTap: () {
-                                        menuRef
-                                            .doc(product.productId)
-                                            .set({
-                                          'isAvailable': !isAvailable
-                                        }, SetOptions(merge: true));
-                                        widget.onStockChanged(
-                                            product.productId,
-                                            !isAvailable);
-                                      },
-                                      borderRadius:
-                                      BorderRadius.circular(8),
-                                      child: Container(
-                                        padding:
-                                        const EdgeInsets.symmetric(
-                                            horizontal: 20,
-                                            vertical: 12),
-                                        decoration: BoxDecoration(
-                                          color: isAvailable
-                                              ? Colors.green.shade50
-                                              : Colors.red.shade50,
-                                          borderRadius:
-                                          BorderRadius.circular(8),
-                                          border: Border.all(
-                                              color: isAvailable
-                                                  ? Colors.green
-                                                  : Colors.red,
-                                              width: 2),
-                                        ),
-                                        child: Row(
-                                          children: [
-                                            Icon(
-                                                isAvailable
-                                                    ? Icons.check_circle
-                                                    : Icons.block,
+                                itemCount: filtered.length,
+                                itemBuilder: (context, index) {
+                                  final product = filtered[index];
+                                  final settings =
+                                      activeSettings[product.productId];
+                                  final isAvailable =
+                                      settings?.isAvailable ?? false;
+                                  return Card(
+                                    elevation: 0,
+                                    color: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        side: BorderSide(
+                                            color: Colors.grey.shade200)),
+                                    margin: const EdgeInsets.only(bottom: 12),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Row(
+                                        children: [
+                                          Container(
+                                            width: 60,
+                                            height: 60,
+                                            decoration: BoxDecoration(
+                                                color: Colors.grey.shade100,
+                                                borderRadius:
+                                                    BorderRadius.circular(8)),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: (product
+                                                        .photoUrl?.isNotEmpty ??
+                                                    false)
+                                                ? CachedNetworkImage(
+                                                    imageUrl: product.photoUrl!,
+                                                    fit: BoxFit.cover)
+                                                : Icon(
+                                                    product.isIngredient
+                                                        ? Icons.blender
+                                                        : Icons.fastfood,
+                                                    color:
+                                                        Colors.grey.shade400),
+                                          ),
+                                          const SizedBox(width: 16),
+                                          Expanded(
+                                            child: Text(product.name,
+                                                style: const TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 16)),
+                                          ),
+                                          InkWell(
+                                            onTap: () {
+                                              menuRef
+                                                  .doc(product.productId)
+                                                  .set({
+                                                'isAvailable': !isAvailable
+                                              }, SetOptions(merge: true));
+                                              widget.onStockChanged(
+                                                  product.productId,
+                                                  !isAvailable);
+                                            },
+                                            borderRadius:
+                                                BorderRadius.circular(8),
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                      horizontal: 20,
+                                                      vertical: 12),
+                                              decoration: BoxDecoration(
                                                 color: isAvailable
-                                                    ? Colors.green
-                                                    : Colors.red,
-                                                size: 20),
-                                            const SizedBox(width: 8),
-                                            Text(
-                                              isAvailable
-                                                  ? "EN STOCK"
-                                                  : "ÉPUISÉ",
-                                              style: TextStyle(
-                                                  fontWeight:
-                                                  FontWeight.bold,
-                                                  color: isAvailable
-                                                      ? Colors
-                                                      .green.shade800
-                                                      : Colors
-                                                      .red.shade800),
+                                                    ? Colors.green.shade50
+                                                    : Colors.red.shade50,
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                                border: Border.all(
+                                                    color: isAvailable
+                                                        ? Colors.green
+                                                        : Colors.red,
+                                                    width: 2),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                      isAvailable
+                                                          ? Icons.check_circle
+                                                          : Icons.block,
+                                                      color: isAvailable
+                                                          ? Colors.green
+                                                          : Colors.red,
+                                                      size: 20),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    isAvailable
+                                                        ? "EN STOCK"
+                                                        : "ÉPUISÉ",
+                                                    style: TextStyle(
+                                                        fontWeight:
+                                                            FontWeight.bold,
+                                                        color: isAvailable
+                                                            ? Colors
+                                                                .green.shade800
+                                                            : Colors
+                                                                .red.shade800),
+                                                  ),
+                                                ],
+                                              ),
                                             ),
-                                          ],
-                                        ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                  ],
-                                ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
                       ),
                     ],
                   );
@@ -1547,6 +1578,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
       ),
     );
   }
+
   Widget _buildTabButton(String text, bool isActive, VoidCallback onTap) {
     return Material(
       color: isActive ? AppColors.bkBlack : Colors.white,
@@ -1570,6 +1602,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
       ),
     );
   }
+
   Widget _buildFilterChip(String label, bool isSelected, VoidCallback onTap) {
     return Padding(
       padding: const EdgeInsets.only(right: 8),
@@ -1589,6 +1622,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
     );
   }
 }
+
 class _IngredientCustomizationDialog extends StatefulWidget {
   final List<MasterProduct> baseIngredients;
   final List<String> initiallyRemovedIds;
@@ -1598,6 +1632,7 @@ class _IngredientCustomizationDialog extends StatefulWidget {
   State<_IngredientCustomizationDialog> createState() =>
       _IngredientCustomizationDialogState();
 }
+
 class _IngredientCustomizationDialogState
     extends State<_IngredientCustomizationDialog> {
   late Set<String> _removedIds;
@@ -1606,6 +1641,7 @@ class _IngredientCustomizationDialogState
     super.initState();
     _removedIds = Set.from(widget.initiallyRemovedIds);
   }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -1655,6 +1691,7 @@ class _IngredientCustomizationDialogState
     );
   }
 }
+
 class PaymentSuccessDialog extends StatelessWidget {
   const PaymentSuccessDialog({super.key});
   @override
@@ -1680,6 +1717,7 @@ class PaymentSuccessDialog extends StatelessWidget {
     );
   }
 }
+
 class CombineLatestStream<T, R> extends Stream<R> {
   final List<Stream<T>> streams;
   CombineLatestStream(this.streams);
@@ -1687,8 +1725,8 @@ class CombineLatestStream<T, R> extends Stream<R> {
   StreamSubscription<R> listen(void Function(R event)? onData,
       {Function? onError, void Function()? onDone, bool? cancelOnError}) {
     return Stream<R>.fromFuture(
-        Future.wait(streams.map((s) => s.first)) as Future<R>)
+            Future.wait(streams.map((s) => s.first)) as Future<R>)
         .listen(onData,
-        onError: onError, onDone: onDone, cancelOnError: cancelOnError);
+            onError: onError, onDone: onDone, cancelOnError: cancelOnError);
   }
 }

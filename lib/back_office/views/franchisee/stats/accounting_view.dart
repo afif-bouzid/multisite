@@ -6,22 +6,25 @@ import '../../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../../core/repository/repository.dart';
 import '../../../../core/services/accounting_export_service.dart';
+
 class AccountingView extends StatelessWidget {
   final String franchiseeId;
   final DateTime? startDate;
   final DateTime? endDate;
+
   const AccountingView({
     super.key,
     required this.franchiseeId,
     this.startDate,
     this.endDate,
   });
+
   @override
   Widget build(BuildContext context) {
-    final start =
-        startDate ?? DateTime.now().subtract(const Duration(days: 30));
+    final start = startDate ?? DateTime.now().subtract(const Duration(days: 30));
     final end = endDate ?? DateTime.now();
     final repository = FranchiseRepository();
+
     return StreamBuilder<List<Transaction>>(
       stream: repository.getTransactionsInDateRange(
         franchiseeId,
@@ -35,298 +38,203 @@ class AccountingView extends StatelessWidget {
         }
         if (!snapshot.hasData || snapshot.data!.isEmpty) {
           return const Center(
-              child: Text("Aucune donnée comptable sur cette période."));
+              child: Text("Aucune donnée comptable sur cette période.",
+                  style: TextStyle(color: Colors.grey, fontSize: 16)));
         }
-        return _buildAccountingReport(context, snapshot.data!);
-      },
-    );
-  }
-  Widget _buildAccountingReport(
-      BuildContext context, List<Transaction> transactions) {
-    double totalTTC = 0;
-    double totalHT = 0;
-    Map<double, Map<String, double>> vatBreakdown = {};
-    Map<String, double> paymentBreakdown = {};
-    for (var t in transactions) {
-      totalTTC += t.total;
-      t.paymentMethods.forEach((method, amount) {
-        paymentBreakdown[method] =
-            (paymentBreakdown[method] ?? 0) + (amount as num).toDouble();
-      });
-      for (var item in t.items) {
-        double lineTotalTTC = (item['total'] as num).toDouble();
-        double vatRate = (item['vatRate'] as num).toDouble();
-        double lineTotalHT = lineTotalTTC / (1 + (vatRate / 100));
-        double lineVatAmount = lineTotalTTC - lineTotalHT;
-        totalHT += lineTotalHT;
-        vatBreakdown.putIfAbsent(
-            vatRate, () => {'baseHT': 0.0, 'amountTVA': 0.0});
-        vatBreakdown[vatRate]!['baseHT'] =
-            vatBreakdown[vatRate]!['baseHT']! + lineTotalHT;
-        vatBreakdown[vatRate]!['amountTVA'] =
-            vatBreakdown[vatRate]!['amountTVA']! + lineVatAmount;
-      }
-    }
-    final sortedRates = vatBreakdown.keys.toList()..sort();
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+
+        final transactions = snapshot.data!;
+
+        double totalRevenue = 0;
+        Map<String, double> methodTotals = {
+          'CB Bornes': 0.0,
+          'CB Comptoir': 0.0,
+          'Espèces': 0.0,
+          'Ticket Resto': 0.0,
+        };
+
+        for (var tx in transactions) {
+          tx.paymentMethods.forEach((method, amount) {
+            double val = (amount as num).toDouble();
+            totalRevenue += val;
+
+            if (method == 'Card_Kiosk') {
+              methodTotals['CB Bornes'] = methodTotals['CB Bornes']! + val;
+            } else if (method == 'Card_Counter') {
+              methodTotals['CB Comptoir'] = methodTotals['CB Comptoir']! + val;
+            } else if (method == 'Cash') {
+              methodTotals['Espèces'] = methodTotals['Espèces']! + val;
+            } else if (method == 'Ticket') {
+              methodTotals['Ticket Resto'] = methodTotals['Ticket Resto']! + val;
+            } else if (method == 'Card') {
+              // LOGIQUE INFAILLIBLE
+              bool isBorne = false;
+              try { if ((tx as dynamic).source?.toString() == 'borne') isBorne = true; } catch (_) {}
+              try { if ((tx as dynamic).origin?.toString() == 'kiosk') isBorne = true; } catch (_) {}
+
+              if (isBorne) {
+                methodTotals['CB Bornes'] = methodTotals['CB Bornes']! + val;
+              } else {
+                methodTotals['CB Comptoir'] = methodTotals['CB Comptoir']! + val;
+              }
+            } else {
+              methodTotals[method] = (methodTotals[method] ?? 0) + val;
+            }
+          });
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.calculate, size: 32, color: Colors.blueGrey),
-              const SizedBox(width: 12),
-              Text("Rapport Comptable",
-                  style: Theme.of(context).textTheme.headlineSmall),
-              const Spacer(),
-              ElevatedButton.icon(
-                icon: const Icon(Icons.download),
-                label: const Text("Exporter (Excel/CSV)"),
-                onPressed: () async {
-                  final exportService = AccountingExportService();
-                  Map<String, double> pdfVatMap = {};
-                  vatBreakdown.forEach((rate, data) {
-                    pdfVatMap["${rate.toStringAsFixed(1)}%"] =
-                        (data['amountTVA'] as num).toDouble();
-                  });
-                  String operatorName = "Utilisateur";
-                  try {
-                    final authProvider =
-                    Provider.of<AuthProvider>(context, listen: false);
-                    operatorName =
-                        authProvider.franchiseUser?.companyName ?? "Utilisateur";
-                  } catch (e) {
-                  }
-                  String cName = "Société Inconnue";
-                  String cAddress = "";
-                  String cSiret = "";
-                  try {
-                    final docSnap = await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(franchiseeId)
-                        .get();
-                    if (docSnap.exists) {
-                      final data = docSnap.data() as Map<String, dynamic>;
-                      cName = data['companyName'] ??
-                          data['name'] ??
-                          data['societe'] ??
-                          data['enseigne'] ??
-                          operatorName;
-                      cSiret = data['siret'] ??
-                          data['siren'] ??
-                          data['tvaIntra'] ??
-                          "SIRET non renseigné";
-                      String rue = data['address'] ?? data['rue'] ?? data['street'] ?? data['adresse'] ?? '';
-                      String cp = data['zipCode'] ?? data['cp'] ?? data['codePostal'] ?? '';
-                      String ville = data['city'] ?? data['ville'] ?? '';
-                      List<String> addressParts = [rue, cp, ville];
-                      cAddress = addressParts.where((s) => s.isNotEmpty).join(" ");
-                    }
-                  } catch (e) {
-                    debugPrint("Erreur récupération infos franchisé: $e");
-                  }
-                  await showModalBottomSheet(
-                    context: context,
-                    builder: (ctx) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.picture_as_pdf, color: Colors.red),
-                          title: const Text('Générer le Z de Caisse (PDF)'),
-                          subtitle: Text('Société : $cName'),
-                          onTap: () async {
-                            Navigator.pop(ctx);
-                            final dummySession = TillSession(
-                              id: "Export_${DateFormat('yyyyMMdd').format(DateTime.now())}",
-                              franchiseeId: franchiseeId,
-                              openingTime: startDate ?? DateTime.now(),
-                              initialCash: 0.0,
-                              isClosed: true,
-                              closingTime: endDate ?? DateTime.now(),
-                              finalCash: 0.0,
-                            );
-                            await exportService.generateAccountingPdf(
-                              dummySession,
-                              transactions,
-                              pdfVatMap,
-                              operatorName,
-                              companyName: cName,      
-                              companyAddress: cAddress, 
-                              companySiret: cSiret,     
-                            );
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.table_chart, color: Colors.green),
-                          title: const Text('Fichier Excel (CSV)'),
-                          subtitle: const Text("Compatible Excel, Numbers, Google Sheets"),
-                          onTap: () async {
-                            Navigator.pop(ctx);
-                            final rawCsvData = exportService.generateCSV(transactions);
-                            final String headerInfo =
-                                "Rapport Comptable;;;\n"
-                                "Société:;$cName;;\n"
-                                "Adresse:;$cAddress;;\n"
-                                "SIRET:;$cSiret;;\n"
-                                "Période:;${startDate != null ? DateFormat('dd/MM/yyyy').format(startDate!) : 'Début'} au ${endDate != null ? DateFormat('dd/MM/yyyy').format(endDate!) : 'Fin'};\n"
-                                "Date export:;${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())};;\n"
-                                "\n"; 
-                            final fullCsvContent = headerInfo + rawCsvData;
-                            await exportService.shareCsvFile(fullCsvContent);
-                          },
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text("Bilan Comptable Détaillé", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text("Période du ${DateFormat('dd/MM/yyyy').format(start)} au ${DateFormat('dd/MM/yyyy').format(end)}",
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
+                    ],
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      final exportService = AccountingExportService();
+
+                      // 1. On génère d'abord le texte du CSV
+                      final csvData = exportService.generateCSV(transactions);
+
+                      // 2. On demande au service de le partager/télécharger
+                      await exportService.shareCsvFile(csvData);
+                    },
+                    icon: const Icon(Icons.download),
+                    label: const Text("Exporter CSV"),
+                    style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12)),
+                  )                ],
+              ),
+              const SizedBox(height: 32),
+              Row(
+                children: [
+                  _buildSummaryBox("CB Bornes", methodTotals['CB Bornes']!, Colors.teal, Icons.touch_app),
+                  const SizedBox(width: 16),
+                  _buildSummaryBox("CB Comptoir", methodTotals['CB Comptoir']!, Colors.indigo, Icons.point_of_sale),
+                  const SizedBox(width: 16),
+                  _buildSummaryBox("Espèces", methodTotals['Espèces']!, Colors.green, Icons.payments),
+                  const SizedBox(width: 16),
+                  _buildSummaryBox("Ticket Resto", methodTotals['Ticket Resto']!, Colors.orange, Icons.restaurant),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade200),
+                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10)],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text("Détail par mode de paiement", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                    const Divider(height: 1),
+                    DataTable(
+                      columnSpacing: 40,
+                      columns: const [
+                        DataColumn(label: Text("Méthode", style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text("Montant TTC", style: TextStyle(fontWeight: FontWeight.bold))),
+                        DataColumn(label: Text("Part (%)", style: TextStyle(fontWeight: FontWeight.bold))),
+                      ],
+                      rows: [
+                        ...methodTotals.entries.where((e) => e.value > 0).map((e) {
+                          final percent = totalRevenue > 0 ? (e.value / totalRevenue) * 100 : 0.0;
+                          return DataRow(cells: [
+                            DataCell(Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(_getIconForMethod(e.key), size: 18, color: _getColorForMethod(e.key)),
+                                const SizedBox(width: 12),
+                                Text(e.key),
+                              ],
+                            )),
+                            DataCell(Text("${e.value.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.bold))),
+                            DataCell(Text("${percent.toStringAsFixed(1)} %")),
+                          ]);
+                        }),
+                        DataRow(
+                          color: WidgetStateProperty.all(Colors.grey.shade50),
+                          cells: [
+                            const DataCell(Text("TOTAL GLOBAL", style: TextStyle(fontWeight: FontWeight.bold))),
+                            DataCell(Text("${totalRevenue.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo))),
+                            const DataCell(Text("100.0 %", style: TextStyle(fontWeight: FontWeight.bold))),
+                          ],
                         ),
                       ],
                     ),
-                  );
-                },
-              )
+                  ],
+                ),
+              ),
             ],
           ),
-          const SizedBox(height: 24),
-          Row(
-            children: [
-              _buildSummaryBox("Chiffre d'Affaires TTC", totalTTC, Colors.blue),
-              const SizedBox(width: 16),
-              _buildSummaryBox("Total HT", totalHT, Colors.indigo),
-              const SizedBox(width: 16),
-              _buildSummaryBox(
-                  "Total TVA Collectée", totalTTC - totalHT, Colors.orange),
-            ],
-          ),
-          const SizedBox(height: 32),
-          const Text("Ventilation TVA",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade300)),
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-              columns: const [
-                DataColumn(
-                    label: Text("Taux TVA",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(
-                    label: Text("Base HT",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(
-                    label: Text("Montant TVA",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(
-                    label: Text("Total TTC",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-              ],
-              rows: sortedRates.map((rate) {
-                final data = vatBreakdown[rate]!;
-                final base = data['baseHT']!;
-                final vat = data['amountTVA']!;
-                return DataRow(cells: [
-                  DataCell(Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                        color: Colors.orange.shade50,
-                        borderRadius: BorderRadius.circular(4)),
-                    child: Text("${rate.toStringAsFixed(1)} %",
-                        style: TextStyle(
-                            color: Colors.orange.shade900,
-                            fontWeight: FontWeight.bold)),
-                  )),
-                  DataCell(Text("${base.toStringAsFixed(2)} €")),
-                  DataCell(Text("${vat.toStringAsFixed(2)} €")),
-                  DataCell(Text("${(base + vat).toStringAsFixed(2)} €",
-                      style: const TextStyle(fontWeight: FontWeight.bold))),
-                ]);
-              }).toList(),
-            ),
-          ),
-          const SizedBox(height: 32),
-          const Text("Détail des Encaissements",
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Card(
-            elevation: 0,
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.grey.shade300)),
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(Colors.grey.shade100),
-              columns: const [
-                DataColumn(
-                    label: Text("Mode de Paiement",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(
-                    label: Text("Montant",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-                DataColumn(
-                    label: Text("Part (%)",
-                        style: TextStyle(fontWeight: FontWeight.bold))),
-              ],
-              rows: paymentBreakdown.entries.map((entry) {
-                final percent =
-                    totalTTC > 0 ? (entry.value / totalTTC * 100) : 0.0;
-                return DataRow(cells: [
-                  DataCell(Row(
-                    children: [
-                      Icon(_getIconForMethod(entry.key),
-                          size: 16, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Text(entry.key),
-                    ],
-                  )),
-                  DataCell(Text("${entry.value.toStringAsFixed(2)} €",
-                      style: const TextStyle(fontWeight: FontWeight.bold))),
-                  DataCell(Text("${percent.toStringAsFixed(1)} %")),
-                ]);
-              }).toList(),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
-  Widget _buildSummaryBox(String label, double value, Color color) {
+
+  Widget _buildSummaryBox(String label, double value, Color color, IconData icon) {
     return Expanded(
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
           color: Colors.white,
+          borderRadius: BorderRadius.circular(8),
           border: Border(left: BorderSide(color: color, width: 4)),
-          boxShadow: [
-            BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 4,
-                offset: const Offset(0, 2))
-          ],
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4, offset: const Offset(0, 2))],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: TextStyle(
-                    color: Colors.grey.shade600, fontWeight: FontWeight.w500)),
+            Row(
+              children: [
+                Icon(icon, size: 14, color: color),
+                const SizedBox(width: 8),
+                Text(label, style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.w500, fontSize: 13)),
+              ],
+            ),
             const SizedBox(height: 8),
-            Text("${value.toStringAsFixed(2)} €",
-                style: TextStyle(
-                    color: color, fontSize: 24, fontWeight: FontWeight.bold)),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text("${value.toStringAsFixed(2)} €", style: TextStyle(color: color, fontSize: 22, fontWeight: FontWeight.bold)),
+            ),
           ],
         ),
       ),
     );
   }
+
   IconData _getIconForMethod(String method) {
     switch (method) {
-      case 'Cash':
-        return Icons.money;
-      case 'Card':
-        return Icons.credit_card;
-      case 'Ticket':
-        return Icons.receipt;
-      default:
-        return Icons.payment;
+      case 'Espèces': return Icons.payments;
+      case 'CB Bornes': return Icons.touch_app;
+      case 'CB Comptoir': return Icons.point_of_sale;
+      case 'Ticket Resto': return Icons.restaurant;
+      default: return Icons.credit_card;
+    }
+  }
+
+  Color _getColorForMethod(String method) {
+    switch (method) {
+      case 'Espèces': return Colors.green;
+      case 'CB Bornes': return Colors.teal;
+      case 'CB Comptoir': return Colors.indigo;
+      case 'Ticket Resto': return Colors.orange;
+      default: return Colors.blueGrey;
     }
   }
 }

@@ -7,9 +7,19 @@ void main() async {
 
   // Dossiers et fichiers à ignorer absolument
   final List<String> ignoredPatterns = [
-    '.git', '.dart_tool', '.idea', 'build', 'ios', 'android', 'web',
-    'linux', 'macos', 'windows', 'test',
-    '.fvm', '.github'
+    '.git',
+    '.dart_tool',
+    '.idea',
+    'build',
+    'ios',
+    'android',
+    'web',
+    'linux',
+    'macos',
+    'windows',
+    'test',
+    '.fvm',
+    '.github'
   ];
 
   // Extensions de fichiers à lire (Code uniquement)
@@ -39,7 +49,8 @@ void main() async {
   // Parcours récursif pour le dossier lib/
   final Directory libDir = Directory('${projectRoot.path}/lib');
   if (await libDir.exists()) {
-    await _processDirectoryContents(libDir, buffer, ignoredPatterns, allowedExtensions);
+    await _processDirectoryContents(
+        libDir, buffer, ignoredPatterns, allowedExtensions);
   } else {
     print('⚠️ Attention: Dossier "lib" introuvable.');
   }
@@ -48,17 +59,14 @@ void main() async {
   await outputFile.writeAsString(buffer.toString());
 
   print('--------------------------------------------------');
-  print('✅ Succès ! Fichier généré : \"${outputFile.path}\"');
-  print('Taille totale : ${(await outputFile.length() / 1024).toStringAsFixed(2)} KB');
+  print('✅ Succès ! Fichier généré : "${outputFile.path}"');
+  print(
+      'Taille totale : ${(await outputFile.length() / 1024).toStringAsFixed(2)} KB');
 }
 
 /// Génère l'arborescence visuelle récursivement
-Future<void> _generateTree(
-    Directory dir,
-    String prefix,
-    StringBuffer buffer,
-    List<String> ignored
-    ) async {
+Future<void> _generateTree(Directory dir, String prefix, StringBuffer buffer,
+    List<String> ignored) async {
   try {
     // Lister et trier : Dossiers d'abord, puis fichiers
     List<FileSystemEntity> entities = await dir.list().toList();
@@ -87,11 +95,7 @@ Future<void> _generateTree(
 
       if (entity is Directory) {
         await _generateTree(
-            entity,
-            '$prefix${isLast ? '    ' : '│   '}',
-            buffer,
-            ignored
-        );
+            entity, '$prefix${isLast ? '    ' : '│   '}', buffer, ignored);
       }
     }
   } catch (e) {
@@ -100,12 +104,8 @@ Future<void> _generateTree(
 }
 
 /// Parcourt les dossiers pour lire le contenu
-Future<void> _processDirectoryContents(
-    Directory dir,
-    StringBuffer buffer,
-    List<String> ignored,
-    List<String> extensions
-    ) async {
+Future<void> _processDirectoryContents(Directory dir, StringBuffer buffer,
+    List<String> ignored, List<String> extensions) async {
   await for (final FileSystemEntity entity in dir.list(recursive: true)) {
     if (entity is File) {
       final path = entity.path;
@@ -134,7 +134,8 @@ Future<void> _appendFileContent(File file, StringBuffer buffer) async {
     cleanContent = cleanContent.replaceAll(RegExp(r'\n\s*\n'), '\n');
 
     buffer.writeln('==================================================');
-    buffer.writeln('FILE PATH: ${file.path.substring(Directory.current.path.length + 1)}'); // Chemin relatif
+    buffer.writeln(
+        'FILE PATH: ${file.path.substring(Directory.current.path.length + 1)}'); // Chemin relatif
     buffer.writeln('==================================================');
     buffer.writeln(cleanContent);
     buffer.writeln('\n');

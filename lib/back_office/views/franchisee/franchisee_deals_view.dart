@@ -5,6 +5,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/repository/repository.dart';
 import '../../../models.dart';
+
 class FranchiseeDealsView extends StatelessWidget {
   const FranchiseeDealsView({super.key});
   @override
@@ -76,12 +77,14 @@ class FranchiseeDealsView extends StatelessWidget {
     );
   }
 }
+
 class FranchiseeDealFormView extends StatefulWidget {
   final Deal? dealToEdit;
   const FranchiseeDealFormView({super.key, this.dealToEdit});
   @override
   State<FranchiseeDealFormView> createState() => _FranchiseeDealFormViewState();
 }
+
 class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -97,12 +100,14 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       _selectedSectionIds = List.from(widget.dealToEdit!.sectionIds);
     }
   }
+
   @override
   void dispose() {
     _nameController.dispose();
     _priceController.dispose();
     super.dispose();
   }
+
   Future<void> _saveDeal() async {
     if (!_formKey.currentState!.validate()) return;
     final price = double.tryParse(_priceController.text.replaceAll(',', '.'));
@@ -141,6 +146,7 @@ class _FranchiseeDealFormViewState extends State<FranchiseeDealFormView> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);

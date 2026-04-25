@@ -1,25 +1,25 @@
 import 'dart:ui';
-import 'package:cloud_firestore/cloud_firestore.dart'; 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/providers/update_provider.dart';
+
 class FranchiseeDashboardView extends StatelessWidget {
   final Widget child;
   const FranchiseeDashboardView({super.key, required this.child});
   @override
   Widget build(BuildContext context) {
-    const Color bgSidebar = Color(0xFF121212); 
-    const Color activeAccent = Color(0xFFD4AF37); 
-    const Color inactiveIcon =
-        Color(0xFF666666); 
+    const Color bgSidebar = Color(0xFF121212);
+    const Color activeAccent = Color(0xFFD4AF37);
+    const Color inactiveIcon = Color(0xFF666666);
     return Scaffold(
       backgroundColor: bgSidebar,
       body: Row(
         children: [
           SizedBox(
-            width: 120, 
+            width: 120,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -27,7 +27,7 @@ class FranchiseeDashboardView extends StatelessWidget {
                   children: [
                     const SizedBox(height: 40),
                     _BrandAvatar(),
-                    const SizedBox(height: 60), 
+                    const SizedBox(height: 60),
                     _PremiumNavIcon(
                       icon: Icons.point_of_sale,
                       label: "Caisse",
@@ -79,8 +79,8 @@ class FranchiseeDashboardView extends StatelessWidget {
             child: Container(
               margin: const EdgeInsets.fromLTRB(0, 16, 16, 16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F7), 
-                borderRadius: BorderRadius.circular(32), 
+                color: const Color(0xFFF2F2F7),
+                borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
                     color: Colors.black.withOpacity(0.3),
@@ -98,6 +98,7 @@ class FranchiseeDashboardView extends StatelessWidget {
     );
   }
 }
+
 class _BrandAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -121,13 +122,14 @@ class _BrandAvatar extends StatelessWidget {
         style: const TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.w300,
-          fontSize: 32, 
+          fontSize: 32,
           fontFamily: 'Times',
         ),
       ),
     );
   }
 }
+
 class _PremiumNavIcon extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -159,7 +161,7 @@ class _PremiumNavIcon extends StatelessWidget {
           decoration: BoxDecoration(
             color:
                 isActive ? activeColor.withOpacity(0.15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(24), 
+            borderRadius: BorderRadius.circular(24),
             border: isActive
                 ? Border.all(color: activeColor.withOpacity(0.5), width: 1.5)
                 : Border.all(color: Colors.transparent),
@@ -170,7 +172,7 @@ class _PremiumNavIcon extends StatelessWidget {
               Icon(
                 icon,
                 color: isActive ? activeColor : inactiveColor,
-                size: 36, 
+                size: 36,
               ),
               const SizedBox(height: 6),
               Text(
@@ -188,6 +190,7 @@ class _PremiumNavIcon extends StatelessWidget {
     );
   }
 }
+
 class _MenuTriggerButton extends StatelessWidget {
   final Color activeColor;
   const _MenuTriggerButton({required this.activeColor});
@@ -199,7 +202,7 @@ class _MenuTriggerButton extends StatelessWidget {
         onTap: () => _showAdminMenu(context),
         borderRadius: BorderRadius.circular(24),
         child: Container(
-          width: 70, 
+          width: 70,
           height: 70,
           decoration: BoxDecoration(
             color: const Color(0xFF252525),
@@ -218,6 +221,7 @@ class _MenuTriggerButton extends StatelessWidget {
       ),
     );
   }
+
   void _showAdminMenu(BuildContext context) {
     showGeneralDialog(
       context: context,
@@ -241,6 +245,7 @@ class _MenuTriggerButton extends StatelessWidget {
     );
   }
 }
+
 class _AdminMenuOverlay extends StatelessWidget {
   final BuildContext parentContext;
   const _AdminMenuOverlay({required this.parentContext});
@@ -253,8 +258,8 @@ class _AdminMenuOverlay extends StatelessWidget {
     final modules = user?.enabledModules ?? {};
     return Center(
       child: Container(
-        width: 800, 
-        padding: const EdgeInsets.all(48), 
+        width: 800,
+        padding: const EdgeInsets.all(48),
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E24),
           borderRadius: BorderRadius.circular(40),
@@ -365,11 +370,13 @@ class _AdminMenuOverlay extends StatelessWidget {
       ),
     );
   }
+
   void _nav(BuildContext context, String route) {
     Navigator.pop(context);
     GoRouter.of(parentContext).go(route);
   }
 }
+
 class _AdminTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -401,7 +408,7 @@ class _AdminTile extends StatelessWidget {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 50, color: color), 
+              Icon(icon, size: 50, color: color),
               const SizedBox(height: 20),
               Text(
                 label,
@@ -409,8 +416,7 @@ class _AdminTile extends StatelessWidget {
                 style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
-                    fontSize: 18 
-                    ),
+                    fontSize: 18),
               ),
             ],
           ),
@@ -419,6 +425,7 @@ class _AdminTile extends StatelessWidget {
     );
   }
 }
+
 class _KioskSwitchButton extends StatelessWidget {
   const _KioskSwitchButton();
   @override

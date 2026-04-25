@@ -1,14 +1,12 @@
-import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
 import '../../models.dart';
+
 class FranchiseRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -36,16 +34,19 @@ class FranchiseRepository {
       'updatedAt': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
-  Stream<List<FranchiseeMenuItem>> getFranchiseeMenuStream(String franchiseeId) {
+
+  Stream<List<FranchiseeMenuItem>> getFranchiseeMenuStream(
+      String franchiseeId) {
     return _firestore
         .collection('users')
         .doc(franchiseeId)
         .collection('menu')
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
-        .toList());
+            .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
+            .toList());
   }
+
   Future<void> saveProduct({
     MasterProduct? product,
     required String name,
@@ -70,7 +71,8 @@ class FranchiseRepository {
     final productId = product?.productId ?? const Uuid().v4();
     String? finalPhotoUrl = photoUrl;
     if (imageFile != null) {
-      final ref = _storage.ref('product_images/$productId/${DateTime.now().millisecondsSinceEpoch}.png');
+      final ref = _storage.ref(
+          'product_images/$productId/${DateTime.now().millisecondsSinceEpoch}.png');
       final Uint8List bytes = await imageFile.readAsBytes();
       final metadata = SettableMetadata(
         contentType: 'image/png',
@@ -99,15 +101,17 @@ class FranchiseRepository {
       'ingredientProductIds': ingredientProductIds,
     }, SetOptions(merge: true));
   }
+
   Stream<List<MasterProduct>> getMasterProductsStream(String franchisorId) {
     return _firestore
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId)
         .snapshots()
         .map((snapshot) => snapshot.docs
-        .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
-        .toList());
+            .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
+            .toList());
   }
+
   Stream<List<KioskCategory>> getKioskCategoriesStream(String franchisorId) {
     return _firestore
         .collection('kiosk_categories')
@@ -122,24 +126,23 @@ class FranchiseRepository {
             name: doc['name'],
             filters: [],
             position: doc['position'] ?? 0,
-            imageUrl: doc['imageUrl']
-        ));
+            imageUrl: doc['imageUrl']));
       }
       return categories;
     });
   }
-  Future<List<ProductSection>> getSectionsForProduct(String franchisorId, List<String> sectionIds) async {
+
+  Future<List<ProductSection>> getSectionsForProduct(
+      String franchisorId, List<String> sectionIds) async {
     if (sectionIds.isEmpty) return [];
-    final snapshot = await _firestore.collection('product_sections')
+    final snapshot = await _firestore
+        .collection('product_sections')
         .where('sectionId', whereIn: sectionIds.take(10).toList())
         .get();
     List<ProductSection> sections = [];
-    for(var doc in snapshot.docs) {
+    for (var doc in snapshot.docs) {
       sections.add(ProductSection(
-          id: doc.id,
-          sectionId: doc['sectionId'],
-          title: doc['title']
-      ));
+          id: doc.id, sectionId: doc['sectionId'], title: doc['title']));
     }
     return sections;
   }

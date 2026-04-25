@@ -53,7 +53,6 @@ class _FranchiseeTillViewState extends State<FranchiseeTillView> {
           .where('franchiseeId', isEqualTo: franchiseeId)
           .snapshots()
           .listen((snapshot) async {
-
         // --- CORRECTION : IGNORER LES COMMANDES AU REDÉMARRAGE ---
         if (_isFirstLoad) {
           // On prend tous les documents qui sont DÉJÀ dans la base au démarrage
@@ -62,28 +61,30 @@ class _FranchiseeTillViewState extends State<FranchiseeTillView> {
             _printedOrders.add(doc.id);
           }
           _isFirstLoad = false; // On désactive le bouclier
-          debugPrint("🚀 Démarrage caisse : ${_printedOrders.length} anciennes commandes bloquées pour impression.");
+          debugPrint(
+              "🚀 Démarrage caisse : ${_printedOrders.length} anciennes commandes bloquées pour impression.");
           return; // On arrête l'exécution ici pour ce premier tour
         }
         // ---------------------------------------------------------
 
         for (var change in snapshot.docChanges) {
           // On écoute maintenant les AJOUTS (added) ET les MISES À JOUR (modified)
-          if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
-
+          if (change.type == DocumentChangeType.added ||
+              change.type == DocumentChangeType.modified) {
             final newOrder = PendingOrder.fromFirestore(change.doc);
 
             // LOGIQUE MÉTIER : Ça vient de la borne ET c'est payé
-            if ((newOrder.source == 'borne' || newOrder.source == 'kiosk') && newOrder.isPaid) {
-
+            if ((newOrder.source == 'borne' || newOrder.source == 'kiosk') &&
+                newOrder.isPaid) {
               // SÉCURITÉ : On vérifie que ce ticket n'a pas DÉJÀ été imprimé
               if (!_printedOrders.contains(newOrder.id)) {
-
                 // On l'ajoute à la mémoire pour bloquer les futures impressions de ce ticket
                 _printedOrders.add(newOrder.id);
 
                 try {
-                  final printerConfig = await FranchiseRepository().getPrinterConfigStream(franchiseeId).first;
+                  final printerConfig = await FranchiseRepository()
+                      .getPrinterConfigStream(franchiseeId)
+                      .first;
 
                   await PrintingService().printKitchenTicketSafe(
                       printerConfig: printerConfig,
@@ -93,13 +94,15 @@ class _FranchiseeTillViewState extends State<FranchiseeTillView> {
                       // ON ENVOIE LE NOM DU RESTAURANT ICI :
                       franchisee: {
                         'companyName': authProvider.franchiseUser?.companyName,
-                        'restaurantName': authProvider.franchiseUser?.restaurantName,
-                      }
-                  );
+                        'restaurantName':
+                            authProvider.franchiseUser?.restaurantName,
+                      });
 
-                  debugPrint("🖨️ ✅ Impression auto cuisine lancée en direct pour : ${newOrder.identifier}");
+                  debugPrint(
+                      "🖨️ ✅ Impression auto cuisine lancée en direct pour : ${newOrder.identifier}");
                 } catch (e) {
-                  debugPrint("❌ Erreur lors de l'impression auto en cuisine : $e");
+                  debugPrint(
+                      "❌ Erreur lors de l'impression auto en cuisine : $e");
                 }
               }
             }
@@ -190,7 +193,7 @@ class _PosContentState extends State<_PosContent> {
             .get(),
         repo
             .getFranchiseeVisibleProductsStream(
-            widget.franchiseeId, widget.franchisorId)
+                widget.franchiseeId, widget.franchisorId)
             .first,
         firestore
             .collection('users')
@@ -303,21 +306,21 @@ class _PosContentState extends State<_PosContent> {
           return Scaffold(
             body: Center(
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline, size: 48, color: Colors.red),
-                    const SizedBox(height: 16),
-                    Text("Erreur de chargement : ${snapshot.error}"),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                        onPressed: () {
-                          setState(() {
-                            _posDataFutureState = _loadData();
-                          });
-                        },
-                        child: const Text("Réessayer"))
-                  ],
-                )),
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                const SizedBox(height: 16),
+                Text("Erreur de chargement : ${snapshot.error}"),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                    onPressed: () {
+                      setState(() {
+                        _posDataFutureState = _loadData();
+                      });
+                    },
+                    child: const Text("Réessayer"))
+              ],
+            )),
           );
         }
 
@@ -377,7 +380,6 @@ class _TillOpenFormState extends State<TillOpenForm> {
 
   Future<void> _openTill() async {
     if (!_formKey.currentState!.validate()) return;
-
     final initialCash =
     double.tryParse(_initialCashController.text.replaceAll(',', '.'));
     if (initialCash == null || initialCash < 0) {
@@ -388,12 +390,20 @@ class _TillOpenFormState extends State<TillOpenForm> {
       }
       return;
     }
-
     setState(() => _isLoading = true);
     final repository = FranchiseRepository();
     try {
       await repository.openTillSession(
           franchiseeId: widget.franchiseeId, initialCash: initialCash);
+
+      // ✅ Reset le compteur de commandes des bornes
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.franchiseeId)
+          .collection('config')
+          .doc('session_order_counter')
+          .set({'count': 0, 'daily_queue': []});
+
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -403,7 +413,6 @@ class _TillOpenFormState extends State<TillOpenForm> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return Center(
@@ -430,9 +439,9 @@ class _TillOpenFormState extends State<TillOpenForm> {
                         labelText: "Fonds de caisse initial (€)",
                         prefixIcon: Icon(Icons.euro_symbol)),
                     keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
+                        const TextInputType.numberWithOptions(decimal: true),
                     validator: (v) =>
-                    (v == null || v.isEmpty) ? 'Requis' : null,
+                        (v == null || v.isEmpty) ? 'Requis' : null,
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
@@ -442,10 +451,10 @@ class _TillOpenFormState extends State<TillOpenForm> {
                       onPressed: _isLoading ? null : _openTill,
                       icon: _isLoading
                           ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 2, color: Colors.white))
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
                           : const Icon(Icons.check),
                       label: const Text("Démarrer la Session"),
                       style: ElevatedButton.styleFrom(

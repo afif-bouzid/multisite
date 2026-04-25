@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import '/models.dart';
+
 class PosContainerDialog extends StatelessWidget {
   final MasterProduct container;
   final List<MasterProduct> allProducts;
@@ -18,7 +19,7 @@ class PosContainerDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
         padding: const EdgeInsets.all(16),
-        width: 600, 
+        width: 600,
         height: 500,
         child: Column(
           children: [
@@ -28,7 +29,8 @@ class PosContainerDialog extends StatelessWidget {
                 Expanded(
                   child: Text(
                     container.name.toUpperCase(),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                        fontSize: 20, fontWeight: FontWeight.bold),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -42,31 +44,33 @@ class PosContainerDialog extends StatelessWidget {
             Expanded(
               child: children.isEmpty
                   ? const Center(
-                child: Text(
-                  "Aucun produit trouvé dans ce dossier.",
-                  style: TextStyle(color: Colors.grey, fontSize: 16),
-                ),
-              )
+                      child: Text(
+                        "Aucun produit trouvé dans ce dossier.",
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    )
                   : GridView.builder(
-                padding: const EdgeInsets.all(8),
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 3, 
-                  childAspectRatio: 0.8,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                ),
-                itemCount: children.length,
-                itemBuilder: (context, index) {
-                  final product = children[index];
-                  return _buildProductCard(context, product);
-                },
-              ),
+                      padding: const EdgeInsets.all(8),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        childAspectRatio: 0.8,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                      ),
+                      itemCount: children.length,
+                      itemBuilder: (context, index) {
+                        final product = children[index];
+                        return _buildProductCard(context, product);
+                      },
+                    ),
             ),
           ],
         ),
       ),
     );
   }
+
   Widget _buildProductCard(BuildContext context, MasterProduct product) {
     return InkWell(
       onTap: () {
@@ -87,18 +91,23 @@ class PosContainerDialog extends StatelessWidget {
           children: [
             Expanded(
               child: ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
-                    ? CachedNetworkImage(
-                  imageUrl: product.photoUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(color: Colors.grey[200]),
-                  errorWidget: (context, url, error) => const Icon(Icons.error),
-                )
-                    : Container(
-                  color: Colors.grey[100],
-                  child: Icon(Icons.fastfood, size: 40, color: Colors.grey[400]),
-                ),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(12)),
+                child:
+                    (product.photoUrl != null && product.photoUrl!.isNotEmpty)
+                        ? CachedNetworkImage(
+                            imageUrl: product.photoUrl!,
+                            fit: BoxFit.cover,
+                            placeholder: (context, url) =>
+                                Container(color: Colors.grey[200]),
+                            errorWidget: (context, url, error) =>
+                                const Icon(Icons.error),
+                          )
+                        : Container(
+                            color: Colors.grey[100],
+                            child: Icon(Icons.fastfood,
+                                size: 40, color: Colors.grey[400]),
+                          ),
               ),
             ),
             Padding(
@@ -108,7 +117,8 @@ class PosContainerDialog extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
               ),
             ),
           ],
@@ -116,14 +126,18 @@ class PosContainerDialog extends StatelessWidget {
       ),
     );
   }
+
   List<MasterProduct> _getContainerChildren() {
     if (container.containerProductIds.isEmpty) return [];
-    return container.containerProductIds.map((childId) {
-      try {
-        return allProducts.firstWhere((p) => p.id == childId);
-      } catch (e) {
-        return null;
-      }
-    }).whereType<MasterProduct>().toList();
+    return container.containerProductIds
+        .map((childId) {
+          try {
+            return allProducts.firstWhere((p) => p.id == childId);
+          } catch (e) {
+            return null;
+          }
+        })
+        .whereType<MasterProduct>()
+        .toList();
   }
 }

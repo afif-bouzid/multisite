@@ -24,7 +24,8 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
     final firebaseUser = authProvider.firebaseUser;
 
     if (franchiseUser?.franchisorId == null || firebaseUser?.uid == null) {
-      return const Center(child: Text("Erreur: Données utilisateur introuvables."));
+      return const Center(
+          child: Text("Erreur: Données utilisateur introuvables."));
     }
 
     final franchisorId = franchiseUser!.franchisorId!;
@@ -60,8 +61,8 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
     );
   }
 
-  Widget _buildScreensaverTab(
-      String franchisorId, String franchiseeId, FranchiseRepository repository) {
+  Widget _buildScreensaverTab(String franchisorId, String franchiseeId,
+      FranchiseRepository repository) {
     return Column(
       children: [
         const Padding(
@@ -121,22 +122,24 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
 
                   final docs = mediaSnapshot.data!.docs;
                   if (docs.isEmpty) {
-                    return const Center(child: Text("Aucune image disponible."));
+                    return const Center(
+                        child: Text("Aucune image disponible."));
                   }
 
                   final Set<String> availableUrls = docs
                       .map((d) =>
-                  (d.data() as Map<String, dynamic>)['url'] as String)
+                          (d.data() as Map<String, dynamic>)['url'] as String)
                       .toSet();
 
                   final List<String> cleanSelection = rawSelection
                       .where((url) =>
-                  url.isNotEmpty && availableUrls.contains(url))
+                          url.isNotEmpty && availableUrls.contains(url))
                       .toList();
 
                   return GridView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 3,
                       crossAxisSpacing: 16,
                       mainAxisSpacing: 16,
@@ -154,31 +157,31 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
                         onTap: _isUpdating
                             ? null
                             : () async {
-                          setState(() => _isUpdating = true);
+                                setState(() => _isUpdating = true);
 
-                          List<String> newSelection =
-                          List.from(cleanSelection);
+                                List<String> newSelection =
+                                    List.from(cleanSelection);
 
-                          if (isSelected) {
-                            newSelection.remove(url);
-                          } else {
-                            newSelection.add(url);
-                          }
+                                if (isSelected) {
+                                  newSelection.remove(url);
+                                } else {
+                                  newSelection.add(url);
+                                }
 
-                          try {
-                            await repository.updateKioskScreensaver(
-                                franchiseeId, newSelection);
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text("Erreur: $e")));
-                            }
-                          } finally {
-                            if (mounted) {
-                              setState(() => _isUpdating = false);
-                            }
-                          }
-                        },
+                                try {
+                                  await repository.updateKioskScreensaver(
+                                      franchiseeId, newSelection);
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text("Erreur: $e")));
+                                  }
+                                } finally {
+                                  if (mounted) {
+                                    setState(() => _isUpdating = false);
+                                  }
+                                }
+                              },
                         child: Stack(
                           children: [
                             Container(
@@ -192,8 +195,8 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
                                   fit: BoxFit.cover,
                                   colorFilter: isSelected
                                       ? ColorFilter.mode(
-                                      Colors.black.withOpacity(0.4),
-                                      BlendMode.darken)
+                                          Colors.black.withOpacity(0.4),
+                                          BlendMode.darken)
                                       : null,
                                 ),
                               ),
@@ -248,7 +251,7 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
           return const Center(child: Text("Erreur chargement produits POS."));
         }
         final allPosProducts =
-        productSnapshot.data!.where((p) => !p.isIngredient).toList();
+            productSnapshot.data!.where((p) => !p.isIngredient).toList();
 
         return StreamBuilder<List<KioskCategory>>(
           stream: repository.getKioskCategoriesStream(franchisorId),
@@ -268,17 +271,20 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
               itemCount: categories.length,
               itemBuilder: (context, index) {
                 final category = categories[index];
-                final visibleFiltersWidgets = category.filters.map((filter) {
-                  final productsForThisFilter = allPosProducts
-                      .where((p) => p.kioskFilterIds.contains(filter.id))
-                      .toList();
+                final visibleFiltersWidgets = category.filters
+                    .map((filter) {
+                      final productsForThisFilter = allPosProducts
+                          .where((p) => p.kioskFilterIds.contains(filter.id))
+                          .toList();
 
-                  if (productsForThisFilter.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return _buildFilterTile(
-                      context, franchiseeId, filter, productsForThisFilter);
-                }).where((w) => w is! SizedBox).toList();
+                      if (productsForThisFilter.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return _buildFilterTile(
+                          context, franchiseeId, filter, productsForThisFilter);
+                    })
+                    .where((w) => w is! SizedBox)
+                    .toList();
 
                 if (visibleFiltersWidgets.isEmpty) {
                   return const SizedBox.shrink();
@@ -312,10 +318,10 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
                                       .textTheme
                                       .headlineSmall
                                       ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      fontSize: 20,
-                                      color:
-                                      Theme.of(context).primaryColor)),
+                                          fontWeight: FontWeight.w800,
+                                          fontSize: 20,
+                                          color:
+                                              Theme.of(context).primaryColor)),
                             ],
                           ),
                         ),
@@ -360,11 +366,11 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
 
         return ListTile(
           contentPadding:
-          const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
           leading: filter.imageUrl != null
               ? CircleAvatar(
-              backgroundImage: CachedNetworkImageProvider(filter.imageUrl!),
-              backgroundColor: Colors.grey.shade200)
+                  backgroundImage: CachedNetworkImageProvider(filter.imageUrl!),
+                  backgroundColor: Colors.grey.shade200)
               : const Icon(Icons.label_outline, color: Colors.grey),
           title: Text(filter.name,
               style: const TextStyle(fontWeight: FontWeight.w600)),
@@ -415,9 +421,9 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
 
   void _showProductAssignmentDialog(BuildContext context,
       {required KioskFilter filter,
-        required DocumentReference configRef,
-        required List<MasterProduct> productsForThisFilter,
-        DocumentSnapshot? currentlyAssigned}) {
+      required DocumentReference configRef,
+      required List<MasterProduct> productsForThisFilter,
+      DocumentSnapshot? currentlyAssigned}) {
     showDialog(
       context: context,
       builder: (context) => ProductAssignmentDialog(
@@ -438,10 +444,10 @@ class ProductAssignmentDialog extends StatefulWidget {
 
   const ProductAssignmentDialog(
       {super.key,
-        required this.filter,
-        required this.configRef,
-        required this.productsForThisFilter,
-        this.currentlyAssigned});
+      required this.filter,
+      required this.configRef,
+      required this.productsForThisFilter,
+      this.currentlyAssigned});
 
   @override
   State<ProductAssignmentDialog> createState() =>
@@ -506,54 +512,55 @@ class _ProductAssignmentDialogState extends State<ProductAssignmentDialog> {
         child: displayedProducts.isEmpty
             ? const Center(child: Text("Aucun produit correspondant."))
             : Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                    onPressed: () => setState(() => _allowedProductIds
-                        .addAll(displayedProducts.map((p) => p.productId))),
-                    child: const Text("Tout sélectionner")),
-                TextButton(
-                    onPressed: () => setState(() => _allowedProductIds
-                        .removeAll(displayedProducts.map((p) => p.productId))),
-                    child: const Text("Tout désélectionner",
-                        style: TextStyle(color: Colors.red))),
-              ],
-            ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: displayedProducts.length,
-                itemBuilder: (context, index) {
-                  final product = displayedProducts[index];
-                  final isAllowed =
-                  _allowedProductIds.contains(product.productId);
-                  return CheckboxListTile(
-                    title: Text(product.name,
-                        style: TextStyle(
-                            decoration: isAllowed
-                                ? null
-                                : TextDecoration.lineThrough,
-                            color: isAllowed
-                                ? Colors.black
-                                : Colors.grey)),
-                    value: isAllowed,
-                    activeColor: Colors.green,
-                    onChanged: (val) {
-                      setState(() {
-                        if (val == true) {
-                          _allowedProductIds.add(product.productId);
-                        } else {
-                          _allowedProductIds.remove(product.productId);
-                        }
-                      });
-                    },
-                  );
-                },
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                          onPressed: () => setState(() =>
+                              _allowedProductIds.addAll(
+                                  displayedProducts.map((p) => p.productId))),
+                          child: const Text("Tout sélectionner")),
+                      TextButton(
+                          onPressed: () => setState(() =>
+                              _allowedProductIds.removeAll(
+                                  displayedProducts.map((p) => p.productId))),
+                          child: const Text("Tout désélectionner",
+                              style: TextStyle(color: Colors.red))),
+                    ],
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      itemCount: displayedProducts.length,
+                      itemBuilder: (context, index) {
+                        final product = displayedProducts[index];
+                        final isAllowed =
+                            _allowedProductIds.contains(product.productId);
+                        return CheckboxListTile(
+                          title: Text(product.name,
+                              style: TextStyle(
+                                  decoration: isAllowed
+                                      ? null
+                                      : TextDecoration.lineThrough,
+                                  color:
+                                      isAllowed ? Colors.black : Colors.grey)),
+                          value: isAllowed,
+                          activeColor: Colors.green,
+                          onChanged: (val) {
+                            setState(() {
+                              if (val == true) {
+                                _allowedProductIds.add(product.productId);
+                              } else {
+                                _allowedProductIds.remove(product.productId);
+                              }
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-          ],
-        ),
       ),
       actions: [
         TextButton(

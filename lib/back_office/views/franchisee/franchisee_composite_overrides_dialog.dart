@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/repository/repository.dart';
 import '../../../models.dart';
+
 class SectionOverrideData {
   final ProductSection section;
   List<SectionItem> items;
@@ -13,6 +14,7 @@ class SectionOverrideData {
     required this.priceOverrides,
   });
 }
+
 class FranchiseeCompositeOverridesDialog extends StatefulWidget {
   final String franchiseeId;
   final String franchisorId;
@@ -27,6 +29,7 @@ class FranchiseeCompositeOverridesDialog extends StatefulWidget {
   State<FranchiseeCompositeOverridesDialog> createState() =>
       _FranchiseeCompositeOverridesDialogState();
 }
+
 class _FranchiseeCompositeOverridesDialogState
     extends State<FranchiseeCompositeOverridesDialog> {
   late Future<List<SectionOverrideData>> _dataFuture;
@@ -43,12 +46,13 @@ class _FranchiseeCompositeOverridesDialogState
         .doc(widget.product.productId);
     _dataFuture = _loadData();
   }
+
   Future<List<SectionOverrideData>> _loadData() async {
     final repository = FranchiseRepository();
     final baseSections = await repository.getSectionsForProduct(
         widget.franchisorId, widget.product.sectionIds);
     final priceOverridesSnapshot =
-    await _menuProductRef.collection('supplement_overrides').get();
+        await _menuProductRef.collection('supplement_overrides').get();
     final priceOverrides = {
       for (var doc in priceOverridesSnapshot.docs)
         doc.id: (doc.data()['price'] as num?)?.toDouble() ?? 0.0
@@ -58,8 +62,10 @@ class _FranchiseeCompositeOverridesDialogState
       List<SectionItem> items = List.from(section.items);
       if (widget.product.ingredientProductIds.isNotEmpty) {
         items.sort((a, b) {
-          int indexA = widget.product.ingredientProductIds.indexOf(a.product.productId);
-          int indexB = widget.product.ingredientProductIds.indexOf(b.product.productId);
+          int indexA =
+              widget.product.ingredientProductIds.indexOf(a.product.productId);
+          int indexB =
+              widget.product.ingredientProductIds.indexOf(b.product.productId);
           if (indexA == -1) indexA = 999;
           if (indexB == -1) indexB = 999;
           return indexA.compareTo(indexB);
@@ -84,12 +90,13 @@ class _FranchiseeCompositeOverridesDialogState
     });
     return finalData;
   }
+
   Future<void> _saveChanges() async {
     setState(() => _isLoading = true);
     final batch = FirebaseFirestore.instance.batch();
     _priceControllers.forEach((productId, controller) {
       final priceRef =
-      _menuProductRef.collection('supplement_overrides').doc(productId);
+          _menuProductRef.collection('supplement_overrides').doc(productId);
       final textVal = controller.text.replaceAll(',', '.').trim();
       if (textVal.isNotEmpty) {
         final priceValue = double.tryParse(textVal);
@@ -120,6 +127,7 @@ class _FranchiseeCompositeOverridesDialogState
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
   @override
   void dispose() {
     for (var controller in _priceControllers.values) {
@@ -127,9 +135,12 @@ class _FranchiseeCompositeOverridesDialogState
     }
     super.dispose();
   }
+
   Widget _getSectionIcon(String type) {
     final t = type.toLowerCase();
-    if (t.contains('increment') || t.contains('quantity') || t.contains('compteur')) {
+    if (t.contains('increment') ||
+        t.contains('quantity') ||
+        t.contains('compteur')) {
       return const Icon(Icons.add_circle_outline, color: Colors.blue);
     } else if (t.contains('unique') || t.contains('radio')) {
       return const Icon(Icons.radio_button_checked, color: Colors.orange);
@@ -137,12 +148,16 @@ class _FranchiseeCompositeOverridesDialogState
       return const Icon(Icons.check_box, color: Colors.green);
     }
   }
+
   String _getSectionTypeText(String type) {
     final t = type.toLowerCase();
     if (t.contains('increment')) return "INCRÉMENTATION";
-    if (t.contains('unique') || t.contains('radio')) return "CHOIX UNIQUE (RADIO)";
+    if (t.contains('unique') || t.contains('radio')) {
+      return "CHOIX UNIQUE (RADIO)";
+    }
     return "CHOIX MULTIPLE (CHECKBOX)";
   }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -159,11 +174,16 @@ class _FranchiseeCompositeOverridesDialogState
         child: FutureBuilder<List<SectionOverrideData>>(
           future: _dataFuture,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting ||
+                _isLoading) {
               return const Center(child: CircularProgressIndicator());
             }
-            if (snapshot.hasError) return Center(child: Text("Erreur: ${snapshot.error}"));
-            if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text("Aucune section trouvée."));
+            if (snapshot.hasError) {
+              return Center(child: Text("Erreur: ${snapshot.error}"));
+            }
+            if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              return const Center(child: Text("Aucune section trouvée."));
+            }
             return ListView.builder(
               itemCount: snapshot.data!.length,
               itemBuilder: (context, index) {
@@ -171,14 +191,16 @@ class _FranchiseeCompositeOverridesDialogState
                 return Card(
                   margin: const EdgeInsets.only(bottom: 16),
                   elevation: 3,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                   child: Column(
                     children: [
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
                           color: Colors.grey.shade100,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12)),
                         ),
                         child: Row(
                           children: [
@@ -189,22 +211,29 @@ class _FranchiseeCompositeOverridesDialogState
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(data.section.title.toUpperCase(),
-                                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 16)),
                                   Text(_getSectionTypeText(data.section.type),
-                                      style: TextStyle(fontSize: 11, color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                                      style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade600,
+                                          fontWeight: FontWeight.bold)),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 4),
                               decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(20),
-                                  border: Border.all(color: Colors.grey.shade300)
-                              ),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300)),
                               child: Text(
                                 "MIN: ${data.section.selectionMin} / MAX: ${data.section.selectionMax == 0 ? '∞' : data.section.selectionMax}",
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
@@ -214,13 +243,19 @@ class _FranchiseeCompositeOverridesDialogState
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         itemCount: data.items.length,
-                        separatorBuilder: (context, i) => const Divider(height: 1),
+                        separatorBuilder: (context, i) =>
+                            const Divider(height: 1),
                         itemBuilder: (context, idx) {
                           final item = data.items[idx];
-                          final controller = _priceControllers[item.product.productId];
+                          final controller =
+                              _priceControllers[item.product.productId];
                           return ListTile(
-                            title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                            subtitle: Text("Prix base: ${item.supplementPrice.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 12)),
+                            title: Text(item.product.name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.w600)),
+                            subtitle: Text(
+                                "Prix base: ${item.supplementPrice.toStringAsFixed(2)} €",
+                                style: const TextStyle(fontSize: 12)),
                             trailing: SizedBox(
                               width: 140,
                               child: TextField(
@@ -231,10 +266,14 @@ class _FranchiseeCompositeOverridesDialogState
                                     hintText: "Défaut",
                                     isDense: true,
                                     border: OutlineInputBorder(),
-                                    suffixText: "€"
-                                ),
-                                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'^\d*([.,]?\d{0,2})'))],
+                                    suffixText: "€"),
+                                keyboardType:
+                                    const TextInputType.numberWithOptions(
+                                        decimal: true),
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.allow(
+                                      RegExp(r'^\d*([.,]?\d{0,2})'))
+                                ],
                               ),
                             ),
                           );
@@ -249,7 +288,9 @@ class _FranchiseeCompositeOverridesDialogState
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text("Annuler")),
+        TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Annuler")),
         ElevatedButton.icon(
           style: ElevatedButton.styleFrom(
             backgroundColor: Theme.of(context).primaryColor,

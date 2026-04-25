@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import '../models.dart';
+
 class AuthProvider extends ChangeNotifier {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -22,9 +23,11 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     if (user != null) {
       try {
-        DocumentSnapshot doc = await _firestore.collection('users').doc(user.uid).get();
+        DocumentSnapshot doc =
+            await _firestore.collection('users').doc(user.uid).get();
         if (doc.exists && doc.data() != null) {
-          _franchiseUser = FranchiseUser.fromFirestore(doc.data() as Map<String, dynamic>, user.uid);
+          _franchiseUser = FranchiseUser.fromFirestore(
+              doc.data() as Map<String, dynamic>, user.uid);
         }
       } catch (e) {
         if (kDebugMode) print("Erreur AuthProvider: $e");
@@ -33,6 +36,7 @@ class AuthProvider extends ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
   Future<String?> signIn(String email, String password) async {
     try {
       _isLoading = true;
@@ -49,6 +53,7 @@ class AuthProvider extends ChangeNotifier {
       return e.toString();
     }
   }
+
   Future<void> signOut() async {
     await _auth.signOut();
   }

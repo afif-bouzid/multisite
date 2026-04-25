@@ -2,13 +2,14 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 class ImageInputCard extends StatelessWidget {
   final XFile? imageFile;
   final String? imageUrl;
   final VoidCallback onPick;
   final VoidCallback onRemove;
   final String label;
-  final double size; 
+  final double size;
   const ImageInputCard({
     super.key,
     required this.imageFile,
@@ -16,11 +17,12 @@ class ImageInputCard extends StatelessWidget {
     required this.onPick,
     required this.onRemove,
     this.label = "Photo",
-    this.size = 140, 
+    this.size = 140,
   });
   @override
   Widget build(BuildContext context) {
-    final bool hasImage = imageFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
+    final bool hasImage =
+        imageFile != null || (imageUrl != null && imageUrl!.isNotEmpty);
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -38,19 +40,21 @@ class ImageInputCard extends StatelessWidget {
             ),
             child: !hasImage
                 ? Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.add_a_photo, size: size * 0.3, color: Colors.grey[600]),
-                if (size > 80) ...[
-                  const SizedBox(height: 5),
-                  Text(
-                    label,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                ]
-              ],
-            )
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.add_a_photo,
+                          size: size * 0.3, color: Colors.grey[600]),
+                      if (size > 80) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          label,
+                          style:
+                              TextStyle(color: Colors.grey[600], fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                      ]
+                    ],
+                  )
                 : null,
           ),
         ),
@@ -74,12 +78,15 @@ class ImageInputCard extends StatelessWidget {
       ],
     );
   }
+
   DecorationImage _buildDecorationImage() {
     if (imageFile != null) {
       if (kIsWeb) {
-        return DecorationImage(image: NetworkImage(imageFile!.path), fit: BoxFit.cover);
+        return DecorationImage(
+            image: NetworkImage(imageFile!.path), fit: BoxFit.cover);
       }
-      return DecorationImage(image: FileImage(File(imageFile!.path)), fit: BoxFit.cover);
+      return DecorationImage(
+          image: FileImage(File(imageFile!.path)), fit: BoxFit.cover);
     } else {
       return DecorationImage(image: NetworkImage(imageUrl!), fit: BoxFit.cover);
     }

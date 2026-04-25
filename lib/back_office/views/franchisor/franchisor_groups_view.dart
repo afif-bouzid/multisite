@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
+
 class _LocalSectionCache {
   static List<ProductSection>? _cachedSections;
   static DateTime? _lastFetch;
-  static Future<List<ProductSection>> getSections(FranchiseRepository repo, String uid) async {
+  static Future<List<ProductSection>> getSections(
+      FranchiseRepository repo, String uid) async {
     if (_cachedSections != null &&
         _lastFetch != null &&
         DateTime.now().difference(_lastFetch!) < const Duration(minutes: 5)) {
@@ -22,16 +24,19 @@ class _LocalSectionCache {
       return [];
     }
   }
+
   static void invalidate() {
     _cachedSections = null;
     _lastFetch = null;
   }
 }
+
 class SectionGroupsView extends StatefulWidget {
   const SectionGroupsView({super.key});
   @override
   State<SectionGroupsView> createState() => _SectionGroupsViewState();
 }
+
 class _SectionGroupsViewState extends State<SectionGroupsView> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
@@ -43,33 +48,34 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       setState(() => _searchQuery = _searchController.text);
     });
   }
+
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
+
   Map<String, dynamic> _processData(
       List<SectionGroup> allGroups, List<ProductFilter> allFilters) {
     List<SectionGroup> filteredGroups = allGroups;
     if (_searchQuery.isNotEmpty) {
       filteredGroups = filteredGroups
-          .where((g) =>
-          g.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .where(
+              (g) => g.name.toLowerCase().contains(_searchQuery.toLowerCase()))
           .toList();
     }
     if (_selectedFilterIds.isNotEmpty) {
       filteredGroups = filteredGroups
-          .where((g) =>
-          g.filterIds.any((id) => _selectedFilterIds.contains(id)))
+          .where(
+              (g) => g.filterIds.any((id) => _selectedFilterIds.contains(id)))
           .toList();
     }
     Set<String> activeFilterIds = {};
     for (var group in allGroups) {
       activeFilterIds.addAll(group.filterIds);
     }
-    List<ProductFilter> visibleFilters = allFilters
-        .where((f) => activeFilterIds.contains(f.id))
-        .toList();
+    List<ProductFilter> visibleFilters =
+        allFilters.where((f) => activeFilterIds.contains(f.id)).toList();
     visibleFilters.sort((a, b) => a.name.compareTo(b.name));
     filteredGroups.sort((a, b) => a.name.compareTo(b.name));
     return {
@@ -77,10 +83,12 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       'filters': visibleFilters,
     };
   }
+
   @override
   Widget build(BuildContext context) {
     final repository = FranchiseRepository();
-    final uid = Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
+    final uid =
+        Provider.of<AuthProvider>(context, listen: false).firebaseUser!.uid;
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
       body: StreamBuilder<List<ProductFilter>>(
@@ -92,7 +100,8 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
               if (!filterSnapshot.hasData || !groupSnapshot.hasData) {
                 return const Center(child: CircularProgressIndicator());
               }
-              final processed = _processData(groupSnapshot.data!, filterSnapshot.data!);
+              final processed =
+                  _processData(groupSnapshot.data!, filterSnapshot.data!);
               final List<SectionGroup> groupsToShow = processed['groups'];
               final List<ProductFilter> relevantFilters = processed['filters'];
               return Column(
@@ -102,12 +111,13 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                     child: groupsToShow.isEmpty
                         ? _buildEmptyState()
                         : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
-                      itemCount: groupsToShow.length,
-                      separatorBuilder: (c, i) => const SizedBox(height: 12),
-                      itemBuilder: (context, index) => _buildGroupCard(
-                          context, groupsToShow[index], repository),
-                    ),
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                            itemCount: groupsToShow.length,
+                            separatorBuilder: (c, i) =>
+                                const SizedBox(height: 12),
+                            itemBuilder: (context, index) => _buildGroupCard(
+                                context, groupsToShow[index], repository),
+                          ),
                   ),
                 ],
               );
@@ -129,6 +139,7 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
+
   Widget _buildHeader(List<ProductFilter> filters) {
     return Container(
       decoration: BoxDecoration(
@@ -159,11 +170,12 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                 prefixIcon: Icon(Icons.search, color: Colors.grey.shade600),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                    icon: const Icon(Icons.clear, size: 18),
-                    onPressed: () => _searchController.clear())
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () => _searchController.clear())
                     : null,
                 border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               ),
             ),
           ),
@@ -183,14 +195,16 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                       selectedColor: Colors.black,
                       labelStyle: TextStyle(
                         color: isSelected ? Colors.white : Colors.black87,
-                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        fontWeight:
+                            isSelected ? FontWeight.bold : FontWeight.normal,
                         fontSize: 12,
                       ),
                       backgroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(20),
                         side: BorderSide(
-                          color: isSelected ? Colors.black : Colors.grey.shade300,
+                          color:
+                              isSelected ? Colors.black : Colors.grey.shade300,
                         ),
                       ),
                       onSelected: (selected) {
@@ -212,6 +226,7 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
+
   Widget _buildEmptyState() {
     return Center(
       child: Column(
@@ -232,7 +247,9 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-  Widget _buildGroupCard(BuildContext context, SectionGroup group, FranchiseRepository repository) {
+
+  Widget _buildGroupCard(BuildContext context, SectionGroup group,
+      FranchiseRepository repository) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -252,7 +269,8 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
           onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
-                  builder: (context) => SectionGroupFormView(groupToEdit: group))),
+                  builder: (context) =>
+                      SectionGroupFormView(groupToEdit: group))),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Row(
@@ -264,7 +282,8 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                     color: Colors.purple.shade50,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: Icon(Icons.workspaces_outline, color: Colors.purple.shade700),
+                  child: Icon(Icons.workspaces_outline,
+                      color: Colors.purple.shade700),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -282,7 +301,8 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                       const SizedBox(height: 4),
                       Text(
                         "${group.sectionIds.length} section(s) incluse(s)",
-                        style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                        style: TextStyle(
+                            fontSize: 12, color: Colors.grey.shade500),
                       ),
                     ],
                   ),
@@ -301,7 +321,8 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                       onTap: () => Navigator.push(
                           context,
                           MaterialPageRoute(
-                              builder: (context) => SectionGroupFormView(groupToEdit: group))),
+                              builder: (context) =>
+                                  SectionGroupFormView(groupToEdit: group))),
                     ),
                     const SizedBox(width: 8),
                     _buildActionButton(
@@ -318,7 +339,11 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-  Widget _buildActionButton({required IconData icon, required Color color, required VoidCallback onTap}) {
+
+  Widget _buildActionButton(
+      {required IconData icon,
+      required Color color,
+      required VoidCallback onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(50),
@@ -332,7 +357,9 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
       ),
     );
   }
-  void _duplicateGroup(BuildContext context, FranchiseRepository repository, SectionGroup group) async {
+
+  void _duplicateGroup(BuildContext context, FranchiseRepository repository,
+      SectionGroup group) async {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text("Duplication de '${group.name}'..."),
@@ -342,37 +369,44 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
     _LocalSectionCache.invalidate();
     await repository.duplicateSectionGroup(group);
   }
-  void _deleteGroup(BuildContext context, FranchiseRepository repository, SectionGroup group) async {
+
+  void _deleteGroup(BuildContext context, FranchiseRepository repository,
+      SectionGroup group) async {
     final confirm = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: const Text("Supprimer ?"),
-          content: Text("Voulez-vous vraiment supprimer le groupe '${group.name}' ?"),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
-            ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    elevation: 0),
-                child: const Text("Supprimer"))
-          ],
-        ));
+              title: const Text("Supprimer ?"),
+              content: Text(
+                  "Voulez-vous vraiment supprimer le groupe '${group.name}' ?"),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text("Annuler",
+                        style: TextStyle(color: Colors.grey))),
+                ElevatedButton(
+                    onPressed: () => Navigator.pop(ctx, true),
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                        elevation: 0),
+                    child: const Text("Supprimer"))
+              ],
+            ));
     if (confirm == true) {
       await repository.deleteSectionGroup(group.id);
     }
   }
 }
+
 class SectionGroupFormView extends StatefulWidget {
   final SectionGroup? groupToEdit;
   const SectionGroupFormView({super.key, this.groupToEdit});
   @override
   State<SectionGroupFormView> createState() => _SectionGroupFormViewState();
 }
+
 class _SectionGroupFormViewState extends State<SectionGroupFormView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -396,17 +430,20 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
     });
     _loadAndCategorizeSections();
   }
+
   @override
   void dispose() {
     _nameController.dispose();
     _sectionSearchController.dispose();
     super.dispose();
   }
+
   Future<void> _loadAndCategorizeSections() async {
     setState(() => _isLoading = true);
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final allSections = await _LocalSectionCache.getSections(repository, authProvider.firebaseUser!.uid);
+    final allSections = await _LocalSectionCache.getSections(
+        repository, authProvider.firebaseUser!.uid);
     if (!mounted) return;
     if (widget.groupToEdit != null) {
       final groupSectionIds = widget.groupToEdit!.sectionIds;
@@ -423,16 +460,19 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
     }
     setState(() => _isLoading = false);
   }
+
   Future<void> _saveGroup() async {
     if (!_formKey.currentState!.validate() || _selectedSections.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text("Veuillez donner un nom et ajouter au moins une section.")));
+          content:
+              Text("Veuillez donner un nom et ajouter au moins une section.")));
       return;
     }
     setState(() => _isLoading = true);
     final repository = FranchiseRepository();
     try {
-      final orderedSectionIds = _selectedSections.map((s) => s.sectionId).toList();
+      final orderedSectionIds =
+          _selectedSections.map((s) => s.sectionId).toList();
       await repository.saveSectionGroup(
           groupId: widget.groupToEdit?.id,
           name: _nameController.text,
@@ -450,6 +490,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -466,42 +507,43 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [
-                  BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      offset: const Offset(0, 4),
-                      blurRadius: 10)
-                ],
-              ),
-              padding: const EdgeInsets.all(24.0),
+              key: _formKey,
               child: Column(
                 children: [
-                  TextFormField(
-                      controller: _nameController,
-                      decoration: const InputDecoration(
-                        labelText: "Nom du groupe",
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (v) => v!.isEmpty ? "Requis" : null),
-                  const SizedBox(height: 20),
-                  _buildFilterSelector(context),
+                  Container(
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            offset: const Offset(0, 4),
+                            blurRadius: 10)
+                      ],
+                    ),
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      children: [
+                        TextFormField(
+                            controller: _nameController,
+                            decoration: const InputDecoration(
+                              labelText: "Nom du groupe",
+                              border: OutlineInputBorder(),
+                            ),
+                            validator: (v) => v!.isEmpty ? "Requis" : null),
+                        const SizedBox(height: 20),
+                        _buildFilterSelector(context),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Expanded(child: _buildDragDropLists()),
                 ],
               ),
             ),
-            const SizedBox(height: 16),
-            Expanded(child: _buildDragDropLists()),
-          ],
-        ),
-      ),
     );
   }
+
   Widget _buildFilterSelector(BuildContext context) {
     final repository = FranchiseRepository();
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -550,10 +592,13 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ],
     );
   }
+
   Widget _buildDragDropLists() {
     final visibleAvailableSections = _availableSections.where((section) {
       if (_sectionSearchQuery.isEmpty) return true;
-      return section.title.toLowerCase().contains(_sectionSearchQuery.toLowerCase());
+      return section.title
+          .toLowerCase()
+          .contains(_sectionSearchQuery.toLowerCase());
     }).toList();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
@@ -562,8 +607,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
         children: [
           Expanded(
               child: _buildSectionColumn(
-                  "Sections Disponibles",
-                  visibleAvailableSections, 
+                  "Sections Disponibles", visibleAvailableSections,
                   isSource: true)),
           const SizedBox(width: 16),
           Expanded(
@@ -574,6 +618,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       ),
     );
   }
+
   Widget _buildSectionColumn(String title, List<ProductSection> sections,
       {required bool isSource}) {
     return DragTarget<ProductSection>(
@@ -614,16 +659,18 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
                             prefixIcon: const Icon(Icons.search, size: 20),
                             suffixIcon: _sectionSearchQuery.isNotEmpty
                                 ? IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: () => _sectionSearchController.clear(),
-                            )
+                                    icon: const Icon(Icons.clear, size: 16),
+                                    onPressed: () =>
+                                        _sectionSearchController.clear(),
+                                  )
                                 : null,
                             isDense: true,
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(8),
-                              borderSide: BorderSide(color: Colors.grey.shade300),
+                              borderSide:
+                                  BorderSide(color: Colors.grey.shade300),
                             ),
                           ),
                         ),
@@ -654,6 +701,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }),
     );
   }
+
   Widget _buildDraggableList(List<ProductSection> sections) {
     if (sections.isEmpty) {
       return Center(
@@ -669,12 +717,13 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
         return Draggable<ProductSection>(
             data: section,
             feedback: _buildFeedbackTile(section),
-            childWhenDragging: Opacity(
-                opacity: 0.3, child: _buildSectionTile(section)),
+            childWhenDragging:
+                Opacity(opacity: 0.3, child: _buildSectionTile(section)),
             child: _buildSectionTile(section));
       },
     );
   }
+
   Widget _buildReorderableTargetList(List<ProductSection> sections) {
     if (sections.isEmpty) {
       return Center(
@@ -691,8 +740,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
             data: section,
             feedback: _buildFeedbackTile(section),
             childWhenDragging: const SizedBox.shrink(),
-            child:
-            _buildSectionTile(section, hasHandle: true, index: index));
+            child: _buildSectionTile(section, hasHandle: true, index: index));
       },
       onReorder: (oldIndex, newIndex) => setState(() {
         if (newIndex > oldIndex) newIndex -= 1;
@@ -701,6 +749,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
       }),
     );
   }
+
   Widget _buildSectionTile(ProductSection section,
       {bool hasHandle = false, int? index}) {
     return Container(
@@ -726,30 +775,29 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
         ),
         trailing: hasHandle
             ? CircleAvatar(
-          radius: 10,
-          backgroundColor: Colors.black,
-          child: Text("${(index ?? 0) + 1}",
-              style: const TextStyle(color: Colors.white, fontSize: 10)),
-        )
+                radius: 10,
+                backgroundColor: Colors.black,
+                child: Text("${(index ?? 0) + 1}",
+                    style: const TextStyle(color: Colors.white, fontSize: 10)),
+              )
             : null,
       ),
     );
   }
+
   Widget _buildFeedbackTile(ProductSection section) => Material(
-    color: Colors.transparent,
-    child: Container(
-      width: 280,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: const [
-          BoxShadow(color: Colors.black26, blurRadius: 10)
-        ],
-      ),
-      child: ListTile(
-        title: Text(section.title),
-        leading: const Icon(Icons.grid_view),
-      ),
-    ),
-  );
+        color: Colors.transparent,
+        child: Container(
+          width: 280,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 10)],
+          ),
+          child: ListTile(
+            title: Text(section.title),
+            leading: const Icon(Icons.grid_view),
+          ),
+        ),
+      );
 }

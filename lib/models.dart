@@ -1,12 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
-
-// ===========================================================================
-// 1. UTILISATEURS ET AUTHENTIFICATION
-// ===========================================================================
-
 enum OrderType { onSite, takeaway }
-
 class FranchiseUser {
   final String uid;
   final String email;
@@ -18,14 +12,11 @@ class FranchiseUser {
   final String? phone;
   final String? address;
   final Map<String, bool> enabledModules;
-
-  // Champs étendus pour l'affichage borne/écran
   final String? restaurantName;
   final String? screensaverUrl;
   final List<String> screensaverUrls;
   final String? dineInImageUrl;
   final String? takeawayImageUrl;
-
   FranchiseUser({
     required this.uid,
     required this.email,
@@ -43,19 +34,16 @@ class FranchiseUser {
     this.dineInImageUrl,
     this.takeawayImageUrl,
   });
-
   factory FranchiseUser.fromFirestore(Map<String, dynamic> data, String uid) {
     final modulesData = (data['enabledModules'] as Map<String, dynamic>?)
         ?.map((key, value) => MapEntry(key, value as bool)) ??
         {};
-
     List<String> parsedScreensaverUrls = [];
     if (data['screensaverUrls'] != null) {
       parsedScreensaverUrls = List<String>.from(data['screensaverUrls'])
           .where((url) => url.isNotEmpty)
           .toList();
     }
-
     return FranchiseUser(
       uid: uid,
       email: data['email'] ?? '',
@@ -67,31 +55,35 @@ class FranchiseUser {
       phone: data['phone'],
       address: data['address'],
       enabledModules: modulesData,
-      restaurantName: data['restaurantName'] ?? data['companyName'] ?? 'Restaurant Sans Nom',
+      restaurantName: data['restaurantName'] ??
+          data['companyName'] ??
+          'Restaurant Sans Nom',
       screensaverUrl: data['screensaverUrl'],
       screensaverUrls: parsedScreensaverUrls,
       dineInImageUrl: data['dineInImageUrl'],
       takeawayImageUrl: data['takeawayImageUrl'],
     );
   }
-
+  bool get isAssociate => role == 'associate';
   bool get isFranchisor => role == 'franchisor';
   bool get isFranchisee => role == 'franchisee';
   bool get isEmployee => role == 'employee';
-  String get effectiveStoreId => role == 'franchisee' ? uid : (storeId ?? '');
+  String get effectiveStoreId {
+    if (role == 'employee' || role == 'associate') {
+      if (storeId != null && storeId!.trim().isNotEmpty) {
+        return storeId!;
+      }
+      return uid;
+    }
+    return uid;
+  }
 }
-
-// ===========================================================================
-// 2. PRODUITS ET OPTIONS (CATALOGUE)
-// ===========================================================================
-
 class ProductOption {
   final String id;
   final String name;
   final List<String> sectionIds;
   final String? imageUrl;
   final double priceOverride;
-
   ProductOption({
     required this.id,
     required this.name,
@@ -99,7 +91,6 @@ class ProductOption {
     this.imageUrl,
     this.priceOverride = 0.0,
   });
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -109,7 +100,6 @@ class ProductOption {
       'priceOverride': priceOverride,
     };
   }
-
   factory ProductOption.fromMap(Map<String, dynamic> map) {
     return ProductOption(
       id: map['id'] ?? '',
@@ -120,35 +110,25 @@ class ProductOption {
     );
   }
 }
-
 class MasterProduct {
-  final String id;          // ID du document Firebase
-  final String productId;   // ID logique du produit
+  final String id;
+  final String productId;
   final String name;
   final String? description;
   final String? photoUrl;
   final String? color;
-
-  // AJOUT : Prix conseillé par le franchiseur
   final double? price;
-
-  // Indicateurs
   final bool isComposite;
   final bool isIngredient;
   final bool isContainer;
-
-  // Listes d'IDs
-  final List<String> containerProductIds; // Les enfants du dossier
+  final List<String> containerProductIds;
   final List<String> filterIds;
   final List<String> sectionIds;
   final List<String> kioskFilterIds;
   final List<String> ingredientProductIds;
-
-  // Options
   final List<ProductOption> options;
   final int? position;
   final String createdBy;
-
   MasterProduct({
     required this.id,
     required this.productId,
@@ -156,7 +136,7 @@ class MasterProduct {
     this.description,
     this.photoUrl,
     this.color,
-    this.price, // AJOUT
+    this.price,
     this.isComposite = false,
     this.isIngredient = false,
     this.isContainer = false,
@@ -169,7 +149,6 @@ class MasterProduct {
     this.position,
     this.createdBy = '',
   });
-
   factory MasterProduct.fromFirestore(Map<String, dynamic> data, String id) {
     return MasterProduct(
       id: id,
@@ -178,48 +157,33 @@ class MasterProduct {
       description: data['description'],
       photoUrl: data['photoUrl'] ?? data['imageUrl'],
       color: data['color'],
-
-      // AJOUT : Récupération du prix conseillé
       price: (data['price'] as num?)?.toDouble(),
-
-      // Booléens
       isComposite: data['isComposite'] ?? false,
       isIngredient: data['isIngredient'] ?? false,
       isContainer: data['isContainer'] ?? false,
-
-      // Listes
       containerProductIds: List<String>.from(data['containerProductIds'] ?? []),
       filterIds: List<String>.from(data['filterIds'] ?? []),
       sectionIds: List<String>.from(data['sectionIds'] ?? []),
       kioskFilterIds: List<String>.from(data['kioskFilterIds'] ?? []),
-      ingredientProductIds: List<String>.from(data['ingredientProductIds'] ?? []),
-
-      // Options
+      ingredientProductIds:
+      List<String>.from(data['ingredientProductIds'] ?? []),
       options: (data['options'] as List<dynamic>?)
           ?.map((e) => ProductOption.fromMap(e as Map<String, dynamic>))
-          .toList() ?? [],
-
+          .toList() ??
+          [],
       position: data['position'],
       createdBy: data['createdBy'] ?? '',
     );
   }
-
   factory MasterProduct.empty() {
     return MasterProduct(id: '', productId: '', name: '');
   }
 }
-
-// ===========================================================================
-// 3. SECTIONS, FILTRES ET GROUPES
-// ===========================================================================
-
 class SectionItem {
   MasterProduct product;
   double supplementPrice;
-
   SectionItem({required this.product, this.supplementPrice = 0.0});
 }
-
 class ProductSection {
   String id;
   String sectionId;
@@ -229,7 +193,6 @@ class ProductSection {
   int selectionMax;
   List<SectionItem> items;
   List<String> filterIds;
-
   ProductSection({
     required this.id,
     required this.sectionId,
@@ -240,7 +203,6 @@ class ProductSection {
     this.items = const [],
     this.filterIds = const [],
   });
-
   factory ProductSection.fromFirestore(
       DocumentSnapshot<Map<String, dynamic>> doc, List<SectionItem> items) {
     final data = doc.data() as Map<String, dynamic>;
@@ -256,20 +218,17 @@ class ProductSection {
     );
   }
 }
-
 class ProductFilter {
   final String id;
   final String name;
   final int position;
   final String? color;
-
   ProductFilter({
     required this.id,
     required this.name,
     this.position = 9999,
     this.color,
   });
-
   factory ProductFilter.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return ProductFilter(
@@ -282,20 +241,17 @@ class ProductFilter {
     );
   }
 }
-
 class SectionGroup {
   final String id;
   final String name;
   final List<String> sectionIds;
   final List<String> filterIds;
-
   SectionGroup({
     required this.id,
     required this.name,
     this.sectionIds = const [],
     this.filterIds = const [],
   });
-
   factory SectionGroup.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return SectionGroup(
@@ -306,11 +262,6 @@ class SectionGroup {
     );
   }
 }
-
-// ===========================================================================
-// 4. STRUCTURE BORNE (KIOSK)
-// ===========================================================================
-
 class KioskMedia {
   final String id;
   final String franchisorId;
@@ -318,7 +269,6 @@ class KioskMedia {
   final String type;
   final String url;
   final String? thumbnailUrl;
-
   KioskMedia({
     required this.id,
     required this.franchisorId,
@@ -327,7 +277,6 @@ class KioskMedia {
     required this.url,
     this.thumbnailUrl,
   });
-
   factory KioskMedia.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return KioskMedia(
@@ -339,7 +288,6 @@ class KioskMedia {
       thumbnailUrl: data['thumbnailUrl'],
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'franchisorId': franchisorId,
@@ -351,14 +299,12 @@ class KioskMedia {
     };
   }
 }
-
 class KioskFilter {
   final String id;
   final String name;
   final int position;
   final String? color;
   final String? imageUrl;
-
   KioskFilter({
     required this.id,
     required this.name,
@@ -366,7 +312,6 @@ class KioskFilter {
     this.color,
     this.imageUrl,
   });
-
   factory KioskFilter.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return KioskFilter(
@@ -377,8 +322,12 @@ class KioskFilter {
       imageUrl: data['imageUrl'],
     );
   }
-
-  KioskFilter copyWith({String? id, String? name, int? position, String? color, String? imageUrl}) {
+  KioskFilter copyWith(
+      {String? id,
+        String? name,
+        int? position,
+        String? color,
+        String? imageUrl}) {
     return KioskFilter(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -388,14 +337,12 @@ class KioskFilter {
     );
   }
 }
-
 class KioskCategory {
   final String id;
   final String name;
   final int position;
   final String? imageUrl;
   final List<KioskFilter> filters;
-
   KioskCategory({
     required this.id,
     required this.name,
@@ -403,8 +350,8 @@ class KioskCategory {
     this.imageUrl,
     this.filters = const [],
   });
-
-  factory KioskCategory.fromFirestore(DocumentSnapshot doc, List<KioskFilter> filters) {
+  factory KioskCategory.fromFirestore(
+      DocumentSnapshot doc, List<KioskFilter> filters) {
     final data = doc.data() as Map<String, dynamic>;
     return KioskCategory(
       id: doc.id,
@@ -414,8 +361,12 @@ class KioskCategory {
       filters: filters,
     );
   }
-
-  KioskCategory copyWith({String? id, String? name, int? position, String? imageUrl, List<KioskFilter>? filters}) {
+  KioskCategory copyWith(
+      {String? id,
+        String? name,
+        int? position,
+        String? imageUrl,
+        List<KioskFilter>? filters}) {
     return KioskCategory(
       id: id ?? this.id,
       name: name ?? this.name,
@@ -425,24 +376,17 @@ class KioskCategory {
     );
   }
 }
-
-// ===========================================================================
-// 5. TRANSACTIONS, VENTES ET PANIER
-// ===========================================================================
-
 class Deal {
   final String id;
   final String name;
   final double price;
   final List<String> sectionIds;
-
   Deal({
     required this.id,
     required this.name,
     required this.price,
     required this.sectionIds,
   });
-
   factory Deal.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return Deal(
@@ -452,10 +396,9 @@ class Deal {
       sectionIds: List<String>.from(data['sectionIds'] ?? []),
     );
   }
-
-  Map<String, dynamic> toMap() => {'name': name, 'price': price, 'sectionIds': sectionIds};
+  Map<String, dynamic> toMap() =>
+      {'name': name, 'price': price, 'sectionIds': sectionIds};
 }
-
 class TillSession {
   final String id;
   final String franchiseeId;
@@ -464,7 +407,6 @@ class TillSession {
   final DateTime? closingTime;
   final double? finalCash;
   final bool isClosed;
-
   TillSession({
     required this.id,
     required this.franchiseeId,
@@ -474,10 +416,10 @@ class TillSession {
     this.finalCash,
     this.isClosed = false,
   });
-
   factory TillSession.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
-    DateTime? parseTimestamp(dynamic value) => (value is Timestamp) ? value.toDate() : null;
+    DateTime? parseTimestamp(dynamic value) =>
+        (value is Timestamp) ? value.toDate() : null;
     return TillSession(
       id: doc.id,
       franchiseeId: data['franchiseeId'] ?? '',
@@ -488,7 +430,6 @@ class TillSession {
       isClosed: data['isClosed'] ?? false,
     );
   }
-
   Map<String, dynamic> toMap() => {
     'franchiseeId': franchiseeId,
     'openingTime': openingTime,
@@ -498,7 +439,6 @@ class TillSession {
     'isClosed': isClosed,
   };
 }
-
 class Transaction {
   final String id;
   final String sessionId;
@@ -516,7 +456,6 @@ class Transaction {
   final String source;
   final String? customerName;
   final String? kioskName;
-
   Transaction({
     required this.id,
     required this.sessionId,
@@ -535,13 +474,12 @@ class Transaction {
     this.customerName,
     this.kioskName,
   });
-
   factory Transaction.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     final total = (data['total'] as num?)?.toDouble() ?? 0.0;
     final discountAmount = (data['discountAmount'] as num?)?.toDouble() ?? 0.0;
-    final subTotal = (data['subTotal'] as num?)?.toDouble() ?? (total + discountAmount);
-
+    final subTotal =
+        (data['subTotal'] as num?)?.toDouble() ?? (total + discountAmount);
     return Transaction(
       id: doc.id,
       sessionId: data['sessionId'] ?? '',
@@ -563,7 +501,6 @@ class Transaction {
       kioskName: data['kioskName'],
     );
   }
-
   Map<String, dynamic> toMap() => {
     'sessionId': sessionId,
     'franchiseeId': franchiseeId,
@@ -582,7 +519,6 @@ class Transaction {
     'kioskName': kioskName,
   };
 }
-
 class FranchiseeMenuItem {
   final String masterProductId;
   final double price;
@@ -595,7 +531,6 @@ class FranchiseeMenuItem {
   final String? availableStartTime;
   final String? availableEndTime;
   final bool hidePriceOnCard;
-
   FranchiseeMenuItem({
     required this.masterProductId,
     this.price = 0.0,
@@ -609,7 +544,6 @@ class FranchiseeMenuItem {
     this.availableEndTime,
     this.hidePriceOnCard = false,
   });
-
   factory FranchiseeMenuItem.fromFirestore(Map<String, dynamic> data) {
     final rawOptionPrices = data['optionPrices'] as Map<String, dynamic>?;
     final parsedOptionPrices = rawOptionPrices
@@ -629,11 +563,9 @@ class FranchiseeMenuItem {
       hidePriceOnCard: data['hidePriceOnCard'] ?? false,
     );
   }
-
   bool isCurrentlyAvailableInTimeSlot() {
     if (availableStartTime == null || availableEndTime == null) return true;
     if (availableStartTime!.isEmpty || availableEndTime!.isEmpty) return true;
-
     final now = DateTime.now();
     final currentTime = now.hour * 60 + now.minute;
     try {
@@ -647,7 +579,6 @@ class FranchiseeMenuItem {
     }
   }
 }
-
 class CartItem {
   final String id;
   final MasterProduct product;
@@ -656,11 +587,9 @@ class CartItem {
   final Map<String, List<SectionItem>> selectedOptions;
   final List<String> removedIngredientProductIds;
   final List<String> removedIngredientNames;
-
   bool isSentToKitchen;
   final List<ProductSection> baseSections;
   int quantity;
-
   CartItem({
     required this.product,
     required double price,
@@ -672,11 +601,9 @@ class CartItem {
     this.baseSections = const [],
     this.quantity = 1,
     String? id,
-  }) : id = id ?? const Uuid().v4(),
+  })  : id = id ?? const Uuid().v4(),
         priceCents = (price * 100).round();
-
   double get price => priceCents / 100.0;
-
   int get totalCents {
     int unitPriceCents = priceCents;
     selectedOptions.forEach((_, items) {
@@ -686,11 +613,8 @@ class CartItem {
     });
     return unitPriceCents * quantity;
   }
-
   double get total => totalCents / 100.0;
-
   double get totalArticlePrice => (priceCents * quantity) / 100.0;
-
   CartItem copyWith({
     String? id,
     MasterProduct? product,
@@ -709,15 +633,16 @@ class CartItem {
       price: price ?? this.price,
       vatRate: vatRate ?? this.vatRate,
       selectedOptions: selectedOptions ?? this.selectedOptions,
-      removedIngredientProductIds: removedIngredientProductIds ?? this.removedIngredientProductIds,
-      removedIngredientNames: removedIngredientNames ?? this.removedIngredientNames,
+      removedIngredientProductIds:
+      removedIngredientProductIds ?? this.removedIngredientProductIds,
+      removedIngredientNames:
+      removedIngredientNames ?? this.removedIngredientNames,
       isSentToKitchen: isSentToKitchen ?? this.isSentToKitchen,
       baseSections: baseSections ?? this.baseSections,
       quantity: quantity ?? this.quantity,
     );
   }
 }
-
 class PendingOrder {
   final String id;
   final String franchiseeId;
@@ -727,11 +652,8 @@ class PendingOrder {
   final double total;
   final String source;
   final String orderType;
-
-  // NOUVEAUX CHAMPS À AJOUTER :
   final bool isPaid;
   final String paymentMethod;
-
   PendingOrder({
     required this.id,
     required this.franchiseeId,
@@ -741,11 +663,9 @@ class PendingOrder {
     required this.total,
     this.source = 'pos',
     this.orderType = 'onSite',
-    this.isPaid = false,      // <-- AJOUT
-    this.paymentMethod = '',  // <-- AJOUT
+    this.isPaid = false,
+    this.paymentMethod = '',
   });
-
-  // Met à jour ta méthode de conversion depuis Firestore :
   factory PendingOrder.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
     return PendingOrder(
@@ -757,40 +677,40 @@ class PendingOrder {
       total: (data['total'] as num?)?.toDouble() ?? 0.0,
       source: data['source'] ?? 'pos',
       orderType: data['orderType'] ?? 'onSite',
-
-      // RÉCUPÉRATION DES NOUVEAUX CHAMPS :
       isPaid: data['isPaid'] ?? false,
       paymentMethod: data['paymentMethod'] ?? '',
     );
   }
 }
-
 enum PrinterType { escpos }
 enum PaperWidth { mm58, mm80 }
-
 class PrinterConfig {
   final String name;
   final String ipAddress;
+  final String? kitchenIpAddress;
   final PrinterType type;
   final PaperWidth paperWidth;
   final bool isKitchenPrintingEnabled;
   final bool isBluetooth;
   final String? macAddress;
-
+  final bool autoSendKitchenOnPayment;
   PrinterConfig({
-    this.name = 'Imprimante Cuisine',
-    this.ipAddress = '192.168.1.100',
+    this.name = 'Imprimante Principale',
+    this.ipAddress = '192.168.1.200',
+    this.kitchenIpAddress,
     this.type = PrinterType.escpos,
     this.paperWidth = PaperWidth.mm80,
     this.isKitchenPrintingEnabled = true,
     this.isBluetooth = false,
     this.macAddress,
+    this.autoSendKitchenOnPayment = false,
   });
-
   factory PrinterConfig.fromFirestore(Map<String, dynamic> data) {
     return PrinterConfig(
-      name: data['name'] ?? 'Imprimante Cuisine',
-      ipAddress: data['ipAddress'] ?? '192.168.1.100',
+      name: data['name'] ?? 'Imprimante Principale',
+      ipAddress: data['ipAddress'] ?? '192.168.1.200',
+      kitchenIpAddress: data[
+      'kitchenIpAddress'],
       type: PrinterType.values.firstWhere(
             (e) => e.toString() == data['type'],
         orElse: () => PrinterType.escpos,
@@ -802,35 +722,35 @@ class PrinterConfig {
       isKitchenPrintingEnabled: data['isKitchenPrintingEnabled'] ?? true,
       isBluetooth: data['isBluetooth'] ?? false,
       macAddress: data['macAddress'],
+      autoSendKitchenOnPayment: data['autoSendKitchenOnPayment'] ?? false,
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'name': name,
       'ipAddress': ipAddress,
+      'kitchenIpAddress':
+      kitchenIpAddress,
       'type': type.toString(),
       'paperWidth': paperWidth.toString(),
       'isKitchenPrintingEnabled': isKitchenPrintingEnabled,
       'isBluetooth': isBluetooth,
       'macAddress': macAddress,
+      'autoSendKitchenOnPayment': autoSendKitchenOnPayment,
     };
   }
 }
-
 class ReceiptConfig {
   final String headerText;
   final String footerText;
   final bool showVatDetails;
   final bool printReceiptOnPayment;
-
   ReceiptConfig({
     required this.headerText,
     required this.footerText,
     required this.showVatDetails,
     required this.printReceiptOnPayment,
   });
-
   Map<String, dynamic> toMap() {
     return {
       'headerText': headerText,
@@ -839,7 +759,6 @@ class ReceiptConfig {
       'printReceiptOnPayment': printReceiptOnPayment,
     };
   }
-
   factory ReceiptConfig.fromMap(Map<String, dynamic> map) {
     return ReceiptConfig(
       headerText: map['headerText'] ?? '',
@@ -849,19 +768,15 @@ class ReceiptConfig {
     );
   }
 }
-
-
 class AvailabilitySchedule {
   final List<int> daysOfWeek;
   final String startTime;
   final String endTime;
-
   AvailabilitySchedule({
     required this.daysOfWeek,
     required this.startTime,
     required this.endTime,
   });
-
   factory AvailabilitySchedule.fromMap(Map<String, dynamic> map) {
     return AvailabilitySchedule(
       daysOfWeek: List<int>.from(map['daysOfWeek'] ?? []),
@@ -869,7 +784,6 @@ class AvailabilitySchedule {
       endTime: map['endTime'] ?? "23:59",
     );
   }
-
   Map<String, dynamic> toMap() {
     return {
       'daysOfWeek': daysOfWeek,
@@ -877,7 +791,6 @@ class AvailabilitySchedule {
       'endTime': endTime,
     };
   }
-
   bool isAvailableNow() {
     final now = DateTime.now();
     if (!daysOfWeek.contains(now.weekday)) {
@@ -886,17 +799,17 @@ class AvailabilitySchedule {
     try {
       final int currentMinutes = now.hour * 60 + now.minute;
       final startParts = startTime.split(':');
-      final int startMinutes = int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
+      final int startMinutes =
+          int.parse(startParts[0]) * 60 + int.parse(startParts[1]);
       final endParts = endTime.split(':');
-      final int endMinutes = int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
+      final int endMinutes =
+          int.parse(endParts[0]) * 60 + int.parse(endParts[1]);
       return currentMinutes >= startMinutes && currentMinutes <= endMinutes;
     } catch (e) {
       return true;
     }
   }
 }
-
-// Legacy class (préservée si utilisée ailleurs)
 class Product {
   final String id;
   final String name;
@@ -908,7 +821,6 @@ class Product {
   final bool isMaster;
   final bool isContainer;
   final List<String> containerProductIds;
-
   Product({
     required this.id,
     required this.name,
@@ -921,7 +833,6 @@ class Product {
     this.isContainer = false,
     this.containerProductIds = const [],
   });
-
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -936,7 +847,6 @@ class Product {
       'containerProductIds': containerProductIds,
     };
   }
-
   factory Product.fromMap(Map<String, dynamic> map, String id) {
     return Product(
       id: id,

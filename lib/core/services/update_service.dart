@@ -30,7 +30,7 @@ class UpdateService {
 
       // Recherche du fichier .apk dans les assets de la release
       final apkAsset = assets.firstWhere(
-            (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
+        (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
         orElse: () => null,
       );
 

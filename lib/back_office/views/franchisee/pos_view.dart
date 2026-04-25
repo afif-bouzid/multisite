@@ -7,11 +7,14 @@ import 'package:collection/collection.dart';
 import '../../../../core/auth_provider.dart';
 import '../../../../models.dart';
 import '../../../../core/repository/repository.dart';
+import '../../../views/shared/payment_dialogs.dart';
+
 class POSView extends StatefulWidget {
   const POSView({super.key});
   @override
   State<POSView> createState() => _POSViewState();
 }
+
 class _POSViewState extends State<POSView> {
   List<MasterProduct> _allProducts = [];
   Map<String, FranchiseeMenuItem> _menuConfig = {};
@@ -26,6 +29,7 @@ class _POSViewState extends State<POSView> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) => _initData());
   }
+
   @override
   void dispose() {
     for (var s in _subs) {
@@ -33,6 +37,7 @@ class _POSViewState extends State<POSView> {
     }
     super.dispose();
   }
+
   void _initData() {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.franchiseUser;
@@ -46,7 +51,8 @@ class _POSViewState extends State<POSView> {
     }
     final repo = FranchiseRepository();
     final String franchisorId = user.franchisorId!;
-    final String myStoreId = user.role == 'employee' ? (user.storeId ?? user.uid) : user.uid;
+    final String myStoreId =
+        user.role == 'employee' ? (user.storeId ?? user.uid) : user.uid;
     _subs.add(repo.getMasterProductsStream(franchisorId).listen((products) {
       if (mounted) setState(() => _allProducts = products);
     }));
@@ -66,13 +72,15 @@ class _POSViewState extends State<POSView> {
       }
     }));
   }
+
   List<MasterProduct> _getVisibleProducts() {
     var visibleList = _allProducts.where((p) {
       final config = _menuConfig[p.productId];
       return config != null && config.isVisible;
     }).toList();
     if (_selectedCategoryId != null) {
-      final category = _categories.firstWhereOrNull((c) => c.id == _selectedCategoryId);
+      final category =
+          _categories.firstWhereOrNull((c) => c.id == _selectedCategoryId);
       if (category != null) {
         final categoryFilterIds = category.filters.map((f) => f.id).toList();
         visibleList = visibleList.where((p) {
@@ -81,21 +89,27 @@ class _POSViewState extends State<POSView> {
       }
     }
     if (_searchQuery.isNotEmpty) {
-      visibleList = visibleList.where((p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase())).toList();
+      visibleList = visibleList
+          .where(
+              (p) => p.name.toLowerCase().contains(_searchQuery.toLowerCase()))
+          .toList();
     }
-    visibleList.sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
+    visibleList
+        .sort((a, b) => (a.position ?? 999).compareTo(b.position ?? 999));
     return visibleList;
   }
+
   double _getFranchiseePrice(String productId) {
     return _menuConfig[productId]?.price ?? 0.0;
   }
+
   void _onProductTap(MasterProduct product) {
     if (product.isContainer) {
       showDialog(
         context: context,
         builder: (_) => PosContainerDialog(
           container: product,
-          allProducts: _allProducts, 
+          allProducts: _allProducts,
           onProductSelected: (selectedSubProduct) {
             _processProductSelection(selectedSubProduct);
           },
@@ -105,6 +119,7 @@ class _POSViewState extends State<POSView> {
       _processProductSelection(product);
     }
   }
+
   void _processProductSelection(MasterProduct product) {
     final hasSections = product.sectionIds.isNotEmpty;
     if (hasSections) {
@@ -113,12 +128,14 @@ class _POSViewState extends State<POSView> {
       _addToCart(product);
     }
   }
+
   void _showOptionsModal(MasterProduct product) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.franchiseUser;
     if (user == null || user.franchisorId == null) return;
     final repo = FranchiseRepository();
-    final sections = await repo.getSectionsForProduct(user.franchisorId!, product.sectionIds);
+    final sections = await repo.getSectionsForProduct(
+        user.franchisorId!, product.sectionIds);
     if (!mounted) return;
     showDialog(
       context: context,
@@ -136,6 +153,7 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
+
   void _addToCart(MasterProduct product) {
     final menuItem = _menuConfig[product.productId];
     final price = menuItem?.price ?? 0.0;
@@ -149,6 +167,7 @@ class _POSViewState extends State<POSView> {
       ));
     });
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -180,7 +199,12 @@ class _POSViewState extends State<POSView> {
                   height: 60,
                   alignment: Alignment.center,
                   color: const Color(0xFF2D3436),
-                  child: const Text("TICKET", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                  child: const Text("TICKET",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2)),
                 ),
                 Expanded(child: _buildCartList()),
                 _buildCartTotal(),
@@ -191,6 +215,7 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
+
   Widget _buildCategoryTabs() {
     return Container(
       color: Colors.white,
@@ -205,6 +230,7 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
+
   Widget _buildTabChip(String label, String? id) {
     final isSelected = _selectedCategoryId == id;
     return Padding(
@@ -217,11 +243,11 @@ class _POSViewState extends State<POSView> {
         backgroundColor: Colors.white,
         labelStyle: TextStyle(
             color: isSelected ? Colors.white : Colors.black87,
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal
-        ),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
       ),
     );
   }
+
   Widget _buildProductGrid() {
     final visibleProducts = _getVisibleProducts();
     if (visibleProducts.isEmpty) {
@@ -233,8 +259,7 @@ class _POSViewState extends State<POSView> {
           crossAxisCount: 4,
           childAspectRatio: 0.75,
           crossAxisSpacing: 16,
-          mainAxisSpacing: 16
-      ),
+          mainAxisSpacing: 16),
       itemCount: visibleProducts.length,
       itemBuilder: (context, index) {
         final product = visibleProducts[index];
@@ -246,12 +271,18 @@ class _POSViewState extends State<POSView> {
       },
     );
   }
-  Widget _buildProductCardDesign(MasterProduct product, double price, {bool isInsideModal = false}) {
+
+  Widget _buildProductCardDesign(MasterProduct product, double price,
+      {bool isInsideModal = false}) {
     final bool isContainer = product.isContainer;
-    final Color borderColor = isContainer ? Colors.orange.shade300 : Colors.transparent;
-    final Color footerColor = isContainer ? Colors.orange.shade50 : Colors.grey.shade50;
-    final IconData icon = isContainer ? Icons.folder_copy_rounded : Icons.fastfood_rounded;
-    final Color iconColor = isContainer ? Colors.orange.shade300 : Colors.grey.shade300;
+    final Color borderColor =
+        isContainer ? Colors.orange.shade300 : Colors.transparent;
+    final Color footerColor =
+        isContainer ? Colors.orange.shade50 : Colors.grey.shade50;
+    final IconData icon =
+        isContainer ? Icons.folder_copy_rounded : Icons.fastfood_rounded;
+    final Color iconColor =
+        isContainer ? Colors.orange.shade300 : Colors.grey.shade300;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -261,8 +292,7 @@ class _POSViewState extends State<POSView> {
           BoxShadow(
               color: Colors.black.withOpacity(0.04),
               blurRadius: 10,
-              offset: const Offset(0, 4)
-          )
+              offset: const Offset(0, 4))
         ],
       ),
       child: Column(
@@ -273,13 +303,16 @@ class _POSViewState extends State<POSView> {
               padding: const EdgeInsets.all(12.0),
               child: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
                   ? Hero(
-                tag: isInsideModal ? "modal_${product.id}" : "grid_${product.id}",
-                child: CachedNetworkImage(
-                  imageUrl: product.photoUrl!,
-                  fit: BoxFit.contain,
-                  errorWidget: (context, url, error) => Icon(icon, size: 50, color: iconColor),
-                ),
-              )
+                      tag: isInsideModal
+                          ? "modal_${product.id}"
+                          : "grid_${product.id}",
+                      child: CachedNetworkImage(
+                        imageUrl: product.photoUrl!,
+                        fit: BoxFit.contain,
+                        errorWidget: (context, url, error) =>
+                            Icon(icon, size: 50, color: iconColor),
+                      ),
+                    )
                   : Center(child: Icon(icon, size: 50, color: iconColor)),
             ),
           ),
@@ -287,7 +320,8 @@ class _POSViewState extends State<POSView> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
               color: footerColor,
-              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(16)),
+              borderRadius:
+                  const BorderRadius.vertical(bottom: Radius.circular(16)),
             ),
             child: Column(
               children: [
@@ -296,25 +330,35 @@ class _POSViewState extends State<POSView> {
                   maxLines: 2,
                   textAlign: TextAlign.center,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Color(0xFF2D3436)),
+                  style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                      color: Color(0xFF2D3436)),
                 ),
                 const SizedBox(height: 6),
                 if (isContainer)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: Colors.orange.shade100,
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       "MENU / DOSSIER",
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.orange.shade900),
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w900,
+                          color: Colors.orange.shade900),
                     ),
                   )
                 else
                   Text(
                     "${price.toStringAsFixed(2)} €",
-                    style: const TextStyle(color: Colors.blue, fontWeight: FontWeight.w900, fontSize: 16),
+                    style: const TextStyle(
+                        color: Colors.blue,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 16),
                   ),
               ],
             ),
@@ -323,9 +367,11 @@ class _POSViewState extends State<POSView> {
       ),
     );
   }
+
   Widget _buildCartList() {
     if (_cart.isEmpty) {
-      return Center(child: Column(
+      return Center(
+          child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(Icons.shopping_cart_outlined, size: 48, color: Colors.grey[300]),
@@ -341,33 +387,49 @@ class _POSViewState extends State<POSView> {
         final item = _cart[index];
         return ListTile(
           dense: true,
-          title: Text(item.product.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+          title: Text(item.product.name,
+              style: const TextStyle(fontWeight: FontWeight.bold)),
           subtitle: item.selectedOptions.isNotEmpty
               ? Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: item.selectedOptions.entries.map((e) {
-              return Text("+ ${e.value.map((i) => i.product.name).join(', ')}", style: TextStyle(fontSize: 11, color: Colors.grey[600]));
-            }).toList(),
-          )
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: item.selectedOptions.entries.map((e) {
+                    return Text(
+                        "+ ${e.value.map((i) => i.product.name).join(', ')}",
+                        style:
+                            TextStyle(fontSize: 11, color: Colors.grey[600]));
+                  }).toList(),
+                )
               : null,
-          trailing: Text("${item.total.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.bold)),
+          trailing: Text("${item.total.toStringAsFixed(2)} €",
+              style: const TextStyle(fontWeight: FontWeight.bold)),
           onLongPress: () => setState(() => _cart.removeAt(index)),
         );
       },
     );
   }
+
   Widget _buildCartTotal() {
     double total = _cart.fold(0, (sum, item) => sum + item.total);
     return Container(
       padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(color: Colors.grey[50], border: Border(top: BorderSide(color: Colors.grey.shade300))),
+      decoration: BoxDecoration(
+          color: Colors.grey[50],
+          border: Border(top: BorderSide(color: Colors.grey.shade300))),
       child: Column(
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("TOTAL", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)),
-              Text("${total.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Color(0xFF2D3436))),
+              const Text("TOTAL",
+                  style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey)),
+              Text("${total.toStringAsFixed(2)} €",
+                  style: const TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF2D3436))),
             ],
           ),
           const SizedBox(height: 16),
@@ -375,11 +437,48 @@ class _POSViewState extends State<POSView> {
             width: double.infinity,
             height: 50,
             child: ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-              onPressed: _cart.isEmpty ? null : () {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Paiement non implémenté")));
-              },
-              child: const Text("ENCAISSER", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12))),
+
+              // --- DEBUT DE LA CORRECTION ---
+              onPressed: _cart.isEmpty
+                  ? null
+                  : () async {
+                      // 1. Ouvre la boîte de dialogue de paiement que nous avons corrigée
+                      final paymentResult = await showDialog(
+                        context: context,
+                        builder: (context) =>
+                            MixedPaymentDialog(totalDue: total),
+                      );
+
+                      // 2. Si le paiement est validé (paymentResult n'est pas null)
+                      if (paymentResult != null) {
+                        // TODO : Ici, il faudra envoyer la commande à Firestore (création de l'objet Order)
+                        // repository.createOrder(cart: _cart, payments: paymentResult, ...);
+
+                        // 3. On vide le panier et on affiche un message de succès
+                        setState(() {
+                          _cart.clear();
+                        });
+
+                        if (mounted) {
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(const SnackBar(
+                            content: Text("Paiement validé avec succès !"),
+                            backgroundColor: Colors.green,
+                          ));
+                        }
+                      }
+                    },
+              // --- FIN DE LA CORRECTION ---
+
+              child: const Text("ENCAISSER",
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
             ),
           )
         ],
@@ -387,30 +486,39 @@ class _POSViewState extends State<POSView> {
     );
   }
 }
+
 class _ProductOptionsDialog extends StatefulWidget {
   final MasterProduct product;
   final List<ProductSection> sections;
   final double basePrice;
   final double vatRate;
   final Function(CartItem) onConfirm;
-  const _ProductOptionsDialog({
-    required this.product,
-    required this.sections,
-    required this.basePrice,
-    required this.vatRate,
-    required this.onConfirm
-  });
+
+  const _ProductOptionsDialog(
+      {required this.product,
+      required this.sections,
+      required this.basePrice,
+      required this.vatRate,
+      required this.onConfirm});
+
   @override
   State<_ProductOptionsDialog> createState() => _ProductOptionsDialogState();
 }
+
 class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
   final Map<String, List<SectionItem>> _selections = {};
+
+  // CORRECTION CRITIQUE : Calcul du prix total avec les suppléments
   double get _currentTotal {
     double total = widget.basePrice;
     _selections.forEach((key, items) {
+      for (var item in items) {
+        total += item.supplementPrice; // On ajoute le prix de chaque option
+      }
     });
     return total;
   }
+
   @override
   Widget build(BuildContext context) {
     return Dialog(
@@ -422,7 +530,9 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
           children: [
             Padding(
               padding: const EdgeInsets.all(24.0),
-              child: Text("Configurer : ${widget.product.name}", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+              child: Text("Configurer : ${widget.product.name}",
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.w900)),
             ),
             Expanded(
               child: ListView.separated(
@@ -436,13 +546,24 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
                     children: [
                       Row(
                         children: [
-                          Text(section.title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
+                          Text(section.title,
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF2D3436))),
                           const SizedBox(width: 8),
                           if (section.selectionMax > 1)
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                              decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(4)),
-                              child: Text("Max: ${section.selectionMax}", style: TextStyle(fontSize: 12, color: Colors.blue[800], fontWeight: FontWeight.bold)),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                  color: Colors.blue[50],
+                                  borderRadius: BorderRadius.circular(4)),
+                              child: Text("Max: ${section.selectionMax}",
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: Colors.blue[800],
+                                      fontWeight: FontWeight.bold)),
                             )
                         ],
                       ),
@@ -451,29 +572,48 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
                         spacing: 10,
                         runSpacing: 10,
                         children: section.items.map((item) {
-                          final isSelected = _selections[section.sectionId]?.any((s) => s.product.id == item.product.id) ?? false;
+                          final isSelected = _selections[section.sectionId]
+                                  ?.any(
+                                      (s) => s.product.id == item.product.id) ??
+                              false;
                           return FilterChip(
-                            label: Text("${item.product.name} ${item.supplementPrice > 0 ? '(+${item.supplementPrice.toStringAsFixed(2)}€)' : ''}"),
+                            label: Text(
+                                "${item.product.name} ${item.supplementPrice > 0 ? '(+${item.supplementPrice.toStringAsFixed(2)}€)' : ''}"),
                             selected: isSelected,
                             checkmarkColor: Colors.white,
                             selectedColor: Colors.black,
                             backgroundColor: Colors.white,
-                            shape: StadiumBorder(side: BorderSide(color: isSelected ? Colors.transparent : Colors.grey.shade300)),
-                            labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.black87, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal),
+                            shape: StadiumBorder(
+                                side: BorderSide(
+                                    color: isSelected
+                                        ? Colors.transparent
+                                        : Colors.grey.shade300)),
+                            labelStyle: TextStyle(
+                                color:
+                                    isSelected ? Colors.white : Colors.black87,
+                                fontWeight: isSelected
+                                    ? FontWeight.bold
+                                    : FontWeight.normal),
                             onSelected: (selected) {
                               setState(() {
-                                final currentList = _selections[section.sectionId] ?? [];
-                                if (section.type == 'radio' || section.selectionMax == 1) {
+                                final currentList =
+                                    _selections[section.sectionId] ?? [];
+                                if (section.type == 'radio' ||
+                                    section.selectionMax == 1) {
                                   _selections[section.sectionId] = [item];
                                 } else {
                                   if (selected) {
-                                    if (currentList.length < section.selectionMax) {
+                                    if (currentList.length <
+                                        section.selectionMax) {
                                       currentList.add(item);
-                                      _selections[section.sectionId] = currentList;
+                                      _selections[section.sectionId] =
+                                          currentList;
                                     }
                                   } else {
-                                    currentList.removeWhere((i) => i.product.id == item.product.id);
-                                    _selections[section.sectionId] = currentList;
+                                    currentList.removeWhere(
+                                        (i) => i.product.id == item.product.id);
+                                    _selections[section.sectionId] =
+                                        currentList;
                                   }
                                 }
                               });
@@ -491,24 +631,31 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
               decoration: BoxDecoration(
                   color: Colors.grey[50],
                   border: Border(top: BorderSide(color: Colors.grey.shade300)),
-                  borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20))
-              ),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(20))),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text("Prix Article", style: TextStyle(fontSize: 12, color: Colors.grey)),
-                      Text("${_currentTotal.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Color(0xFF2D3436))),
+                      const Text("Prix Article",
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      // Le prix se mettra désormais à jour correctement ici
+                      Text("${_currentTotal.toStringAsFixed(2)} €",
+                          style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2D3436))),
                     ],
                   ),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 40, vertical: 20),
                         backgroundColor: Colors.black,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))
-                    ),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12))),
                     onPressed: () {
                       widget.onConfirm(CartItem(
                         product: widget.product,
@@ -517,7 +664,11 @@ class _ProductOptionsDialogState extends State<_ProductOptionsDialog> {
                         selectedOptions: _selections,
                       ));
                     },
-                    child: const Text("VALIDER", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                    child: const Text("VALIDER",
+                        style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16)),
                   )
                 ],
               ),

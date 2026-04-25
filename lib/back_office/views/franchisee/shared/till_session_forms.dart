@@ -4,11 +4,11 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/auth_provider.dart';
 import '../../../../core/repository/repository.dart';
-import '../../../../core/services/printing_service.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '/models.dart';
 import 'transaction_dialogs.dart';
+
 class ActiveSessionPaidHistoryView extends StatelessWidget {
   const ActiveSessionPaidHistoryView({super.key});
   @override
@@ -35,6 +35,7 @@ class ActiveSessionPaidHistoryView extends StatelessWidget {
     );
   }
 }
+
 class SessionTransactionsDetailView extends StatelessWidget {
   final TillSession session;
   final FranchiseRepository repository;
@@ -198,12 +199,14 @@ class SessionTransactionsDetailView extends StatelessWidget {
     );
   }
 }
+
 class TillCloseForm extends StatefulWidget {
   final TillSession session;
   const TillCloseForm({super.key, required this.session});
   @override
   State<TillCloseForm> createState() => _TillCloseFormState();
 }
+
 class _TillCloseFormState extends State<TillCloseForm> {
   final _formKey = GlobalKey<FormState>();
   final _finalCashController = TextEditingController();
@@ -213,6 +216,7 @@ class _TillCloseFormState extends State<TillCloseForm> {
     super.initState();
     _finalCashController.text = widget.session.initialCash.toStringAsFixed(2);
   }
+
   Future<void> _closeTill() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
@@ -233,6 +237,7 @@ class _TillCloseFormState extends State<TillCloseForm> {
       setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Card(

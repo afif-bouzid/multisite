@@ -49,14 +49,20 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
     super.initState();
     _loadSettings();
   }
+  @override
+  void dispose() {
+    _receiptIpController.dispose();
+    _kitchenIpController.dispose();
+    super.dispose();
+  }
   Future<void> _loadSettings() async {
     setState(() => _isLoading = true);
     final config = await _localService.getPrinterConfig();
     if (mounted) {
       setState(() {
         _receiptIpController.text = config.ipAddress;
+        _kitchenIpController.text = config.kitchenIpAddress ?? "";
         _useBluetooth = config.isBluetooth;
-        _kitchenIpController.text = "192.168.1.100"; 
       });
       if (_useBluetooth) {
         await _scanBluetoothDevices();
@@ -104,13 +110,18 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   Future<void> _saveSettings() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
+      // Préserve autoSendKitchenOnPayment qui est géré dans l'onglet "Reçu"
+      // (relu juste avant le save pour ne pas l'écraser).
+      final existing = await _localService.getPrinterConfig();
       final newConfig = PrinterConfig(
         name: _useBluetooth
             ? (_selectedDevice?.name ?? 'Imprimante BT')
             : 'Imprimante Principale',
         ipAddress: _receiptIpController.text,
+        kitchenIpAddress: _kitchenIpController.text,
         isBluetooth: _useBluetooth,
         macAddress: _useBluetooth ? _selectedDevice?.address : null,
+        autoSendKitchenOnPayment: existing.autoSendKitchenOnPayment,
       );
       await _localService.savePrinterConfig(newConfig);
       if (_useBluetooth && _selectedDevice != null) {
@@ -135,6 +146,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
       }
       final testConfig = PrinterConfig(
         ipAddress: _receiptIpController.text,
+        kitchenIpAddress: _kitchenIpController.text,
         isBluetooth: _useBluetooth,
         macAddress: _selectedDevice?.address,
       );
@@ -198,7 +210,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
                         border: OutlineInputBorder(),
                         prefixIcon: Icon(Icons.bluetooth),
                       ),
-                      value: _selectedDevice,
+                      initialValue: _selectedDevice,
                       items: _devices.map((d) {
                         return DropdownMenuItem(
                           value: d,
@@ -227,7 +239,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
               TextFormField(
                 controller: _receiptIpController,
                 decoration: const InputDecoration(
-                  labelText: "Adresse IP",
+                  labelText: "Adresse IP Caisse",
                   hintText: "192.168.1.200",
                   border: OutlineInputBorder(),
                   prefixIcon: Icon(Icons.lan),
@@ -299,21 +311,53 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
       footerText: '',
       showVatDetails: true,
       printReceiptOnPayment: true);
+  bool _autoSendKitchenOnPayment = false;
   bool _isLoading = true;
   @override
   void initState() {
     super.initState();
     _loadReceiptSettings();
   }
+  @override
+  void dispose() {
+    headerController.dispose();
+    footerController.dispose();
+    super.dispose();
+  }
   Future<void> _loadReceiptSettings() async {
     setState(() => _isLoading = true);
     final config = await _localService.getReceiptConfig();
-    setState(() {
-      _config = config;
-      headerController.text = config.headerText;
-      footerController.text = config.footerText;
-      _isLoading = false;
-    });
+    final printerConfig = await _localService.getPrinterConfig();
+    if (mounted) {
+      setState(() {
+        _config = config;
+        headerController.text = config.headerText;
+        footerController.text = config.footerText;
+        _autoSendKitchenOnPayment = printerConfig.autoSendKitchenOnPayment;
+        _isLoading = false;
+      });
+    }
+  }
+  Future<void> _saveAutoSendKitchen(bool value) async {
+    final existing = await _localService.getPrinterConfig();
+    final updated = PrinterConfig(
+      name: existing.name,
+      ipAddress: existing.ipAddress,
+      kitchenIpAddress: existing.kitchenIpAddress,
+      type: existing.type,
+      paperWidth: existing.paperWidth,
+      isKitchenPrintingEnabled: existing.isKitchenPrintingEnabled,
+      isBluetooth: existing.isBluetooth,
+      macAddress: existing.macAddress,
+      autoSendKitchenOnPayment: value,
+    );
+    await _localService.savePrinterConfig(updated);
+    if (mounted) {
+      setState(() => _autoSendKitchenOnPayment = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Préférences sauvegardées')),
+      );
+    }
   }
   Future<void> _saveSettings(
       {String? headerText,
@@ -329,11 +373,11 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
       printReceiptOnPayment ?? _config.printReceiptOnPayment,
     );
     await _localService.saveReceiptConfig(newConfig);
-    setState(() {
-      _config = newConfig;
-      _isLoading = false;
-    });
     if (mounted) {
+      setState(() {
+        _config = newConfig;
+        _isLoading = false;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Préférences sauvegardées')),
       );
@@ -370,8 +414,17 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
         const SizedBox(height: 16),
         SwitchListTile(
           title: const Text("Imprimer auto. après paiement"),
+          subtitle: const Text("Le ticket client sort automatiquement à l'encaissement."),
           value: _config.printReceiptOnPayment,
           onChanged: (value) => _saveSettings(printReceiptOnPayment: value),
+        ),
+        SwitchListTile(
+          title: const Text("Envoyer auto. en cuisine à l'encaissement"),
+          subtitle: const Text(
+            "Imprime le ticket cuisine au paiement uniquement s'il n'a pas déjà été envoyé.",
+          ),
+          value: _autoSendKitchenOnPayment,
+          onChanged: _saveAutoSendKitchen,
         ),
         SwitchListTile(
           title: const Text("Détail TVA"),
@@ -379,8 +432,12 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
           onChanged: (value) => _saveSettings(showVatDetails: value),
         ),
         const SizedBox(height: 24),
-        ElevatedButton(
-            onPressed: () => _saveSettings(), child: const Text("Enregistrer"))
+        ElevatedButton.icon(
+          icon: const Icon(Icons.save),
+          onPressed: () => _saveSettings(),
+          label: const Text("Enregistrer"),
+          style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16)),
+        )
       ],
     );
   }

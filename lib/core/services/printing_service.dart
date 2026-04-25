@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
@@ -8,7 +8,6 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../models.dart';
 import 'local_config_service.dart';
 
 class _PrintJob {
@@ -18,7 +17,7 @@ class _PrintJob {
 }
 
 // ============================================================================
-// ENCODEUR EXACT DE LA BORNE (Pour gérer les accents et les formats stricts)
+// ENCODEUR EXACT CP858 (Fix Accents & Euro)
 // ============================================================================
 Uint8List _encodeCP858(String text) {
   final List<int> bytes = [];
@@ -43,14 +42,37 @@ Uint8List _encodeCP858(String text) {
         if (codeUnit <= 0x7F) {
           bytes.add(codeUnit);
         } else {
-          bytes.add(0x20); // Espace pour caractères non supportés
+          bytes.add(0x20); // Espace
         }
     }
   }
   return Uint8List.fromList(bytes);
 }
 
-// Outil utilitaire de la borne pour aligner le texte Gauche/Droite
+// ============================================================================
+// COMMANDES ESC/POS BRUTES POUR CP858 (VERSION AMÉLIORÉE POUR WiFi)
+// ============================================================================
+List<int> _forceCP858Commands() {
+  return [
+    0x1B, 0x40,       // ESC @ : Reset
+    0x1C, 0x2E,       // FS .  : Quitter mode Kanji
+    0x1B, 0x74, 0x13, // ESC t 19 : Table CP858
+    0x1B, 0x52, 0x00, // ESC R 0 : Jeu USA
+    0x1B, 0x74, 0x13, // On remet CP858 (double sécurité)
+  ];
+}
+
+// Commandes supplémentaires pour certaines imprimantes WiFi récalcitrantes
+List<int> _forceCP858Alternative() {
+  return [
+    0x1B, 0x40,       // Reset
+    0x1B, 0x74, 0x13, // ESC t 19 CP858
+    0x1B, 0x74, 0x16, // Alternative: ESC t 22 CP858 (certaines imprimantes)
+    0x1C, 0x2E,       // FS . Quitter Kanji
+    0x1B, 0x74, 0x13, // Rappel CP858
+  ];
+}
+
 String _formatRow(String left, String right, {int width = 32}) {
   String l = left.replaceAll('\n', ' ').trim();
   String r = right.replaceAll('\n', ' ').trim();
@@ -64,20 +86,19 @@ String _formatRow(String left, String right, {int width = 32}) {
   int spaces = width - l.length - r.length;
   return l + (' ' * (spaces > 0 ? spaces : 0)) + r;
 }
+
 // ============================================================================
-// 1. GÉNÉRATION DU TICKET CUISINE (Version Épurée & Efficace)
+// 1. GÉNÉRATION DU TICKET CUISINE (COMPLET)
 // ============================================================================
 List<int> _generateKitchenBytes(Map<String, dynamic> params) {
   final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
   final String identifier = params['identifier']?.toString() ?? '';
 
-  // --- TRADUCTION FORCÉE DU LIEU DE CONSOMMATION ---
   String rawOrderType = (params['orderType']?.toString() ?? '').toLowerCase();
-  String orderType = "SUR PLACE"; // Par défaut en français
+  String orderType = "SUR PLACE";
   if (rawOrderType.contains('takeaway') || rawOrderType.contains('emporter') || rawOrderType.contains('take_away')) {
     orderType = "A EMPORTER";
   }
-  // --------------------------------------------------
 
   final List<dynamic> lines = params['lines'] as List? ?? [];
   final String date = params['date']?.toString() ?? '';
@@ -87,25 +108,23 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
 
   List<int> bytes = [];
   bytes += generator.reset();
-  bytes += generator.setGlobalCodeTable('CP858');
+  bytes += _forceCP858Commands();
 
-  // STYLES
-  // Taille 3 pour le mode de commande (Énorme et visible)
+  // Petit délai pour les imprimantes WiFi lentes
+  bytes += [0x1B, 0x64, 0x02]; // ESC d 2 (feed 2 lignes avec délai)
+
   const styleOrderType = PosStyles(align: PosAlign.center, bold: true, reverse: true, width: PosTextSize.size3, height: PosTextSize.size3);
   const styleTitreProduit = PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2);
   const styleInfo = PosStyles(bold: true, width: PosTextSize.size2);
   const styleAlerteSans = PosStyles(bold: true, reverse: true, height: PosTextSize.size2);
 
-  // 1. MODE DE COMMANDE (SUR PLACE / A EMPORTER) - TOUT EN HAUT
   bytes += generator.feed(1);
   bytes += generator.textEncoded(_encodeCP858(" $orderType "), styles: styleOrderType);
   bytes += generator.feed(1);
 
-  // 2. IDENTIFIANT (Table / N° Commande)
   if (identifier.isNotEmpty) {
     String idClean = identifier.replaceAll("Table", "TBL").toUpperCase();
-    bytes += generator.textEncoded(_encodeCP858(idClean),
-        styles: const PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
+    bytes += generator.textEncoded(_encodeCP858(idClean), styles: const PosStyles(align: PosAlign.center, height: PosTextSize.size2, width: PosTextSize.size2, bold: true));
   }
 
   bytes += generator.textEncoded(_encodeCP858("Heure: $date"), styles: const PosStyles(align: PosAlign.center));
@@ -117,7 +136,6 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
     if (line is Map) {
       totalQty += (line['qty'] as int? ?? 1);
 
-      // NOM DU PRODUIT
       bytes += generator.row([
         PosColumn(textEncoded: _encodeCP858("${line['qty']} x"), width: 2, styles: styleTitreProduit),
         PosColumn(textEncoded: _encodeCP858(line['name'].toString().toUpperCase()), width: 10, styles: styleTitreProduit),
@@ -125,7 +143,6 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
 
       bytes += generator.feed(1);
 
-      // 3. LES "SANS"
       for (var rem in (line['removed'] as List? ?? [])) {
         bytes += generator.row([
           PosColumn(textEncoded: _encodeCP858(" !"), width: 1, styles: styleAlerteSans),
@@ -133,24 +150,16 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
         ]);
       }
 
-      // 4. LES OPTIONS / SUPPLÉMENTS
       for (var opt in (line['options'] as List? ?? [])) {
         String optName = opt is Map ? (opt['name']?.toString() ?? "") : opt.toString();
         double optPrice = opt is Map ? (double.tryParse(opt['price']?.toString() ?? '0') ?? 0.0) : 0.0;
-
-        if (optName == "___SECTION_SEP___") {
-          bytes += generator.feed(1);
-          continue;
-        }
-
+        if (optName == "___SECTION_SEP___") { bytes += generator.feed(1); continue; }
         String label = optPrice > 0 ? "$optName (sup)" : optName;
-
         bytes += generator.row([
           PosColumn(textEncoded: _encodeCP858("-"), width: 1),
           PosColumn(textEncoded: _encodeCP858(label), width: 11, styles: styleInfo),
         ]);
       }
-
       bytes += generator.feed(1);
       bytes += generator.hr(ch: '-');
       bytes += generator.feed(1);
@@ -158,13 +167,13 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
   }
 
   bytes += generator.textEncoded(_encodeCP858("Total articles : $totalQty"), styles: const PosStyles(align: PosAlign.right));
-
   bytes += generator.feed(3);
   bytes += generator.cut();
   return bytes;
 }
+
 // ============================================================================
-// 2. GÉNÉRATION DU REÇU CLIENT (Façon Borne)
+// 2. GÉNÉRATION DU REÇU CLIENT (COMPLET)
 // ============================================================================
 List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   final int paperWidthInt = int.tryParse(params['paperWidthInt'].toString()) ?? 80;
@@ -176,16 +185,14 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
 
   List<int> bytes = [];
   bytes += generator.reset();
-  bytes += generator.setGlobalCodeTable('CP858'); // Table d'encodage de ta borne
+  bytes += _forceCP858Commands();
+  bytes += [0x1B, 0x64, 0x02]; // Petit délai
 
-  const styleNormal = PosStyles(codeTable: 'CP858');
-  const styleGras = PosStyles(bold: true, codeTable: 'CP858');
-  const styleCentre = PosStyles(align: PosAlign.center, codeTable: 'CP858');
-  const styleTitre = PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2, codeTable: 'CP858');
+  const styleNormal = PosStyles();
+  const styleGras = PosStyles(bold: true);
+  const styleCentre = PosStyles(align: PosAlign.center);
+  const styleTitre = PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, width: PosTextSize.size2);
 
-  // ==========================================
-  // EN-TÊTE ET NOM DE L'ENTREPRISE
-  // ==========================================
   String companyName = fMap['companyName']?.toString() ?? '';
   String restaurantName = fMap['restaurantName']?.toString() ?? '';
   if (companyName == 'null') companyName = '';
@@ -216,10 +223,6 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   }
 
   bytes += generator.feed(1);
-
-  // ==========================================
-  // IDENTIFIANT UNIQUE ET DATE
-  // ==========================================
   bytes += generator.textEncoded(_encodeCP858("Date : ${DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now())}"), styles: styleNormal);
 
   String uniqueId = tMap['id']?.toString() ?? '';
@@ -231,15 +234,11 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   if (identifier.isNotEmpty && identifier != 'null') {
     String displayNum = identifier.replaceAll(RegExp(r'[^0-9]'), '').replaceFirst(RegExp(r'^0+'), '');
     if (displayNum.isEmpty) displayNum = identifier;
-
     bytes += generator.feed(1);
     bytes += generator.textEncoded(_encodeCP858("COMMANDE $displayNum"), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size3, width: PosTextSize.size2));
     bytes += generator.feed(1);
   }
 
-  // ==========================================
-  // CLIENT & SOURCE
-  // ==========================================
   if (tMap['customerName'] != null && tMap['customerName'].toString().isNotEmpty && tMap['customerName'].toString() != 'null') {
     bytes += generator.textEncoded(_encodeCP858("Client : ${tMap['customerName']}"), styles: styleGras);
   }
@@ -253,20 +252,12 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   }
 
   bytes += generator.feed(1);
-
-  // ==========================================
-  // TYPE DE COMMANDE
-  // ==========================================
   String orderType = tMap['orderType'].toString().toLowerCase().contains('takeaway') ? "A EMPORTER" : "SUR PLACE";
   bytes += generator.textEncoded(_encodeCP858(orderType), styles: const PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2, reverse: true));
   bytes += generator.feed(1);
   bytes += generator.hr(ch: '=');
 
-  // ==========================================
-  // ARTICLES ET SUPPLÉMENTS
-  // ==========================================
   int charWidth = paperWidthInt == 80 ? 48 : 32;
-
   final List items = tMap['items'] as List? ?? [];
   for (var item in items) {
     if (item is Map) {
@@ -275,8 +266,7 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
       double price = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
       double totalItem = double.tryParse(item['total']?.toString() ?? '0') ?? (price * qty);
 
-      String rowMain = _formatRow("${qty}x $itemName", "${totalItem.toStringAsFixed(2)} €", width: charWidth);
-      bytes += generator.textEncoded(_encodeCP858(rowMain), styles: styleGras);
+      bytes += generator.textEncoded(_encodeCP858(_formatRow("${qty}x $itemName", "${totalItem.toStringAsFixed(2)} €", width: charWidth)), styles: styleGras);
 
       for (var opt in (item['options'] as List? ?? [])) {
         String optName = "";
@@ -287,11 +277,9 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
         } else {
           optName = opt.toString();
         }
-
         if (optName != "___SECTION_SEP___") {
           String pStr = optPrice > 0 ? "+${optPrice.toStringAsFixed(2)} €" : "";
-          String optRow = _formatRow("  > $optName", pStr, width: charWidth);
-          bytes += generator.textEncoded(_encodeCP858(optRow), styles: styleNormal);
+          bytes += generator.textEncoded(_encodeCP858(_formatRow("  > $optName", pStr, width: charWidth)), styles: styleNormal);
         }
       }
 
@@ -302,9 +290,6 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
     }
   }
 
-  // ==========================================
-  // TOTAUX
-  // ==========================================
   bytes += generator.feed(1);
 
   double totalAmount = double.tryParse(tMap['total'].toString()) ?? 0.0;
@@ -319,51 +304,36 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   bytes += generator.textEncoded(_encodeCP858(_formatRow("TOTAL TTC", "${totalAmount.toStringAsFixed(2)} €", width: charWidth)), styles: styleGras.copyWith(height: PosTextSize.size2));
   bytes += generator.hr(ch: '=');
 
-  // ==========================================
-  // PAIEMENTS
-  // ==========================================
   if (tMap['paymentMethods'] is Map) {
     (tMap['paymentMethods'] as Map).forEach((key, value) {
       if ((double.tryParse(value.toString()) ?? 0) > 0) {
         String nomPaiement = key.toString();
         if (nomPaiement.toLowerCase() == 'card') nomPaiement = 'Carte Bancaire';
-        if (nomPaiement.toLowerCase() == 'cash') nomPaiement = 'Espèces';
+        if (nomPaiement.toLowerCase() == 'cash') nomPaiement = 'Especes';
         if (nomPaiement.toLowerCase() == 'ticket') nomPaiement = 'Tickets Resto';
-
-        bytes += generator.textEncoded(_encodeCP858(_formatRow("Payé en $nomPaiement :", "${double.parse(value.toString()).toStringAsFixed(2)} €", width: charWidth)), styles: styleNormal);
+        bytes += generator.textEncoded(_encodeCP858(_formatRow("Paye en $nomPaiement :", "${double.parse(value.toString()).toStringAsFixed(2)} €", width: charWidth)), styles: styleNormal);
       }
     });
   }
 
   bytes += generator.feed(1);
 
-  // ==========================================
-  // TAXES
-  // ==========================================
   if (cMap['showVatDetails'] == true || cMap['showVatDetails'].toString() == 'true') {
     bytes += generator.textEncoded(_encodeCP858("--- DETAIL DES TAXES ---"), styles: styleCentre);
-
-    // Aligné via _formatRow pour simuler les colonnes de la borne
     bytes += generator.textEncoded(_encodeCP858(_formatRow("Taux", "HT      TVA     TTC", width: charWidth)), styles: styleGras);
-
     double vatTotal = double.tryParse(tMap['vatTotal']?.toString() ?? '0') ?? 0.0;
     double htTotal = totalAmount - vatTotal;
-
     String rightPart = "${htTotal.toStringAsFixed(2)}€  ${vatTotal.toStringAsFixed(2)}€  ${totalAmount.toStringAsFixed(2)}€";
     bytes += generator.textEncoded(_encodeCP858(_formatRow("Mixte", rightPart, width: charWidth)), styles: styleNormal);
   }
 
-  // ==========================================
-  // PIED DE PAGE
-  // ==========================================
   if (cMap['footerText'] != null && cMap['footerText'].toString().isNotEmpty && cMap['footerText'].toString() != 'null') {
     bytes += generator.hr();
     bytes += generator.textEncoded(_encodeCP858(cMap['footerText'].toString()), styles: styleCentre);
   }
 
   bytes += generator.feed(1);
-  bytes += generator.textEncoded(_encodeCP858("Merci de votre visite et a bientot !"), styles: const PosStyles(align: PosAlign.center, bold: true));
-
+  bytes += generator.textEncoded(_encodeCP858("Merci de votre visite et a bientot !"), styles: styleCentre);
   bytes += generator.feed(3);
   bytes += generator.cut();
 
@@ -371,7 +341,7 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
 }
 
 // ============================================================================
-// 3. SERVICE D'IMPRESSION (Classe Principale)
+// 3. SERVICE D'IMPRESSION (CLASSE PRINCIPALE)
 // ============================================================================
 class PrintingService {
   final BlueThermalPrinter bluetooth = BlueThermalPrinter.instance;
@@ -410,7 +380,11 @@ class PrintingService {
     if (!kIsWeb && Platform.isAndroid) {
       await [Permission.bluetooth, Permission.bluetoothScan, Permission.bluetoothConnect, Permission.location].request();
     }
-    try { return await bluetooth.getBondedDevices().timeout(const Duration(seconds: 2)); } catch (_) { return []; }
+    try {
+      return await bluetooth.getBondedDevices().timeout(const Duration(seconds: 2));
+    } catch (_) {
+      return [];
+    }
   }
 
   void _addJob(Future<List<int>> Function() generator, Map<String, dynamic> config) {
@@ -423,8 +397,13 @@ class PrintingService {
     _isPrinting = true;
     try {
       final job = _queue.removeAt(0);
+
       bool isBle = job.config['isBluetooth'].toString() == 'true';
+      bool isWifi = job.config['isWifi'].toString() == 'true';
       String? mac = job.config['macAddress'] ?? _selectedDevice?.address;
+      String? ip = job.config['ipAddress']?.toString();
+
+      // Impression Bluetooth
       if (isBle && mac != null) {
         if (!(await bluetooth.isConnected ?? false)) {
           await bluetooth.connect(BluetoothDevice("Printer", mac)).timeout(const Duration(seconds: 4));
@@ -433,12 +412,86 @@ class PrintingService {
         final bytes = await job.byteGenerator();
         if (bytes.isNotEmpty && (await bluetooth.isConnected ?? false)) {
           await bluetooth.writeBytes(Uint8List.fromList(bytes));
+          debugPrint("✅ Impression Bluetooth envoyée à ${_selectedDevice?.name}");
         }
       }
-    } catch (_) {}
-    finally {
+      // Impression Wi-Fi (version améliorée avec gestion des erreurs)
+      else if (isWifi && ip != null && ip.isNotEmpty) {
+        final bytes = await job.byteGenerator();
+        if (bytes.isNotEmpty) {
+          Socket? socket;
+          try {
+            int port = int.tryParse(job.config['port']?.toString() ?? '9100') ?? 9100;
+            socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
+
+            // Option 1: Envoi normal
+            socket.add(Uint8List.fromList(bytes));
+            await socket.flush();
+
+            // Petit délai pour permettre à l'imprimante de traiter
+            await Future.delayed(const Duration(milliseconds: 800));
+
+            debugPrint("✅ Impression Wi-Fi envoyée à $ip:$port");
+
+            // Si les caractères ne s'affichent toujours pas, décommentez la section ci-dessous
+            // et commentez l'envoi normal ci-dessus
+
+            /*
+            // Option 2: Envoi par paquets (pour imprimantes lentes)
+            const int chunkSize = 512;
+            for (int i = 0; i < bytes.length; i += chunkSize) {
+              int end = (i + chunkSize < bytes.length) ? i + chunkSize : bytes.length;
+              socket.add(Uint8List.fromList(bytes.sublist(i, end)));
+              await socket.flush();
+              await Future.delayed(const Duration(milliseconds: 100));
+            }
+            */
+
+          } catch (e) {
+            debugPrint("🔴 ERREUR WI-FI : $e");
+            // Tentative avec les commandes alternatives
+            await _tryAlternativeWifiPrint(ip, job);
+          } finally {
+            socket?.destroy();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("🔴 ERREUR PROCESS QUEUE : $e");
+    } finally {
       _isPrinting = false;
-      if (_queue.isNotEmpty) { await Future.delayed(const Duration(milliseconds: 300)); _processQueue(); }
+      if (_queue.isNotEmpty) {
+        await Future.delayed(const Duration(milliseconds: 1000));
+        _processQueue();
+      }
+    }
+  }
+
+  // Méthode de secours pour WiFi avec commandes alternatives
+  Future<void> _tryAlternativeWifiPrint(String ip, _PrintJob job) async {
+    try {
+      final bytes = await job.byteGenerator();
+      if (bytes.isEmpty) return;
+
+      Socket? socket;
+      int port = int.tryParse(job.config['port']?.toString() ?? '9100') ?? 9100;
+      socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 10));
+
+      // Envoi des commandes alternatives CP858 en premier
+      List<int> altCommands = _forceCP858Alternative();
+      socket.add(Uint8List.fromList(altCommands));
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 300));
+
+      // Envoi des données normales
+      socket.add(Uint8List.fromList(bytes));
+      await socket.flush();
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      debugPrint("✅ Impression Wi-Fi (alternative) envoyée à $ip:$port");
+      socket.destroy();
+    } catch (e) {
+      debugPrint("🔴 ERREUR WI-FI ALTERNATIVE : $e");
     }
   }
 
@@ -459,8 +512,7 @@ class PrintingService {
       } else {
         price = (optionItem as dynamic).supplementPrice ?? 0.0;
       }
-    } catch(_) {}
-
+    } catch (_) {}
     return {'name': name, 'price': price};
   }
 
@@ -480,9 +532,7 @@ class PrintingService {
             options.add(_formatOption(element));
           }
         }
-        if (options.isNotEmpty && (options.last is Map) && options.last['name'] == "___SECTION_SEP___") {
-          options.removeLast();
-        }
+        if (options.isNotEmpty && (options.last is Map) && options.last['name'] == "___SECTION_SEP___") options.removeLast();
       } else if (raw is Map) {
         raw.forEach((k, v) {
           if (v is List && v.isNotEmpty) {
@@ -503,39 +553,19 @@ class PrintingService {
       priceVal = double.tryParse(item['price']?.toString() ?? '0') ?? 0.0;
       extractOpts(item['options'] ?? item['selectedOptions']);
     } else {
-      try {
-        qtyVal = (item as dynamic).quantity;
-      } catch (_) {}
-      try {
-        priceVal = (item as dynamic).price;
-      } catch (_) {}
-      try {
-        extractOpts((item as dynamic).selectedOptions);
-      } catch (_) {}
+      try { qtyVal = (item as dynamic).quantity; } catch (_) {}
+      try { priceVal = (item as dynamic).price; } catch (_) {}
+      try { extractOpts((item as dynamic).selectedOptions); } catch (_) {}
     }
 
-    final List<String> removed = item is Map
-        ? (item['removedIngredientNames'] as List? ?? []).map((e) => e.toString()).toList()
-        : (item is! Map)
-        ? (item as dynamic).removedIngredientNames ?? []
-        : [];
-
-    return {
-      'name': name,
-      'qty': qtyVal,
-      'price': priceVal.toStringAsFixed(2),
-      'total': (priceVal * qtyVal).toStringAsFixed(2),
-      'options': options,
-      'removed': removed
-    };
+    final List<String> removed = item is Map ? (item['removedIngredientNames'] as List? ?? []).map((e) => e.toString()).toList() : (item is! Map) ? (item as dynamic).removedIngredientNames ?? [] : [];
+    return {'name': name, 'qty': qtyVal, 'price': priceVal.toStringAsFixed(2), 'total': (priceVal * qtyVal).toStringAsFixed(2), 'options': options, 'removed': removed};
   }
 
   List<Map<String, dynamic>> _standardizeItems(dynamic inputItems) {
     List<Map<String, dynamic>> cleanList = [];
     if (inputItems is List) {
-      for (var item in inputItems) {
-        cleanList.add(_cleanItemForPrint(item));
-      }
+      for (var item in inputItems) cleanList.add(_cleanItemForPrint(item));
     }
     return cleanList;
   }
@@ -551,49 +581,78 @@ class PrintingService {
     return tMap;
   }
 
-  Future<void> printKitchenTicketSafe({
-    required dynamic printerConfig,
-    required List itemsToPrint,
-    required String identifier,
-    bool isUpdate = false,
-    bool isReprint = false,
-    String? orderType,
-    dynamic franchisee
-  }) async {
+  Future<Map<String, dynamic>> _resolvePrinterConfig(dynamic passedConfig) async {
+    Map<String, dynamic> m = _normalizeConfig(passedConfig);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? printerConfigStr = prefs.getString('printer_config');
+      if (printerConfigStr != null) {
+        final parsed = jsonDecode(printerConfigStr);
+        String? freshIp = parsed['ipAddress'] ?? parsed['ip'] ?? parsed['receiptPrinterIp'] ?? parsed['host'];
+        if (freshIp != null && freshIp.contains('.')) {
+          m['ipAddress'] = freshIp;
+          m['isWifi'] = true;
+          m['isBluetooth'] = false;
+        }
+      }
+    } catch (e) {}
+    return m;
+  }
+
+  Map<String, dynamic> _normalizeConfig(dynamic config) {
+    Map<String, dynamic> m = {};
+    if (config == null) return m;
+    if (config is Map) {
+      config.forEach((k, v) => m[k.toString()] = v);
+    } else {
+      try { m['isBluetooth'] = (config as dynamic).isBluetooth; } catch (_) {}
+      try { m['macAddress'] = (config as dynamic).macAddress; } catch (_) {}
+      try { m['isWifi'] = (config as dynamic).isWifi; } catch (_) {}
+      try { m['ipAddress'] = (config as dynamic).ipAddress; } catch (_) {}
+    }
+
+    String detectedIp = m['ipAddress']?.toString() ?? m['ip']?.toString() ?? m['host']?.toString() ?? '';
+    if (detectedIp.contains('.')) {
+      m['isWifi'] = true;
+      m['isBluetooth'] = false;
+      m['ipAddress'] = detectedIp;
+    }
+    return m;
+  }
+
+  // --- FONCTIONS PUBLIQUES ---
+
+  Future<void> printKitchenTicketSafe({required dynamic printerConfig, required List itemsToPrint, required String identifier, bool isUpdate = false, bool isReprint = false, String? orderType, dynamic franchisee}) async {
     await _tryRestoreSavedDevice();
+    final resolvedConfig = await _resolvePrinterConfig(printerConfig);
     final List<Map<String, dynamic>> lines = _standardizeItems(itemsToPrint);
-    _addJob(() async => await compute(_generateKitchenBytes, {
+    final profile = await CapabilityProfile.load();
+
+    _addJob(() async => _generateKitchenBytes({
       'paperWidthInt': 80,
-      'header': isReprint ? "RE-IMPRESSION" : (isUpdate ? "AJOUT" : "NOUVEAU"),
       'identifier': identifier,
       'orderType': orderType,
       'lines': lines,
       'date': DateFormat('HH:mm').format(DateTime.now()),
-      'profile': await CapabilityProfile.load()
-    }), _normalizeConfig(printerConfig));
+      'profile': profile
+    }), resolvedConfig);
   }
 
   Future<void> printReceipt({required dynamic printerConfig, required dynamic transaction, dynamic franchisee, dynamic receiptConfig}) async {
     await _tryRestoreSavedDevice();
+    final resolvedConfig = await _resolvePrinterConfig(printerConfig);
 
     Map<String, dynamic> tMap = _extractTransactionData(transaction);
     tMap['items'] = _standardizeItems(tMap['items'] as List? ?? []);
 
-    // ====================================================================================
-    // 💡 FORCE BRUTE : L'imprimante télécharge elle-même le nom du restaurant via Firebase
-    // ====================================================================================
     Map<String, dynamic> fMap = {};
     try {
       String fId = tMap['franchiseeId']?.toString() ?? '';
       if (fId.isNotEmpty) {
         final doc = await FirebaseFirestore.instance.collection('users').doc(fId).get();
-        if (doc.exists && doc.data() != null) {
-          fMap = doc.data()!;
-        }
+        if (doc.exists) fMap = doc.data()!;
       }
-    } catch (e) {
-      debugPrint("Erreur téléchargement auto Franchisee: $e");
-    }
+    } catch (e) {}
 
     Map<String, dynamic> cMap = receiptConfig is Map ? Map.from(receiptConfig) : {};
     try {
@@ -602,68 +661,80 @@ class PrintingService {
       cMap['headerText'] ??= savedConfig.headerText;
       cMap['footerText'] ??= savedConfig.footerText;
       cMap['showVatDetails'] ??= savedConfig.showVatDetails;
-    } catch(_) {}
+    } catch (_) {}
 
-    _addJob(() async => await compute(_generateReceiptBytes, {
+    final profile = await CapabilityProfile.load();
+    _addJob(() async => _generateReceiptBytes({
       'paperWidthInt': 80,
       'transaction': tMap,
       'franchisee': fMap,
       'config': cMap,
-      'profile': await CapabilityProfile.load()
-    }), _normalizeConfig(printerConfig));
+      'profile': profile
+    }), resolvedConfig);
   }
 
   Future<void> printOrderAndReceipt({required dynamic printerConfig, required dynamic receiptConfig, required dynamic transaction, dynamic franchisee}) async {
-    // 1. Impression du ticket client
-    await printReceipt(printerConfig: printerConfig, receiptConfig: receiptConfig, transaction: transaction, franchisee: franchisee);
+    final resolvedConfig = await _resolvePrinterConfig(printerConfig);
+    await printReceipt(printerConfig: resolvedConfig, receiptConfig: receiptConfig, transaction: transaction, franchisee: franchisee);
 
-    // 2. Préparation des données pour le ticket cuisine
     List items = [];
     String identifier = "CLIENT";
-    String orderTypeStr = "SUR PLACE"; // Valeur par défaut
+    String orderTypeStr = "SUR PLACE";
 
     try {
-      final tMap = transaction is Map ? transaction : (transaction as dynamic).toMap();
+      final tMap = _extractTransactionData(transaction);
       items = tMap['items'] ?? [];
       identifier = tMap['identifier']?.toString() ?? "CLIENT";
-
-      // Détection ultra-robuste du type de commande
-      String typeRaw = tMap['orderType']?.toString().toLowerCase() ?? '';
-      if (typeRaw.contains('takeaway') || typeRaw.contains('emporter') || typeRaw.contains('take_away')) {
-        orderTypeStr = "A EMPORTER";
-      } else {
-        orderTypeStr = "SUR PLACE";
-      }
-    } catch(e) {
-      debugPrint("Erreur récupération orderType: $e");
-    }
+      orderTypeStr = tMap['orderType']?.toString() ?? "SUR PLACE";
+    } catch (_) {}
 
     if (items.isNotEmpty) {
-      await Future.delayed(const Duration(milliseconds: 1500)); // Pause pour laisser respirer l'imprimante
-      await printKitchenTicketSafe(
-          printerConfig: printerConfig,
-          itemsToPrint: items,
-          identifier: identifier,
-          orderType: orderTypeStr // On passe la chaîne bien formatée ici
-      );
+      await Future.delayed(const Duration(milliseconds: 1500));
+      await printKitchenTicketSafe(printerConfig: resolvedConfig, itemsToPrint: items, identifier: identifier, orderType: orderTypeStr);
     }
-  }
-  Future<void> printTestTicket({required dynamic printerConfig}) async {
-    if (printerConfig is Map && printerConfig['macAddress'] != null) { try { final devices = await bluetooth.getBondedDevices(); final d = devices.firstWhere((x) => x.address == printerConfig['macAddress']); await selectDevice(d); } catch(_) {} }
-    await _tryRestoreSavedDevice();
-    Map<String, dynamic> configMap = _normalizeConfig(printerConfig);
-    _addJob(() async { final gen = Generator(PaperSize.mm80, await CapabilityProfile.load()); List<int> b = []; b += gen.reset(); b += gen.setGlobalCodeTable('CP858'); b += gen.textEncoded(_encodeCP858("TEST SYSTEME"), styles: const PosStyles(align: PosAlign.center, bold: true)); b += gen.textEncoded(_encodeCP858("Accents: é à è ê"), styles: const PosStyles(align: PosAlign.center)); b += gen.feed(2); b += gen.cut(); return b; }, configMap);
   }
 
-  Map<String, dynamic> _normalizeConfig(dynamic config) {
-    Map<String, dynamic> m = {};
-    if (config is Map) {
-      config.forEach((k, v) => m[k.toString()] = v);
-    } else {
-      try { m['isBluetooth'] = config.isBluetooth; m['macAddress'] = config.macAddress; } catch (_) {}
+  Future<void> printTestTicket({required dynamic printerConfig}) async {
+    await _tryRestoreSavedDevice();
+    final resolvedConfig = await _resolvePrinterConfig(printerConfig);
+
+    _addJob(() async {
+      final gen = Generator(PaperSize.mm80, await CapabilityProfile.load());
+      List<int> b = [];
+      b += gen.reset();
+      b += _forceCP858Commands();
+      b += [0x1B, 0x64, 0x02];
+      b += gen.textEncoded(_encodeCP858("TEST SYSTEME"), styles: const PosStyles(align: PosAlign.center, bold: true));
+      b += gen.textEncoded(_encodeCP858("Accents: € é à è ê ç °"), styles: const PosStyles(align: PosAlign.center));
+      b += gen.feed(2);
+      b += gen.cut();
+      return b;
+    }, resolvedConfig);
+  }
+
+  // Méthode pour diagnostiquer le problème WiFi
+  Future<void> diagnoseWifiPrinter(String ip, {int port = 9100}) async {
+    try {
+      Socket socket = await Socket.connect(ip, port, timeout: const Duration(seconds: 5));
+
+      // Envoyer une commande de statut
+      socket.add([0x10, 0x04, 0x01]);
+      await socket.flush();
+
+      // Attendre la réponse
+      await Future.delayed(const Duration(seconds: 2));
+
+      List<int> response = [];
+      await for (var data in socket) {
+        response.addAll(data);
+        if (response.length > 10) break;
+      }
+
+      debugPrint("📊 Diagnostic WiFi - Réponse de l'imprimante: $response");
+      socket.destroy();
+    } catch (e) {
+      debugPrint("📊 Diagnostic WiFi - Erreur: $e");
     }
-    if (m['macAddress'] == null && _selectedDevice != null) { m['isBluetooth'] = true; m['macAddress'] = _selectedDevice!.address; }
-    return m;
   }
 }
 
@@ -673,15 +744,29 @@ class PrintingService {
 extension PrintingServiceZ on PrintingService {
   Future<void> printZTicket({required dynamic printerConfig, required dynamic session, required List transactions, required double declaredCash, required bool isManager, required String userName}) async {
     await _tryRestoreSavedDevice();
-    Map<String, dynamic> configMap = _normalizeConfig(printerConfig);
+    final resolvedConfig = await _resolvePrinterConfig(printerConfig);
+
     double totalSales = 0;
     for (var t in transactions) {
-      Map<String, dynamic> tMap = t is Map ? Map.from(t) : (t as dynamic).toMap();
+      Map<String, dynamic> tMap = _extractTransactionData(t);
       totalSales += (tMap['total'] as num? ?? 0).toDouble();
     }
     double initialCash = 0;
-    try { initialCash = (session is Map) ? (session['initialCash'] as num).toDouble() : (session as dynamic).initialCash; } catch (_) {}
-    _addJob(() async => await compute(_generateZTicketBytes, {'paperWidthInt': 80, 'sessionInitialCash': initialCash, 'declaredCash': declaredCash, 'userName': userName, 'isManager': isManager, 'totalSales': totalSales.toStringAsFixed(2), 'date': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()), 'profile': await CapabilityProfile.load()}), configMap);
+    try {
+      initialCash = (session is Map) ? (session['initialCash'] as num).toDouble() : (session as dynamic).initialCash;
+    } catch (_) {}
+
+    final profile = await CapabilityProfile.load();
+    _addJob(() async => _generateZTicketBytes({
+      'paperWidthInt': 80,
+      'sessionInitialCash': initialCash,
+      'declaredCash': declaredCash,
+      'userName': userName,
+      'isManager': isManager,
+      'totalSales': totalSales.toStringAsFixed(2),
+      'date': DateFormat('dd/MM/yyyy HH:mm').format(DateTime.now()),
+      'profile': profile
+    }), resolvedConfig);
   }
 }
 
@@ -693,26 +778,25 @@ List<int> _generateZTicketBytes(Map<String, dynamic> params) {
   List<int> bytes = [];
 
   bytes += generator.reset();
-  bytes += generator.setGlobalCodeTable('CP858');
+  bytes += _forceCP858Commands();
+  bytes += [0x1B, 0x64, 0x02];
 
   const PosStyles sTitle = PosStyles(align: PosAlign.center, bold: true, height: PosTextSize.size2);
   const PosStyles sNormal = PosStyles();
 
   bytes += generator.textEncoded(_encodeCP858('CLOTURE (Z)'), styles: sTitle);
   bytes += generator.textEncoded(_encodeCP858('Date: ${params['date']}'), styles: sNormal);
-  bytes += generator.textEncoded(_encodeCP858('Fermé par: ${params['userName']}'), styles: sNormal);
+  bytes += generator.textEncoded(_encodeCP858('Ferme par: ${params['userName']}'), styles: sNormal);
   bytes += generator.hr();
 
   double initCash = double.tryParse(params['sessionInitialCash'].toString()) ?? 0.0;
   double declared = double.tryParse(params['declaredCash'].toString()) ?? 0.0;
 
   bytes += generator.textEncoded(_encodeCP858('FONDS DE CAISSE'), styles: const PosStyles(bold: true));
-
   int charWidth = paperWidthInt == 80 ? 48 : 32;
 
   bytes += generator.textEncoded(_encodeCP858(_formatRow('Ouverture :', '${initCash.toStringAsFixed(2)} EUR', width: charWidth)), styles: sNormal);
   bytes += generator.textEncoded(_encodeCP858(_formatRow('DECLARE :', '${declared.toStringAsFixed(2)} EUR', width: charWidth)), styles: const PosStyles(bold: true));
-
   bytes += generator.hr();
 
   if (params['isManager'] == true) {
@@ -722,6 +806,5 @@ List<int> _generateZTicketBytes(Map<String, dynamic> params) {
 
   bytes += generator.feed(3);
   bytes += generator.cut();
-
   return bytes;
 }

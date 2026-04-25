@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '/models.dart';
 import '../../../../core/repository/repository.dart';
+
 class StatsDashboard extends StatefulWidget {
   final String franchiseeId;
   final DateTime? startDate;
@@ -17,13 +18,16 @@ class StatsDashboard extends StatefulWidget {
   @override
   State<StatsDashboard> createState() => _StatsDashboardState();
 }
+
 class _StatsDashboardState extends State<StatsDashboard> {
   final FranchiseRepository _repository = FranchiseRepository();
+
   @override
   Widget build(BuildContext context) {
     final start =
         widget.startDate ?? DateTime.now().subtract(const Duration(days: 30));
     final end = widget.endDate ?? DateTime.now();
+
     return StreamBuilder<List<Transaction>>(
       stream: _repository.getTransactionsInDateRange(
         widget.franchiseeId,
@@ -52,21 +56,55 @@ class _StatsDashboardState extends State<StatsDashboard> {
       },
     );
   }
+
   Widget _buildFixedDashboard(List<Transaction> transactions) {
     double totalRevenue = transactions.fold(0, (sum, t) => sum + t.total);
     int totalOrders = transactions.length;
     double averageBasket = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-    Map<String, double> paymentStats = {};
+
+    Map<String, double> paymentStats = {
+      'CB Bornes': 0.0,
+      'CB Comptoir': 0.0,
+      'Espèces': 0.0,
+      'Ticket Resto': 0.0,
+    };
+
     for (var t in transactions) {
       t.paymentMethods.forEach((method, amount) {
-        paymentStats[method] =
-            (paymentStats[method] ?? 0) + (amount as num).toDouble();
+        double val = (amount as num).toDouble();
+
+        if (method == 'Card_Kiosk') {
+          paymentStats['CB Bornes'] = paymentStats['CB Bornes']! + val;
+        } else if (method == 'Card_Counter') {
+          paymentStats['CB Comptoir'] = paymentStats['CB Comptoir']! + val;
+        } else if (method == 'Cash') {
+          paymentStats['Espèces'] = paymentStats['Espèces']! + val;
+        } else if (method == 'Ticket') {
+          paymentStats['Ticket Resto'] = paymentStats['Ticket Resto']! + val;
+        } else if (method == 'Card') {
+          // LOGIQUE INFAILLIBLE : Détecte la borne automatiquement
+          bool isBorne = false;
+          try { if ((t as dynamic).source?.toString() == 'borne') isBorne = true; } catch (_) {}
+          try { if ((t as dynamic).origin?.toString() == 'kiosk') isBorne = true; } catch (_) {}
+
+          if (isBorne) {
+            paymentStats['CB Bornes'] = paymentStats['CB Bornes']! + val;
+          } else {
+            paymentStats['CB Comptoir'] = paymentStats['CB Comptoir']! + val;
+          }
+        } else {
+          paymentStats[method] = (paymentStats[method] ?? 0) + val;
+        }
       });
     }
+
+    paymentStats.removeWhere((key, value) => value == 0);
+
     var groupedByDay = groupBy(transactions, (Transaction t) {
       return DateFormat('yyyy-MM-dd').format(t.timestamp);
     });
     var sortedKeys = groupedByDay.keys.toList()..sort();
+
     Map<String, int> productCounts = {};
     Map<String, double> productRevenues = {};
     for (var t in transactions) {
@@ -81,7 +119,8 @@ class _StatsDashboardState extends State<StatsDashboard> {
     final topProducts = productCounts.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
     final top5 = topProducts.take(5).toList();
-    return Padding(
+
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -91,25 +130,18 @@ class _StatsDashboardState extends State<StatsDashboard> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _buildKpiCard(
-                    "Chiffre d'Affaires",
-                    "${totalRevenue.toStringAsFixed(2)} €",
-                    Icons.euro,
-                    Colors.indigo),
+                _buildKpiCard("Chiffre d'Affaires", "${totalRevenue.toStringAsFixed(2)} €", Icons.euro, Colors.indigo),
                 const SizedBox(width: 16),
-                _buildKpiCard("Commandes", "$totalOrders", Icons.shopping_bag,
-                    Colors.orange),
+                _buildKpiCard("Commandes", "$totalOrders", Icons.shopping_bag, Colors.orange),
                 const SizedBox(width: 16),
-                _buildKpiCard(
-                    "Panier Moyen",
-                    "${averageBasket.toStringAsFixed(2)} €",
-                    Icons.shopping_basket,
-                    Colors.green),
+                _buildKpiCard("Panier Moyen", "${averageBasket.toStringAsFixed(2)} €", Icons.shopping_basket, Colors.green),
               ],
             ),
           ),
           const SizedBox(height: 16),
-          Expanded(
+
+          SizedBox(
+            height: 500,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -128,11 +160,8 @@ class _StatsDashboardState extends State<StatsDashboard> {
                               barTouchData: BarTouchData(
                                 touchTooltipData: BarTouchTooltipData(
                                   getTooltipColor: (_) => Colors.indigo,
-                                  getTooltipItem:
-                                      (group, groupIndex, rod, rodIndex) {
-                                    return BarTooltipItem(
-                                        '${rod.toY.toStringAsFixed(0)}€',
-                                        const TextStyle(color: Colors.white));
+                                  getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                                    return BarTooltipItem('${rod.toY.toStringAsFixed(0)}€', const TextStyle(color: Colors.white));
                                   },
                                 ),
                               ),
@@ -143,53 +172,30 @@ class _StatsDashboardState extends State<StatsDashboard> {
                                     showTitles: true,
                                     reservedSize: 30,
                                     getTitlesWidget: (value, meta) {
-                                      int interval =
-                                          (sortedKeys.length / 7).ceil();
-                                      if (value.toInt() % interval != 0) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      if (value.toInt() >= 0 &&
-                                          value.toInt() < sortedKeys.length) {
-                                        final date = DateTime.parse(
-                                            sortedKeys[value.toInt()]);
+                                      int interval = (sortedKeys.length / 7).ceil();
+                                      if (value.toInt() % interval != 0) return const SizedBox.shrink();
+                                      if (value.toInt() >= 0 && value.toInt() < sortedKeys.length) {
+                                        final date = DateTime.parse(sortedKeys[value.toInt()]);
                                         return Padding(
-                                            padding:
-                                                const EdgeInsets.only(top: 8.0),
-                                            child: Text(
-                                                DateFormat('dd/MM')
-                                                    .format(date),
-                                                style: const TextStyle(
-                                                    fontSize: 10,
-                                                    color: Colors.grey)));
+                                            padding: const EdgeInsets.only(top: 8.0),
+                                            child: Text(DateFormat('dd/MM').format(date),
+                                                style: const TextStyle(fontSize: 10, color: Colors.grey)));
                                       }
                                       return const SizedBox();
                                     },
                                   ),
                                 ),
-                                leftTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false)),
-                                topTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false)),
-                                rightTitles: const AxisTitles(
-                                    sideTitles: SideTitles(showTitles: false)),
+                                leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                                rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                               ),
                               borderData: FlBorderData(show: false),
                               gridData: const FlGridData(show: false),
-                              barGroups:
-                                  sortedKeys.asMap().entries.map((entry) {
-                                final dayTotal = groupedByDay[entry.value]!
-                                    .fold(0.0, (sum, t) => sum + t.total);
-                                return BarChartGroupData(
-                                    x: entry.key,
-                                    barRods: [
-                                      BarChartRodData(
-                                          toY: dayTotal,
-                                          color: Colors.indigo,
-                                          width: 12,
-                                          borderRadius:
-                                              const BorderRadius.vertical(
-                                                  top: Radius.circular(4)))
-                                    ]);
+                              barGroups: sortedKeys.asMap().entries.map((entry) {
+                                final dayTotal = groupedByDay[entry.value]!.fold(0.0, (sum, t) => sum + t.total);
+                                return BarChartGroupData(x: entry.key, barRods: [
+                                  BarChartRodData(toY: dayTotal, color: Colors.indigo, width: 12, borderRadius: const BorderRadius.vertical(top: Radius.circular(4)))
+                                ]);
                               }).toList(),
                             ),
                           ),
@@ -211,30 +217,14 @@ class _StatsDashboardState extends State<StatsDashboard> {
                                 dense: true,
                                 contentPadding: EdgeInsets.zero,
                                 leading: CircleAvatar(
-                                  backgroundColor: index == 0
-                                      ? Colors.amber
-                                      : Colors.grey.shade100,
-                                  foregroundColor:
-                                      index == 0 ? Colors.white : Colors.black,
+                                  backgroundColor: index == 0 ? Colors.amber : Colors.grey.shade100,
+                                  foregroundColor: index == 0 ? Colors.white : Colors.black,
                                   radius: 14,
-                                  child: Text("${index + 1}",
-                                      style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold)),
+                                  child: Text("${index + 1}", style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
                                 ),
-                                title: Text(entry.key,
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13),
-                                    overflow: TextOverflow.ellipsis),
-                                subtitle: Text(
-                                    "${revenue.toStringAsFixed(2)} € générés",
-                                    style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade600)),
-                                trailing: Text("${entry.value} ventes",
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold)),
+                                title: Text(entry.key, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
+                                subtitle: Text("${revenue.toStringAsFixed(2)} € générés", style: TextStyle(fontSize: 11, color: Colors.grey.shade600)),
+                                trailing: Text("${entry.value} ventes", style: const TextStyle(fontWeight: FontWeight.bold)),
                               );
                             },
                           ),
@@ -257,9 +247,8 @@ class _StatsDashboardState extends State<StatsDashboard> {
                               sectionsSpace: 2,
                               centerSpaceRadius: 30,
                               sections: paymentStats.entries.map((e) {
-                                final color = _getPaymentColor(e.key);
                                 return PieChartSectionData(
-                                    color: color,
+                                    color: _getPaymentColor(e.key),
                                     value: e.value,
                                     title: '',
                                     radius: 40);
@@ -273,23 +262,14 @@ class _StatsDashboardState extends State<StatsDashboard> {
                             child: Column(
                               children: paymentStats.entries
                                   .map((e) => ListTile(
-                                        dense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        leading: Container(
-                                            width: 12,
-                                            height: 12,
-                                            decoration: BoxDecoration(
-                                                color: _getPaymentColor(e.key),
-                                                shape: BoxShape.circle)),
-                                        title: Text(e.key,
-                                            style: const TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600)),
-                                        trailing: Text(
-                                            "${e.value.toStringAsFixed(2)} €",
-                                            style: const TextStyle(
-                                                fontWeight: FontWeight.bold)),
-                                      ))
+                                dense: true,
+                                contentPadding: EdgeInsets.zero,
+                                leading: Container(
+                                    width: 12, height: 12,
+                                    decoration: BoxDecoration(color: _getPaymentColor(e.key), shape: BoxShape.circle)),
+                                title: Text(e.key, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                                trailing: Text("${e.value.toStringAsFixed(2)} €", style: const TextStyle(fontWeight: FontWeight.bold)),
+                              ))
                                   .toList(),
                             ),
                           ),
@@ -301,10 +281,14 @@ class _StatsDashboardState extends State<StatsDashboard> {
               ],
             ),
           ),
+
+          const SizedBox(height: 24),
+          _buildAccountingHelper(paymentStats, totalRevenue),
         ],
       ),
     );
   }
+
   double _getMaxY(Map<String, List<Transaction>> grouped) {
     double max = 0;
     grouped.forEach((key, value) {
@@ -313,18 +297,17 @@ class _StatsDashboardState extends State<StatsDashboard> {
     });
     return max == 0 ? 100 : max * 1.1;
   }
+
   Color _getPaymentColor(String method) {
     switch (method) {
-      case 'Cash':
-        return Colors.teal;
-      case 'Card':
-        return Colors.blue;
-      case 'Ticket':
-        return Colors.orange;
-      default:
-        return Colors.grey;
+      case 'Espèces': return Colors.green;
+      case 'CB Comptoir': return Colors.indigo;
+      case 'CB Bornes': return Colors.teal;
+      case 'Ticket Resto': return Colors.orange;
+      default: return Colors.blueGrey;
     }
   }
+
   Widget _buildKpiCard(String title, String value, IconData icon, Color color) {
     return Expanded(
       child: Container(
@@ -334,17 +317,13 @@ class _StatsDashboardState extends State<StatsDashboard> {
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
-              BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 6,
-                  offset: const Offset(0, 2))
+              BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2))
             ]),
         child: Row(
           children: [
             Container(
                 padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                    color: color.withOpacity(0.1), shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 24)),
             const SizedBox(width: 12),
             Expanded(
@@ -352,27 +331,21 @@ class _StatsDashboardState extends State<StatsDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                  Text(title,
-                      style: TextStyle(
-                          color: Colors.grey.shade600,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500),
-                      overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 2),
-                  FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(value,
-                          style: TextStyle(
-                              color: Colors.black87,
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold)))
-                ]))
+                      Text(title,
+                          style: TextStyle(color: Colors.grey.shade600, fontSize: 12, fontWeight: FontWeight.w500),
+                          overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(value, style: const TextStyle(color: Colors.black87, fontSize: 20, fontWeight: FontWeight.bold)))
+                    ]))
           ],
         ),
       ),
     );
   }
+
   Widget _buildChartContainer({required String title, required Widget child}) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -381,14 +354,89 @@ class _StatsDashboardState extends State<StatsDashboard> {
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: Colors.grey.shade200)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87)),
+        Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87)),
         const SizedBox(height: 16),
         Expanded(child: child)
       ]),
+    );
+  }
+
+  Widget _buildAccountingHelper(Map<String, double> stats, double total) {
+    double cash = stats['Espèces'] ?? 0.0;
+    double ticket = stats['Ticket Resto'] ?? 0.0;
+    double cbCounter = stats['CB Comptoir'] ?? 0.0;
+    double cbKiosk = stats['CB Bornes'] ?? 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: Colors.blueGrey.shade50,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.blueGrey.shade200, width: 1.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.point_of_sale, size: 28, color: Colors.black87),
+              SizedBox(width: 12),
+              Text("Z DE CAISSE (Aide à la Clôture)",
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, letterSpacing: 1.1)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("1. À VÉRIFIER PHYSIQUEMENT", style: TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _accRow("Cash dans le tiroir", cash, Colors.green),
+                    _accRow("Tickets Restaurants", ticket, Colors.orange),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 32),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text("2. TÉLÉCOLLECTES (TPE)", style: TextStyle(fontSize: 13, color: Colors.black54, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 12),
+                    _accRow("Caisse Comptoir", cbCounter, Colors.indigo),
+                    _accRow("Bornes de Commande", cbKiosk, Colors.teal),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1, color: Colors.black26)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("TOTAL VALIDÉ", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              Text("${total.toStringAsFixed(2)} €", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.black)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _accRow(String label, double value, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500)),
+          Text("${value.toStringAsFixed(2)} €", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        ],
+      ),
     );
   }
 }

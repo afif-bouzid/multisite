@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+
 class TpeResult {
   final bool success;
   final String message;
@@ -14,10 +15,12 @@ class TpeResult {
     this.authNumber,
   });
 }
+
 class TpeService {
   bool get _isSimulationMode {
     return kDebugMode;
   }
+
   Future<TpeResult> sendPaymentRequest({
     required String ipAddress,
     required double amount,

@@ -43,7 +43,7 @@ class KioskCustomizationScreen extends StatelessWidget {
                 const SizedBox(height: 8),
                 Text(
                   "Sélectionnez le visuel qui s'affichera sur l'écran de veille de votre borne. "
-                      "Ces contenus sont validés par votre franchiseur.",
+                  "Ces contenus sont validés par votre franchiseur.",
                   style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                 ),
               ],
@@ -62,7 +62,8 @@ class KioskCustomizationScreen extends StatelessWidget {
               builder: (context, configSnapshot) {
                 String? activeMediaId;
                 if (configSnapshot.hasData && configSnapshot.data!.exists) {
-                  final data = configSnapshot.data!.data() as Map<String, dynamic>;
+                  final data =
+                      configSnapshot.data!.data() as Map<String, dynamic>;
                   activeMediaId = data['activeMediaId'] as String?;
                 }
 
@@ -71,7 +72,8 @@ class KioskCustomizationScreen extends StatelessWidget {
                   stream: repo.getAvailableKioskMedias(franchisorId),
                   builder: (context, mediaSnapshot) {
                     if (mediaSnapshot.hasError) {
-                      return Center(child: Text("Erreur: ${mediaSnapshot.error}"));
+                      return Center(
+                          child: Text("Erreur: ${mediaSnapshot.error}"));
                     }
                     if (!mediaSnapshot.hasData) {
                       return const Center(child: CircularProgressIndicator());
@@ -87,7 +89,8 @@ class KioskCustomizationScreen extends StatelessWidget {
 
                     return GridView.builder(
                       padding: const EdgeInsets.all(20),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
                         maxCrossAxisExtent: 400, // Cartes assez larges
                         childAspectRatio: 1.2,
                         crossAxisSpacing: 20,
@@ -111,12 +114,8 @@ class KioskCustomizationScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMediaCard(
-      BuildContext context,
-      KioskMedia media,
-      bool isActive,
-      FranchiseRepository repo
-      ) {
+  Widget _buildMediaCard(BuildContext context, KioskMedia media, bool isActive,
+      FranchiseRepository repo) {
     return GestureDetector(
       onTap: () async {
         if (isActive) return;
@@ -149,7 +148,8 @@ class KioskCustomizationScreen extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12), // Un peu moins pour coller à la bordure
+          borderRadius: BorderRadius.circular(
+              12), // Un peu moins pour coller à la bordure
           child: Stack(
             children: [
               Column(
@@ -162,7 +162,9 @@ class KioskCustomizationScreen extends StatelessWidget {
                   Expanded(
                     flex: 1,
                     child: Container(
-                      color: isActive ? const Color(0xFF417228).withOpacity(0.05) : Colors.white,
+                      color: isActive
+                          ? const Color(0xFF417228).withOpacity(0.05)
+                          : Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerLeft,
                       child: Row(
@@ -177,14 +179,19 @@ class KioskCustomizationScreen extends StatelessWidget {
                                   style: TextStyle(
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
-                                    color: isActive ? const Color(0xFF417228) : Colors.black,
+                                    color: isActive
+                                        ? const Color(0xFF417228)
+                                        : Colors.black,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 Text(
-                                  media.type == 'video' ? "Vidéo MP4" : "Image JPG/PNG",
-                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  media.type == 'video'
+                                      ? "Vidéo MP4"
+                                      : "Image JPG/PNG",
+                                  style: TextStyle(
+                                      fontSize: 12, color: Colors.grey[600]),
                                 ),
                               ],
                             ),
@@ -193,7 +200,8 @@ class KioskCustomizationScreen extends StatelessWidget {
                             const CircleAvatar(
                               backgroundColor: Color(0xFF417228),
                               radius: 14,
-                              child: Icon(Icons.check, size: 18, color: Colors.white),
+                              child: Icon(Icons.check,
+                                  size: 18, color: Colors.white),
                             ),
                         ],
                       ),
@@ -206,7 +214,8 @@ class KioskCustomizationScreen extends StatelessWidget {
                 top: 12,
                 left: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.6),
                     borderRadius: BorderRadius.circular(8),
@@ -221,7 +230,10 @@ class KioskCustomizationScreen extends StatelessWidget {
                       const SizedBox(width: 4),
                       Text(
                         media.type.toUpperCase(),
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold),
                       ),
                     ],
                   ),
@@ -247,12 +259,16 @@ class KioskCustomizationScreen extends StatelessWidget {
         return Stack(
           fit: StackFit.expand,
           children: [
-            CachedNetworkImage(imageUrl: media.thumbnailUrl!, fit: BoxFit.cover),
+            CachedNetworkImage(
+                imageUrl: media.thumbnailUrl!, fit: BoxFit.cover),
             Center(
               child: Container(
                 padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(color: Colors.black.withOpacity(0.4), shape: BoxShape.circle),
-                child: const Icon(Icons.play_arrow_rounded, color: Colors.white, size: 32),
+                decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.4),
+                    shape: BoxShape.circle),
+                child: const Icon(Icons.play_arrow_rounded,
+                    color: Colors.white, size: 32),
               ),
             ),
           ],
@@ -260,7 +276,8 @@ class KioskCustomizationScreen extends StatelessWidget {
       }
       return Container(
         color: Colors.black87,
-        child: const Center(child: Icon(Icons.videocam, size: 48, color: Colors.white54)),
+        child: const Center(
+            child: Icon(Icons.videocam, size: 48, color: Colors.white54)),
       );
     }
   }

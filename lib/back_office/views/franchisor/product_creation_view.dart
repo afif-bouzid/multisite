@@ -5,24 +5,25 @@ import '../../../models.dart';
 
 class FranchisorProductCreationView extends StatefulWidget {
   final List<Product> availableProducts;
-  final Function(Product, File?) onSave; // Modifié pour renvoyer aussi le fichier image si nécessaire
+  final Function(Product, File?)
+      onSave; // Modifié pour renvoyer aussi le fichier image si nécessaire
 
-  const FranchisorProductCreationView({
-    Key? key,
-    required this.availableProducts,
-    required this.onSave
-  }) : super(key: key);
+  const FranchisorProductCreationView(
+      {super.key, required this.availableProducts, required this.onSave});
 
   @override
-  State<FranchisorProductCreationView> createState() => _FranchisorProductCreationViewState();
+  State<FranchisorProductCreationView> createState() =>
+      _FranchisorProductCreationViewState();
 }
 
-class _FranchisorProductCreationViewState extends State<FranchisorProductCreationView> {
+class _FranchisorProductCreationViewState
+    extends State<FranchisorProductCreationView> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _priceController = TextEditingController();
   final _descriptionController = TextEditingController();
-  final _ingredientsTextController = TextEditingController(); // Pour la fiche technique
+  final _ingredientsTextController =
+      TextEditingController(); // Pour la fiche technique
 
   bool _isContainer = false;
   bool _isIngredient = false;
@@ -61,11 +62,14 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.grey.shade300),
                       image: _selectedImageFile != null
-                          ? DecorationImage(image: FileImage(File(_selectedImageFile!.path)), fit: BoxFit.cover)
+                          ? DecorationImage(
+                              image: FileImage(File(_selectedImageFile!.path)),
+                              fit: BoxFit.cover)
                           : null,
                     ),
                     child: _selectedImageFile == null
-                        ? const Icon(Icons.add_a_photo, size: 40, color: Colors.grey)
+                        ? const Icon(Icons.add_a_photo,
+                            size: 40, color: Colors.grey)
                         : null,
                   ),
                   Positioned.fill(
@@ -88,9 +92,11 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
                           decoration: const BoxDecoration(
                               color: Colors.white,
                               shape: BoxShape.circle,
-                              boxShadow: [BoxShadow(blurRadius: 2, color: Colors.black26)]
-                          ),
-                          child: const Icon(Icons.delete, color: Colors.red, size: 18),
+                              boxShadow: [
+                                BoxShadow(blurRadius: 2, color: Colors.black26)
+                              ]),
+                          child: const Icon(Icons.delete,
+                              color: Colors.red, size: 18),
                         ),
                         onPressed: () {
                           setState(() {
@@ -123,10 +129,13 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
                 border: OutlineInputBorder(),
                 suffixIcon: Icon(Icons.euro),
               ),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               validator: (v) {
                 if (v == null || v.isEmpty) return null; // Peut être 0
-                if (double.tryParse(v.replaceAll(',', '.')) == null) return "Prix invalide";
+                if (double.tryParse(v.replaceAll(',', '.')) == null) {
+                  return "Prix invalide";
+                }
                 return null;
               },
             ),
@@ -135,7 +144,8 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
             // --- TOGGLE : EST-CE UN INGRÉDIENT ? ---
             SwitchListTile(
               title: const Text("C'est un ingrédient ?"),
-              subtitle: const Text("Sert aux fiches techniques, non vendu seul."),
+              subtitle:
+                  const Text("Sert aux fiches techniques, non vendu seul."),
               value: _isIngredient,
               onChanged: (val) {
                 setState(() {
@@ -174,7 +184,8 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
             if (!_isIngredient) // On masque souvent l'option conteneur pour un ingrédient simple
               SwitchListTile(
                 title: const Text("Est-ce un conteneur (Dossier) ?"),
-                subtitle: const Text("Regroupe d'autres produits (ex: Nos Burgers)"),
+                subtitle:
+                    const Text("Regroupe d'autres produits (ex: Nos Burgers)"),
                 value: _isContainer,
                 onChanged: (val) => setState(() => _isContainer = val),
               ),
@@ -182,11 +193,13 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
             // --- LISTE DES ENFANTS (Si Conteneur) ---
             if (_isContainer && !_isIngredient) ...[
               const SizedBox(height: 10),
-              const Text("Sélectionnez les produits contenus :", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text("Sélectionnez les produits contenus :",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               Container(
                 height: 200,
                 margin: const EdgeInsets.only(top: 8),
-                decoration: BoxDecoration(border: Border.all(color: Colors.grey)),
+                decoration:
+                    BoxDecoration(border: Border.all(color: Colors.grey)),
                 child: ListView.builder(
                   itemCount: widget.availableProducts.length,
                   itemBuilder: (context, index) {
@@ -233,20 +246,27 @@ class _FranchisorProductCreationViewState extends State<FranchisorProductCreatio
                     id: DateTime.now().millisecondsSinceEpoch.toString(),
                     name: _nameController.text,
                     price: price,
-                    description: !_isIngredient ? _descriptionController.text : null,
+                    description:
+                        !_isIngredient ? _descriptionController.text : null,
                     // Note: imageUrl sera géré par le parent via le fichier renvoyé
                     isContainer: _isContainer,
                     // Le champ isIngredient n'existe peut-être pas dans votre modèle Product original
                     // (basé sur le snippet fourni), mais s'il existe, ajoutez: isIngredient: _isIngredient,
-                    containerProductIds: _isContainer ? _selectedChildrenIds : [],
+                    containerProductIds:
+                        _isContainer ? _selectedChildrenIds : [],
                   );
 
                   // On renvoie le produit ET le fichier image
-                  widget.onSave(newProduct, _selectedImageFile != null ? File(_selectedImageFile!.path) : null);
+                  widget.onSave(
+                      newProduct,
+                      _selectedImageFile != null
+                          ? File(_selectedImageFile!.path)
+                          : null);
                   Navigator.pop(context);
                 }
               },
-              child: const Text("Sauvegarder le Produit", style: TextStyle(fontSize: 16)),
+              child: const Text("Sauvegarder le Produit",
+                  style: TextStyle(fontSize: 16)),
             ),
             const SizedBox(height: 30),
           ],

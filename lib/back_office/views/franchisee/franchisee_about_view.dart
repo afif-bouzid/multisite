@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import '../../../core/providers/update_provider.dart';
+
 class FranchiseeAboutView extends StatefulWidget {
   const FranchiseeAboutView({super.key});
   @override
   State<FranchiseeAboutView> createState() => _FranchiseeAboutViewState();
 }
+
 class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
   String _version = '...';
   @override
@@ -14,6 +16,7 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
     super.initState();
     _loadVersion();
   }
+
   Future<void> _loadVersion() async {
     final packageInfo = await PackageInfo.fromPlatform();
     if (mounted) {
@@ -22,6 +25,7 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
       });
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -76,11 +80,36 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
                               label: Text(
                                   "Installer v${updateProvider.latestVersion ?? ''}"),
                               onPressed: () {
-                                updateProvider.downloadAndInstallUpdate();
+                                // --- CORRECTION 6 : Filet de sécurité pour l'update ---
+                                showDialog(
+                                    context: context,
+                                    builder: (ctx) => AlertDialog(
+                                            title: const Text("⚠️ Attention"),
+                                            content: const Text(
+                                                "Assurez-vous d'avoir une connexion internet très stable. Une coupure de réseau pendant la mise à jour peut bloquer définitivement la caisse.\n\nÊtes-vous sûr de vouloir lancer la mise à jour ?"),
+                                            actions: [
+                                              TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx),
+                                                  child: const Text("Annuler")),
+                                              ElevatedButton(
+                                                  onPressed: () {
+                                                    Navigator.pop(ctx);
+                                                    updateProvider
+                                                        .downloadAndInstallUpdate();
+                                                  },
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              Colors.red),
+                                                  child: const Text(
+                                                      "Oui, Mettre à jour",
+                                                      style: TextStyle(
+                                                          color: Colors.white)))
+                                            ]));
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.green.shade700,
-                              ),
+                                  backgroundColor: Colors.green.shade700),
                             );
                           }
                           return ElevatedButton.icon(

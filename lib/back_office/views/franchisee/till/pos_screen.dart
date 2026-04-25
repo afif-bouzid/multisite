@@ -51,15 +51,17 @@ class _PosViewState extends State<PosView> {
   void initState() {
     super.initState();
     final auth = Provider.of<AuthProvider>(context, listen: false);
-    _effectiveFranchiseeId = widget.franchiseeId ?? auth.franchiseUser!.effectiveStoreId;
-    _effectiveFranchisorId = widget.franchisorId ?? (auth.franchiseUser?.franchisorId ?? '');
+    _effectiveFranchiseeId =
+        widget.franchiseeId ?? auth.franchiseUser!.effectiveStoreId;
+    _effectiveFranchisorId =
+        widget.franchisorId ?? (auth.franchiseUser?.franchisorId ?? '');
     _posDataFutureState = _loadData();
 
     // LANCEMENT DE L'ÉCOUTEUR DE NETTOYAGE SILENCIEUX (Version Production)
     _backgroundArchiveSub = FranchiseRepository()
         .getPendingOrdersStream(_effectiveFranchiseeId)
         .listen(
-          (orders) async {
+      (orders) async {
         for (var order in orders) {
           if (order.source == 'borne' && order.isPaid) {
             try {
@@ -67,15 +69,18 @@ class _PosViewState extends State<PosView> {
               await FranchiseRepository().deletePendingOrder(order.id);
             } catch (e) {
               // Ne fait pas planter l'application en cas d'erreur de connexion momentanée
-              debugPrint("Échec de la suppression silencieuse de la commande ${order.id} : $e");
+              debugPrint(
+                  "Échec de la suppression silencieuse de la commande ${order.id} : $e");
             }
           }
         }
       },
       onError: (error) {
-        debugPrint("Erreur critique sur le flux des commandes en attente : $error");
+        debugPrint(
+            "Erreur critique sur le flux des commandes en attente : $error");
       },
-      cancelOnError: false, // Ne ferme jamais l'écoute, même en cas de coupure réseau
+      cancelOnError:
+          false, // Ne ferme jamais l'écoute, même en cas de coupure réseau
     );
   }
 
@@ -93,9 +98,21 @@ class _PosViewState extends State<PosView> {
       repo.getKioskCategoriesStream(_effectiveFranchisorId).first,
       repo.getSectionsStream(_effectiveFranchisorId).first,
       repo.getPrinterConfigStream(_effectiveFranchiseeId).first,
-      firestore.collection('users').doc(_effectiveFranchiseeId).collection('config').doc('filterOrder').get(),
-      repo.getFranchiseeVisibleProductsStream(_effectiveFranchiseeId, _effectiveFranchisorId).first,
-      firestore.collection('users').doc(_effectiveFranchiseeId).collection('menu').get(),
+      firestore
+          .collection('users')
+          .doc(_effectiveFranchiseeId)
+          .collection('config')
+          .doc('filterOrder')
+          .get(),
+      repo
+          .getFranchiseeVisibleProductsStream(
+              _effectiveFranchiseeId, _effectiveFranchisorId)
+          .first,
+      firestore
+          .collection('users')
+          .doc(_effectiveFranchiseeId)
+          .collection('menu')
+          .get(),
     ]);
 
     final visibleProducts = results[5] as List<MasterProduct>;
@@ -103,12 +120,12 @@ class _PosViewState extends State<PosView> {
       final imagesToLoad = visibleProducts
           .where((p) => p.photoUrl != null && p.photoUrl!.isNotEmpty)
           .map((p) => precacheImage(
-        CachedNetworkImageProvider(
-          p.photoUrl!,
-          cacheManager: customCacheManager,
-        ),
-        context,
-      ))
+                CachedNetworkImageProvider(
+                  p.photoUrl!,
+                  cacheManager: customCacheManager,
+                ),
+                context,
+              ))
           .toList();
       await Future.wait(imagesToLoad);
     }
@@ -116,7 +133,8 @@ class _PosViewState extends State<PosView> {
     final menuSnapshot = results[6] as QuerySnapshot;
     final menuSettings = <String, FranchiseeMenuItem>{
       for (var doc in menuSnapshot.docs)
-        doc.id: FranchiseeMenuItem.fromFirestore(doc.data() as Map<String, dynamic>)
+        doc.id:
+            FranchiseeMenuItem.fromFirestore(doc.data() as Map<String, dynamic>)
     };
 
     return PosData(
@@ -133,12 +151,12 @@ class _PosViewState extends State<PosView> {
     final settings = posData.menuSettings[product.productId];
     final double price = settings?.price ?? 0.0;
     context.read<CartProvider>().addItem(CartItem(
-      product: product,
-      price: price,
-      quantity: 1,
-      vatRate: settings?.vatRate ?? 10.0,
-      selectedOptions: {},
-    ));
+          product: product,
+          price: price,
+          quantity: 1,
+          vatRate: settings?.vatRate ?? 10.0,
+          selectedOptions: {},
+        ));
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text("${product.name} ajouté !"),
@@ -147,7 +165,8 @@ class _PosViewState extends State<PosView> {
     ));
   }
 
-  void _showContainerModal(BuildContext context, MasterProduct container, PosData posData) {
+  void _showContainerModal(
+      BuildContext context, MasterProduct container, PosData posData) {
     final children = posData.products
         .where((p) => container.containerProductIds.contains(p.productId))
         .toList();
@@ -155,12 +174,15 @@ class _PosViewState extends State<PosView> {
       context: context,
       builder: (ctx) {
         return AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
               const Icon(Icons.folder_open, color: Colors.orange),
               const SizedBox(width: 10),
-              Flexible(child: Text(container.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+              Flexible(
+                  child: Text(container.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold))),
             ],
           ),
           content: SizedBox(
@@ -169,49 +191,61 @@ class _PosViewState extends State<PosView> {
             child: children.isEmpty
                 ? const Center(child: Text("Ce dossier est vide."))
                 : GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                childAspectRatio: 0.85,
-                crossAxisSpacing: 10,
-                mainAxisSpacing: 10,
-              ),
-              itemCount: children.length,
-              itemBuilder: (ctx, index) {
-                final child = children[index];
-                final price = posData.menuSettings[child.productId]?.price ?? 0.0;
-                return InkWell(
-                  onTap: () => _addToCart(child, posData),
-                  child: Card(
-                    elevation: 3,
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: (child.photoUrl != null && child.photoUrl!.isNotEmpty)
-                                ? CachedNetworkImage(
-                              imageUrl: child.photoUrl!,
-                              cacheManager: customCacheManager,
-                              fit: BoxFit.contain,
-                              fadeInDuration: Duration.zero,
-                              placeholder: (context, url) => const SizedBox(),
-                            )
-                                : const Icon(Icons.fastfood, size: 40, color: Colors.grey),
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 3,
+                      childAspectRatio: 0.85,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                    ),
+                    itemCount: children.length,
+                    itemBuilder: (ctx, index) {
+                      final child = children[index];
+                      final price =
+                          posData.menuSettings[child.productId]?.price ?? 0.0;
+                      return InkWell(
+                        onTap: () => _addToCart(child, posData),
+                        child: Card(
+                          elevation: 3,
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(8.0),
+                                  child: (child.photoUrl != null &&
+                                          child.photoUrl!.isNotEmpty)
+                                      ? CachedNetworkImage(
+                                          imageUrl: child.photoUrl!,
+                                          cacheManager: customCacheManager,
+                                          fit: BoxFit.contain,
+                                          fadeInDuration: Duration.zero,
+                                          placeholder: (context, url) =>
+                                              const SizedBox(),
+                                        )
+                                      : const Icon(Icons.fastfood,
+                                          size: 40, color: Colors.grey),
+                                ),
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 4),
+                                child: Text(child.name,
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                              Text("${price.toStringAsFixed(2)} €",
+                                  style: const TextStyle(
+                                      color: Colors.green,
+                                      fontWeight: FontWeight.bold)),
+                              const SizedBox(height: 8),
+                            ],
                           ),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
-                          child: Text(child.name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold)),
-                        ),
-                        Text("${price.toStringAsFixed(2)} €", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ),
           actions: [
             TextButton(
@@ -237,7 +271,8 @@ class _PosViewState extends State<PosView> {
                 children: [
                   CircularProgressIndicator(),
                   SizedBox(height: 20),
-                  Text("Préparation de la caisse...", style: TextStyle(color: Colors.grey))
+                  Text("Préparation de la caisse...",
+                      style: TextStyle(color: Colors.grey))
                 ],
               ),
             ),
@@ -250,12 +285,13 @@ class _PosViewState extends State<PosView> {
 
         if (_selectedCategoryId != null) {
           final category = posData.kioskCategories.firstWhere(
-                  (c) => c.id == _selectedCategoryId,
-              orElse: () => KioskCategory(id: '', name: '', filters: [], position: 0)
-          );
+              (c) => c.id == _selectedCategoryId,
+              orElse: () =>
+                  KioskCategory(id: '', name: '', filters: [], position: 0));
           final filterIds = category.filters.map((f) => f.id).toSet();
           displayedProducts = displayedProducts
-              .where((p) => p.kioskFilterIds.any((id) => filterIds.contains(id)))
+              .where(
+                  (p) => p.kioskFilterIds.any((id) => filterIds.contains(id)))
               .toList();
         }
 
@@ -281,7 +317,8 @@ class _PosViewState extends State<PosView> {
                             child: ChoiceChip(
                               label: Text(cat.name),
                               selected: _selectedCategoryId == cat.id,
-                              onSelected: (b) => setState(() => _selectedCategoryId = b ? cat.id : null),
+                              onSelected: (b) => setState(() =>
+                                  _selectedCategoryId = b ? cat.id : null),
                             ),
                           );
                         },
@@ -300,9 +337,11 @@ class _PosViewState extends State<PosView> {
                         itemBuilder: (context, index) {
                           final product = displayedProducts[index];
                           final bool isFolder = product.isContainer;
-                          final bool hasChildren = product.containerProductIds.isNotEmpty;
+                          final bool hasChildren =
+                              product.containerProductIds.isNotEmpty;
                           final bool showAsFolder = isFolder || hasChildren;
-                          final settings = posData.menuSettings[product.productId];
+                          final settings =
+                              posData.menuSettings[product.productId];
                           final price = settings?.price ?? 0.0;
 
                           return InkWell(
@@ -317,10 +356,13 @@ class _PosViewState extends State<PosView> {
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                                 side: showAsFolder
-                                    ? const BorderSide(color: Colors.red, width: 3)
+                                    ? const BorderSide(
+                                        color: Colors.red, width: 3)
                                     : BorderSide.none,
                               ),
-                              color: showAsFolder ? Colors.orange.shade50 : Colors.white,
+                              color: showAsFolder
+                                  ? Colors.orange.shade50
+                                  : Colors.white,
                               elevation: 2,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -329,17 +371,31 @@ class _PosViewState extends State<PosView> {
                                     child: Padding(
                                       padding: const EdgeInsets.all(4.0),
                                       child: ClipRRect(
-                                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                                        child: (product.photoUrl != null && product.photoUrl!.isNotEmpty)
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                                top: Radius.circular(8)),
+                                        child: (product.photoUrl != null &&
+                                                product.photoUrl!.isNotEmpty)
                                             ? CachedNetworkImage(
-                                          imageUrl: product.photoUrl!,
-                                          cacheManager: customCacheManager,
-                                          fit: BoxFit.cover,
-                                          fadeInDuration: Duration.zero,
-                                          fadeOutDuration: Duration.zero,
-                                          placeholder: (context, url) => Container(color: Colors.grey[100]),
-                                        )
-                                            : Icon(showAsFolder ? Icons.folder : Icons.fastfood, size: 50, color: showAsFolder ? Colors.orange : Colors.grey),
+                                                imageUrl: product.photoUrl!,
+                                                cacheManager:
+                                                    customCacheManager,
+                                                fit: BoxFit.cover,
+                                                fadeInDuration: Duration.zero,
+                                                fadeOutDuration: Duration.zero,
+                                                placeholder: (context, url) =>
+                                                    Container(
+                                                        color:
+                                                            Colors.grey[100]),
+                                              )
+                                            : Icon(
+                                                showAsFolder
+                                                    ? Icons.folder
+                                                    : Icons.fastfood,
+                                                size: 50,
+                                                color: showAsFolder
+                                                    ? Colors.orange
+                                                    : Colors.grey),
                                       ),
                                     ),
                                   ),
@@ -347,11 +403,22 @@ class _PosViewState extends State<PosView> {
                                     padding: const EdgeInsets.all(8.0),
                                     child: Column(
                                       children: [
-                                        Text(product.name, textAlign: TextAlign.center, style: const TextStyle(fontWeight: FontWeight.bold), maxLines: 2),
+                                        Text(product.name,
+                                            textAlign: TextAlign.center,
+                                            style: const TextStyle(
+                                                fontWeight: FontWeight.bold),
+                                            maxLines: 2),
                                         if (!showAsFolder)
-                                          Text("${price.toStringAsFixed(2)} €", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold))
+                                          Text("${price.toStringAsFixed(2)} €",
+                                              style: const TextStyle(
+                                                  color: Colors.green,
+                                                  fontWeight: FontWeight.bold))
                                         else
-                                          const Text("DOSSIER", style: TextStyle(color: Colors.red, fontSize: 10, fontWeight: FontWeight.bold)),
+                                          const Text("DOSSIER",
+                                              style: TextStyle(
+                                                  color: Colors.red,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.bold)),
                                       ],
                                     ),
                                   ),

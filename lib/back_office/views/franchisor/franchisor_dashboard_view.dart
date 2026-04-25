@@ -12,11 +12,14 @@ import 'franchisor_franchisees_view.dart';
 import 'franchisor_groups_view.dart';
 import 'franchisor_kiosk_view.dart' hide CategoryEditorDialog;
 import 'franchisor_sections_view.dart';
+
 class FranchisorDashboardView extends StatefulWidget {
   const FranchisorDashboardView({super.key});
   @override
-  State<FranchisorDashboardView> createState() => _FranchisorDashboardViewState();
+  State<FranchisorDashboardView> createState() =>
+      _FranchisorDashboardViewState();
 }
+
 class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
@@ -30,11 +33,13 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       if (_tabController.indexIsChanging) setState(() {});
     });
   }
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
   }
+
   void _navigateToFranchisees(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -53,13 +58,14 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
             backgroundColor: Colors.transparent,
             foregroundColor: Colors.white,
             centerTitle: true,
-            toolbarHeight: 60, 
+            toolbarHeight: 60,
           ),
           body: const FranchiseesView(),
         ),
       ),
     );
   }
+
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -78,15 +84,18 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                   colors: [_bgGradientStart, _bgGradientEnd],
                 ),
                 boxShadow: [
-                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
-                ]
-            ),
+                  BoxShadow(
+                      color: Colors.black26,
+                      blurRadius: 4,
+                      offset: Offset(0, 2))
+                ]),
             child: SafeArea(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0, vertical: 8.0),
                     child: Row(
                       children: [
                         Container(
@@ -97,8 +106,9 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                           ),
                           child: const CircleAvatar(
                             backgroundColor: Colors.white10,
-                            radius: 16, 
-                            child: Icon(Icons.admin_panel_settings_rounded, color: Colors.amber, size: 18),
+                            radius: 16,
+                            child: Icon(Icons.admin_panel_settings_rounded,
+                                color: Colors.amber, size: 18),
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -111,13 +121,12 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                                 color: Colors.white,
                                 fontWeight: FontWeight.w900,
                                 letterSpacing: 0.5,
-                                fontSize: 13, 
+                                fontSize: 13,
                               ),
                             ),
-                            Text(
-                                userEmail,
-                                style: TextStyle(color: Colors.grey[400], fontSize: 10)
-                            ),
+                            Text(userEmail,
+                                style: TextStyle(
+                                    color: Colors.grey[400], fontSize: 10)),
                           ],
                         ),
                         const Spacer(),
@@ -125,10 +134,14 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                           onTap: () => _navigateToFranchisees(context),
                           borderRadius: BorderRadius.circular(30),
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 6),
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
-                                colors: [Colors.orange.shade800, Colors.orange.shade500],
+                                colors: [
+                                  Colors.orange.shade800,
+                                  Colors.orange.shade500
+                                ],
                                 begin: Alignment.bottomLeft,
                                 end: Alignment.topRight,
                               ),
@@ -136,7 +149,8 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                             ),
                             child: Row(
                               children: const [
-                                Icon(Icons.store_mall_directory_rounded, color: Colors.white, size: 16),
+                                Icon(Icons.store_mall_directory_rounded,
+                                    color: Colors.white, size: 16),
                                 SizedBox(width: 6),
                                 Text(
                                   "Réseau",
@@ -154,28 +168,40 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                         IconButton(
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          icon: const Icon(Icons.power_settings_new_rounded, color: Colors.white54, size: 24),
+                          icon: const Icon(Icons.power_settings_new_rounded,
+                              color: Colors.white54, size: 24),
                           onPressed: () async => await authProvider.signOut(),
                         ),
                       ],
                     ),
                   ),
                   Container(
-                    height: 45, 
+                    height: 45,
                     padding: const EdgeInsets.only(bottom: 4),
                     child: TabBar(
                       controller: _tabController,
                       isScrollable: true,
-                      indicator: const UnderlineTabIndicator(borderSide: BorderSide.none),
+                      indicator: const UnderlineTabIndicator(
+                          borderSide: BorderSide.none),
                       labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-                      onTap: (index) => setState((){}),
+                      onTap: (index) => setState(() {}),
                       tabs: [
-                        _buildSharpTab(0, "Produits", Icons.fastfood_rounded, const Color(0xFFFF416C), const Color(0xFFFF4B2B)),
-                        _buildSharpTab(1, "Catégories", Icons.category_rounded, const Color(0xFF00B4DB), const Color(0xFF0083B0)),
-                        _buildSharpTab(2, "Sections", Icons.list, const Color(0xFF56ab2f), const Color(0xFFa8e063)),
-                        _buildSharpTab(3, "Groupes", Icons.list_alt, const Color(0xFF8E2DE2), const Color(0xFF4A00E0)),
-                        _buildSharpTab(4, "Filtres", Icons.tune_rounded, const Color(0xFFF7971E), const Color(0xFFFFD200)),
-                        _buildSharpTab(5, "Borne", Icons.phonelink_setup_rounded, const Color(0xFF232526), const Color(0xFF414345)),
+                        _buildSharpTab(0, "Produits", Icons.fastfood_rounded,
+                            const Color(0xFFFF416C), const Color(0xFFFF4B2B)),
+                        _buildSharpTab(1, "Catégories", Icons.category_rounded,
+                            const Color(0xFF00B4DB), const Color(0xFF0083B0)),
+                        _buildSharpTab(2, "Sections", Icons.list,
+                            const Color(0xFF56ab2f), const Color(0xFFa8e063)),
+                        _buildSharpTab(3, "Groupes", Icons.list_alt,
+                            const Color(0xFF8E2DE2), const Color(0xFF4A00E0)),
+                        _buildSharpTab(4, "Filtres", Icons.tune_rounded,
+                            const Color(0xFFF7971E), const Color(0xFFFFD200)),
+                        _buildSharpTab(
+                            5,
+                            "Borne",
+                            Icons.phonelink_setup_rounded,
+                            const Color(0xFF232526),
+                            const Color(0xFF414345)),
                       ],
                     ),
                   ),
@@ -198,53 +224,58 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
         ),
         floatingActionButton: _tabController.index == 5
             ? SizedBox(
-          height: 60, 
-          width: 170,
-          child: FloatingActionButton.extended(
-            elevation: 2,
-            icon: const Icon(Icons.add_photo_alternate_rounded, color: Colors.white, size: 22),
-            label: const Text("Ajouter Fond", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-            backgroundColor: const Color(0xFF232526),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-            onPressed: () => _showAddWallpaperDialog(context),
-          ),
-        )
+                height: 60,
+                width: 170,
+                child: FloatingActionButton.extended(
+                  elevation: 2,
+                  icon: const Icon(Icons.add_photo_alternate_rounded,
+                      color: Colors.white, size: 22),
+                  label: const Text("Ajouter Fond",
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                  backgroundColor: const Color(0xFF232526),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
+                  onPressed: () => _showAddWallpaperDialog(context),
+                ),
+              )
             : null,
       ),
     );
   }
-  Widget _buildSharpTab(int index, String label, IconData icon, Color cStart, Color cEnd) {
+
+  Widget _buildSharpTab(
+      int index, String label, IconData icon, Color cStart, Color cEnd) {
     final bool isSelected = _tabController.index == index;
     return Tab(
-      height: 40, 
+      height: 40,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8), 
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           gradient: isSelected
-              ? LinearGradient(colors: [cStart, cEnd], begin: Alignment.topLeft, end: Alignment.bottomRight)
+              ? LinearGradient(
+                  colors: [cStart, cEnd],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight)
               : null,
           color: isSelected ? null : Colors.transparent,
-          borderRadius: BorderRadius.circular(20), 
-          border: isSelected
-              ? null
-              : Border.all(color: Colors.white12, width: 1),
+          borderRadius: BorderRadius.circular(20),
+          border:
+              isSelected ? null : Border.all(color: Colors.white12, width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-                icon,
-                color: isSelected ? Colors.white : Colors.white60,
-                size: 18 
-            ),
+            Icon(icon,
+                color: isSelected ? Colors.white : Colors.white60, size: 18),
             const SizedBox(width: 8),
             Text(
               label,
               style: TextStyle(
                 color: isSelected ? Colors.white : Colors.white60,
                 fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                fontSize: 13, 
+                fontSize: 13,
               ),
             ),
           ],
@@ -252,6 +283,7 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       ),
     );
   }
+
   void _showAddWallpaperDialog(BuildContext context) {
     final TextEditingController nameController = TextEditingController();
     final ImagePicker picker = ImagePicker();
@@ -262,7 +294,8 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
       builder: (ctx) => StatefulBuilder(
         builder: (context, setStateDialog) {
           return AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
             title: Row(
               children: [
                 Icon(Icons.wallpaper, color: Colors.blueGrey[800], size: 26),
@@ -279,7 +312,9 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                     labelText: "Nom du thème",
                     filled: true,
                     fillColor: Colors.grey[100],
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(15),
+                        borderSide: BorderSide.none),
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -292,25 +327,30 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                     }
                   },
                   child: Container(
-                    height: 150, 
+                    height: 150,
                     width: double.infinity,
                     decoration: BoxDecoration(
                         color: pickedFile == null ? Colors.grey[200] : null,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.grey.shade300, style: BorderStyle.solid),
+                        border: Border.all(
+                            color: Colors.grey.shade300,
+                            style: BorderStyle.solid),
                         image: pickedFile != null
-                            ? DecorationImage(image: FileImage(File(pickedFile!.path)), fit: BoxFit.cover)
-                            : null
-                    ),
+                            ? DecorationImage(
+                                image: FileImage(File(pickedFile!.path)),
+                                fit: BoxFit.cover)
+                            : null),
                     child: pickedFile == null
                         ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
-                        Icon(Icons.add_a_photo_rounded, color: Colors.grey, size: 40),
-                        SizedBox(height: 8),
-                        Text("Choisir image", style: TextStyle(color: Colors.grey)),
-                      ],
-                    )
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.add_a_photo_rounded,
+                                  color: Colors.grey, size: 40),
+                              SizedBox(height: 8),
+                              Text("Choisir image",
+                                  style: TextStyle(color: Colors.grey)),
+                            ],
+                          )
                         : null,
                   ),
                 ),
@@ -324,37 +364,51 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(ctx),
-                  child: const Text("Annuler", style: TextStyle(color: Colors.grey))),
+                  child: const Text("Annuler",
+                      style: TextStyle(color: Colors.grey))),
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.black87,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15)),
                 ),
-                onPressed: (pickedFile == null || isLoading) ? null : () async {
-                  setStateDialog(() => isLoading = true);
-                  try {
-                    final repo = FranchiseRepository();
-                    final auth = Provider.of<AuthProvider>(context, listen: false);
-                    String path = 'wallpapers/${DateTime.now().millisecondsSinceEpoch}.jpg';
-                    String url = await repo.uploadUniversalFile(pickedFile!, path);
-                    await FirebaseFirestore.instance.collection('kiosk_medias').add({
-                      'franchisorId': auth.firebaseUser!.uid,
-                      'name': nameController.text.isEmpty ? 'Sans nom' : nameController.text,
-                      'type': 'image',
-                      'url': url,
-                      'createdAt': FieldValue.serverTimestamp(),
-                    });
-                    if (mounted) {
-                      Navigator.pop(ctx);
-                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Succès !")));
-                    }
-                  } catch (e) {
-                    setStateDialog(() => isLoading = false);
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
-                  }
-                },
+                onPressed: (pickedFile == null || isLoading)
+                    ? null
+                    : () async {
+                        setStateDialog(() => isLoading = true);
+                        try {
+                          final repo = FranchiseRepository();
+                          final auth =
+                              Provider.of<AuthProvider>(context, listen: false);
+                          String path =
+                              'wallpapers/${DateTime.now().millisecondsSinceEpoch}.jpg';
+                          String url =
+                              await repo.uploadUniversalFile(pickedFile!, path);
+                          await FirebaseFirestore.instance
+                              .collection('kiosk_medias')
+                              .add({
+                            'franchisorId': auth.firebaseUser!.uid,
+                            'name': nameController.text.isEmpty
+                                ? 'Sans nom'
+                                : nameController.text,
+                            'type': 'image',
+                            'url': url,
+                            'createdAt': FieldValue.serverTimestamp(),
+                          });
+                          if (mounted) {
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Succès !")));
+                          }
+                        } catch (e) {
+                          setStateDialog(() => isLoading = false);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("Erreur: $e")));
+                        }
+                      },
                 child: const Text("Enregistrer"),
               ),
             ],
@@ -364,16 +418,22 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
     );
   }
 }
+
 class FranchisorGlobalConfigView extends StatefulWidget {
   const FranchisorGlobalConfigView({super.key});
   @override
-  State<FranchisorGlobalConfigView> createState() => _FranchisorGlobalConfigViewState();
+  State<FranchisorGlobalConfigView> createState() =>
+      _FranchisorGlobalConfigViewState();
 }
-class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView> {
+
+class _FranchisorGlobalConfigViewState
+    extends State<FranchisorGlobalConfigView> {
   bool _isUpdating = false;
-  Future<void> _updateTechnicalButton(String typeKey, String currentOtherUrl) async {
+  Future<void> _updateTechnicalButton(
+      String typeKey, String currentOtherUrl) async {
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final XFile? image =
+        await picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (image == null) return;
     setState(() => _isUpdating = true);
     try {
@@ -382,16 +442,20 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
       String path = 'buttons/${auth.firebaseUser!.uid}_$typeKey.jpg';
       String url = await repo.uploadUniversalFile(image, path);
       if (typeKey == 'dineIn') {
-        await repo.updateGlobalButtonImages(auth.firebaseUser!.uid, url, currentOtherUrl);
+        await repo.updateGlobalButtonImages(
+            auth.firebaseUser!.uid, url, currentOtherUrl);
       } else {
-        await repo.updateGlobalButtonImages(auth.firebaseUser!.uid, currentOtherUrl, url);
+        await repo.updateGlobalButtonImages(
+            auth.firebaseUser!.uid, currentOtherUrl, url);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Erreur: $e")));
     } finally {
       setState(() => _isUpdating = false);
     }
   }
+
   Future<void> _deleteTechnicalButton(String typeKey) async {
     setState(() => _isUpdating = true);
     try {
@@ -399,33 +463,44 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
       final repo = FranchiseRepository();
       await repo.deleteGlobalButtonImage(auth.firebaseUser!.uid, typeKey);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Erreur: $e")));
     } finally {
       setState(() => _isUpdating = false);
     }
   }
+
   Future<void> _deleteMedia(String docId) async {
     bool? confirm = await showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-            title: const Text("Supprimer l'image ?"),
-            actions: [
-              TextButton(onPressed: ()=>Navigator.pop(ctx, false), child: const Text("Annuler")),
-              TextButton(onPressed: ()=>Navigator.pop(ctx, true), child: const Text("Supprimer", style: TextStyle(color: Colors.red))),
-            ]
-        )
-    );
-    if(confirm == true) {
-      await FirebaseFirestore.instance.collection('kiosk_medias').doc(docId).delete();
+        builder: (ctx) =>
+            AlertDialog(title: const Text("Supprimer l'image ?"), actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text("Annuler")),
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text("Supprimer",
+                      style: TextStyle(color: Colors.red))),
+            ]));
+    if (confirm == true) {
+      await FirebaseFirestore.instance
+          .collection('kiosk_medias')
+          .doc(docId)
+          .delete();
     }
   }
+
   @override
   Widget build(BuildContext context) {
     final auth = Provider.of<AuthProvider>(context);
     final user = auth.franchiseUser;
     if (user == null) return const Center(child: CircularProgressIndicator());
     return StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .snapshots(),
         builder: (context, snapshot) {
           String? liveDineInUrl;
           String? liveTakeawayUrl;
@@ -442,8 +517,7 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                 color: Colors.white,
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
-                    side: BorderSide(color: Colors.grey.shade200)
-                ),
+                    side: BorderSide(color: Colors.grey.shade200)),
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
@@ -453,11 +527,16 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                         children: [
                           Container(
                               padding: const EdgeInsets.all(8),
-                              decoration: BoxDecoration(color: Colors.blueGrey.shade50, shape: BoxShape.circle),
-                              child: const Icon(Icons.touch_app_rounded, color: Colors.blueGrey, size: 24)
-                          ),
+                              decoration: BoxDecoration(
+                                  color: Colors.blueGrey.shade50,
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.touch_app_rounded,
+                                  color: Colors.blueGrey, size: 24)),
                           const SizedBox(width: 10),
-                          const Text("ACCUEIL BORNE", style: TextStyle(fontWeight: FontWeight.w800, color: Colors.blueGrey)),
+                          const Text("ACCUEIL BORNE",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  color: Colors.blueGrey)),
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -470,7 +549,8 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                             url: liveDineInUrl,
                             color: Colors.orange.shade50,
                             accentColor: Colors.orange,
-                            onTap: () => _updateTechnicalButton('dineIn', liveTakeawayUrl ?? ''),
+                            onTap: () => _updateTechnicalButton(
+                                'dineIn', liveTakeawayUrl ?? ''),
                             onDelete: () => _deleteTechnicalButton('dineIn'),
                           ),
                           _buildInteractiveBtn(
@@ -479,7 +559,8 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                             url: liveTakeawayUrl,
                             color: Colors.brown.shade50,
                             accentColor: Colors.brown,
-                            onTap: () => _updateTechnicalButton('takeaway', liveDineInUrl ?? ''),
+                            onTap: () => _updateTechnicalButton(
+                                'takeaway', liveDineInUrl ?? ''),
                             onDelete: () => _deleteTechnicalButton('takeaway'),
                           ),
                         ],
@@ -492,9 +573,11 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
               const SizedBox(height: 30),
               Row(
                 children: const [
-                  Icon(Icons.photo_library_rounded, color: Colors.black87, size: 24),
+                  Icon(Icons.photo_library_rounded,
+                      color: Colors.black87, size: 24),
                   SizedBox(width: 10),
-                  Text("Fonds d'écran actifs", style: TextStyle(fontWeight: FontWeight.bold)),
+                  Text("Fonds d'écran actifs",
+                      style: TextStyle(fontWeight: FontWeight.bold)),
                 ],
               ),
               const SizedBox(height: 15),
@@ -507,13 +590,21 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                       .orderBy('createdAt', descending: true)
                       .snapshots(),
                   builder: (context, mediaSnapshot) {
-                    if (!mediaSnapshot.hasData) return const Center(child: CircularProgressIndicator());
+                    if (!mediaSnapshot.hasData) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
                     final docs = mediaSnapshot.data!.docs;
-                    if (docs.isEmpty) return const Center(child: Text("Aucun fond d'écran"));
+                    if (docs.isEmpty) {
+                      return const Center(child: Text("Aucun fond d'écran"));
+                    }
                     return GridView.builder(
                       physics: const BouncingScrollPhysics(),
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 3, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 1.5),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 15,
+                              mainAxisSpacing: 15,
+                              childAspectRatio: 1.5),
                       itemCount: docs.length,
                       itemBuilder: (context, index) {
                         final data = docs[index].data() as Map<String, dynamic>;
@@ -523,25 +614,30 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
                               child: Container(
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(15),
-                                  border: Border.all(color: Colors.grey.shade300),
+                                  border:
+                                      Border.all(color: Colors.grey.shade300),
                                 ),
                                 child: ClipRRect(
                                   borderRadius: BorderRadius.circular(15),
                                   child: CachedNetworkImage(
-                                    imageUrl: data['url'], fit: BoxFit.cover,
-                                    placeholder: (c, u) => Container(color: Colors.grey[200]),
+                                    imageUrl: data['url'],
+                                    fit: BoxFit.cover,
+                                    placeholder: (c, u) =>
+                                        Container(color: Colors.grey[200]),
                                   ),
                                 ),
                               ),
                             ),
                             Positioned(
-                              top: 5, right: 5,
+                              top: 5,
+                              right: 5,
                               child: InkWell(
                                 onTap: () => _deleteMedia(docs[index].id),
                                 child: CircleAvatar(
                                   backgroundColor: Colors.white,
                                   radius: 14,
-                                  child: const Icon(Icons.delete_rounded, color: Colors.red, size: 16),
+                                  child: const Icon(Icons.delete_rounded,
+                                      color: Colors.red, size: 16),
                                 ),
                               ),
                             )
@@ -556,6 +652,7 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
           );
         });
   }
+
   Widget _buildInteractiveBtn({
     required String label,
     required IconData icon,
@@ -570,14 +667,19 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
         GestureDetector(
           onTap: onTap,
           child: Container(
-            height: 120, 
+            height: 120,
             width: 120,
             decoration: BoxDecoration(
               color: color,
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: url != null ? Colors.transparent : accentColor.withOpacity(0.3), width: 2),
+              border: Border.all(
+                  color: url != null
+                      ? Colors.transparent
+                      : accentColor.withOpacity(0.3),
+                  width: 2),
               image: url != null
-                  ? DecorationImage(image: CachedNetworkImageProvider(url), fit: BoxFit.cover)
+                  ? DecorationImage(
+                      image: CachedNetworkImageProvider(url), fit: BoxFit.cover)
                   : null,
             ),
             child: url == null
@@ -586,31 +688,41 @@ class _FranchisorGlobalConfigViewState extends State<FranchisorGlobalConfigView>
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: accentColor)),
-        if(url != null)
+        Text(label,
+            style: TextStyle(
+                fontWeight: FontWeight.bold, fontSize: 13, color: accentColor)),
+        if (url != null)
           Padding(
             padding: const EdgeInsets.only(top: 4),
             child: InkWell(
               onTap: onDelete,
-              child: Text("Supprimer", style: TextStyle(color: Colors.red[300], fontSize: 11, decoration: TextDecoration.underline)),
+              child: Text("Supprimer",
+                  style: TextStyle(
+                      color: Colors.red[300],
+                      fontSize: 11,
+                      decoration: TextDecoration.underline)),
             ),
           )
       ],
     );
   }
 }
+
 class _KeepAlivePage extends StatefulWidget {
   final Widget child;
   const _KeepAlivePage({required this.child});
   @override
   State<_KeepAlivePage> createState() => _KeepAlivePageState();
 }
-class _KeepAlivePageState extends State<_KeepAlivePage> with AutomaticKeepAliveClientMixin {
+
+class _KeepAlivePageState extends State<_KeepAlivePage>
+    with AutomaticKeepAliveClientMixin {
   @override
   Widget build(BuildContext context) {
     super.build(context);
     return widget.child;
   }
+
   @override
   bool get wantKeepAlive => true;
 }

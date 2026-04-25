@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 const List<String> kColorPalette = [
   '#F44336',
   '#E91E63',

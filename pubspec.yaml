@@ -1,7 +1,7 @@
 name: ouiborne
 description: application de caisse.
 publish_to: 'none'
-version: 1.0.18+18
+version: 1.0.27+27
 environment:
   sdk: '>=3.2.0 <4.0.0'
 dependencies:
@@ -29,6 +29,7 @@ dependencies:
   flutter_cache_manager: ^3.3.2
   scroll_to_index: ^3.0.1
   shimmer: ^3.0.0
+  url_launcher: ^6.3.0
   # --- Impression ---
   flutter_staggered_animations: ^1.1.1
   # --- État & Navigation ---
@@ -42,23 +43,27 @@ dependencies:
   shared_preferences: ^2.2.3
   package_info_plus: ^4.2.0
   http: ^1.1.2
-  path_provider: ^2.1.2
+  path_provider: ^2.1.5
   open_filex: ^4.3.4
   esc_pos_printer_plus: ^0.1.1
   esc_pos_utils_plus: ^2.0.4
   file_picker: ^10.3.10
+  share_plus: ^12.0.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   msix: 3.16.12
+
 msix_config:
-  display_name: "Ouiborne"
-  publisher_display_name: "Ouiborne"
-  identity_name: "Ouiborne.OUIBORNE"
-  publisher: "CN=A25805F6-1384-40F1-B42A-44F83F8024DC"
-  msix_version: 1.0.18.0
-  architecture: x64
-  capabilities: internetClient, privateNetworkClientServer
+    display_name: "Ouiborne"
+    publisher_display_name: "Ouiborne"
+    identity_name: "Ouiborne.OUIBORNE"
+    publisher: "CN=A25805F6-1384-40F1-B42A-44F83F8024DC"
+    msix_version: 1.0.27.0
+    architecture: x64
+    capabilities: internetClient, privateNetworkClientServer
+    certificate_path: "ouiborne_cert.pfx"
+    certificate_password: "Secret2026!"
 flutter:
   uses-material-design: true

@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; 
-import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../core/repository/repository.dart';
 import '../../models.dart';
+
 class MediaGalleryScreen extends StatefulWidget {
   final String franchisorId;
   const MediaGalleryScreen({super.key, required this.franchisorId});
   @override
   State<MediaGalleryScreen> createState() => _MediaGalleryScreenState();
 }
+
 class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
   final FranchiseRepository _repo = FranchiseRepository();
   bool _isLoading = false;
@@ -16,7 +18,7 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
     final nameController = TextEditingController();
     String selectedType = 'image';
     XFile? selectedFile;
-    XFile? selectedThumb; 
+    XFile? selectedThumb;
     await showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -46,27 +48,31 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                     onChanged: (val) {
                       setDialogState(() {
                         selectedType = val!;
-                        selectedFile = null; 
+                        selectedFile = null;
                       });
                     },
-                    decoration: const InputDecoration(labelText: "Type de média"),
+                    decoration:
+                        const InputDecoration(labelText: "Type de média"),
                   ),
                   const SizedBox(height: 20),
                   OutlinedButton.icon(
-                    icon: Icon(selectedType == 'image' ? Icons.image : Icons.videocam),
+                    icon: Icon(
+                        selectedType == 'image' ? Icons.image : Icons.videocam),
                     label: Text(selectedFile == null
                         ? "Sélectionner le fichier"
                         : "Fichier sélectionné !"),
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: selectedFile != null ? Colors.green : null
-                    ),
+                        foregroundColor:
+                            selectedFile != null ? Colors.green : null),
                     onPressed: () async {
                       final picker = ImagePicker();
                       final XFile? file;
                       if (selectedType == 'image') {
-                        file = await picker.pickImage(source: ImageSource.gallery);
+                        file =
+                            await picker.pickImage(source: ImageSource.gallery);
                       } else {
-                        file = await picker.pickVideo(source: ImageSource.gallery);
+                        file =
+                            await picker.pickVideo(source: ImageSource.gallery);
                       }
                       if (file != null) {
                         setDialogState(() => selectedFile = file);
@@ -81,7 +87,8 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                           ? "Ajouter une miniature (Optionnel)"
                           : "Miniature sélectionnée"),
                       onPressed: () async {
-                        final file = await ImagePicker().pickImage(source: ImageSource.gallery);
+                        final file = await ImagePicker()
+                            .pickImage(source: ImageSource.gallery);
                         if (file != null) {
                           setDialogState(() => selectedThumb = file);
                         }
@@ -94,20 +101,15 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
             actions: [
               TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text("Annuler")
-              ),
+                  child: const Text("Annuler")),
               ElevatedButton(
                 onPressed: (selectedFile == null || nameController.text.isEmpty)
                     ? null
                     : () async {
-                  Navigator.pop(context); 
-                  _uploadMedia(
-                      nameController.text,
-                      selectedType,
-                      selectedFile!,
-                      selectedThumb
-                  );
-                },
+                        Navigator.pop(context);
+                        _uploadMedia(nameController.text, selectedType,
+                            selectedFile!, selectedThumb);
+                      },
                 child: const Text("Uploader"),
               ),
             ],
@@ -116,7 +118,9 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       ),
     );
   }
-  Future<void> _uploadMedia(String name, String type, XFile file, XFile? thumb) async {
+
+  Future<void> _uploadMedia(
+      String name, String type, XFile file, XFile? thumb) async {
     setState(() => _isLoading = true);
     try {
       await _repo.addMasterMedia(
@@ -127,20 +131,25 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Média ajouté avec succès !"), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text("Média ajouté avec succès !"),
+              backgroundColor: Colors.green),
         );
       }
     } catch (e) {
       debugPrint("Erreur upload: $e");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Erreur lors de l'upload : $e"), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text("Erreur lors de l'upload : $e"),
+              backgroundColor: Colors.red),
         );
       }
     } finally {
       setState(() => _isLoading = false);
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -173,9 +182,12 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.perm_media_outlined, size: 60, color: Colors.grey),
+                      Icon(Icons.perm_media_outlined,
+                          size: 60, color: Colors.grey),
                       SizedBox(height: 16),
-                      Text("Aucun média disponible.\nAjoutez-en pour vos franchisés.", textAlign: TextAlign.center),
+                      Text(
+                          "Aucun média disponible.\nAjoutez-en pour vos franchisés.",
+                          textAlign: TextAlign.center),
                     ],
                   ),
                 );
@@ -194,7 +206,8 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                   return Card(
                     clipBehavior: Clip.antiAlias,
                     elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
                     child: Stack(
                       children: [
                         Column(
@@ -211,13 +224,15 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                                 children: [
                                   Text(
                                     media.name,
-                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
                                     media.type.toUpperCase(),
-                                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                                    style: const TextStyle(
+                                        fontSize: 10, color: Colors.grey),
                                   ),
                                 ],
                               ),
@@ -231,7 +246,8 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
                             backgroundColor: Colors.white,
                             radius: 16,
                             child: IconButton(
-                              icon: const Icon(Icons.delete, size: 16, color: Colors.red),
+                              icon: const Icon(Icons.delete,
+                                  size: 16, color: Colors.red),
                               onPressed: () => _confirmDelete(media),
                             ),
                           ),
@@ -246,18 +262,22 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
           if (_isLoading)
             Container(
               color: Colors.black54,
-              child: const Center(child: CircularProgressIndicator(color: Colors.white)),
+              child: const Center(
+                  child: CircularProgressIndicator(color: Colors.white)),
             ),
         ],
       ),
     );
   }
+
   Widget _buildMediaPreview(KioskMedia media) {
     if (media.type == 'image') {
       return CachedNetworkImage(
         imageUrl: media.url,
         fit: BoxFit.cover,
-        placeholder: (_, __) => Container(color: Colors.grey[200], child: const Center(child: Icon(Icons.image))),
+        placeholder: (_, __) => Container(
+            color: Colors.grey[200],
+            child: const Center(child: Icon(Icons.image))),
         errorWidget: (_, __, ___) => const Icon(Icons.broken_image),
       );
     } else {
@@ -265,31 +285,39 @@ class _MediaGalleryScreenState extends State<MediaGalleryScreen> {
         return Stack(
           fit: StackFit.expand,
           children: [
-            CachedNetworkImage(imageUrl: media.thumbnailUrl!, fit: BoxFit.cover),
-            const Center(child: Icon(Icons.play_circle_fill, color: Colors.white70, size: 48)),
+            CachedNetworkImage(
+                imageUrl: media.thumbnailUrl!, fit: BoxFit.cover),
+            const Center(
+                child: Icon(Icons.play_circle_fill,
+                    color: Colors.white70, size: 48)),
           ],
         );
       }
       return Container(
         color: Colors.black87,
-        child: const Center(child: Icon(Icons.videocam, color: Colors.white, size: 48)),
+        child: const Center(
+            child: Icon(Icons.videocam, color: Colors.white, size: 48)),
       );
     }
   }
+
   void _confirmDelete(KioskMedia media) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Supprimer ?"),
-        content: Text("Voulez-vous vraiment supprimer '${media.name}' ?\nCela le retirera de toutes les bornes qui l'utilisent."),
+        content: Text(
+            "Voulez-vous vraiment supprimer '${media.name}' ?\nCela le retirera de toutes les bornes qui l'utilisent."),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Non")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text("Non")),
           TextButton(
             onPressed: () {
               Navigator.pop(ctx);
               _repo.deleteMasterMedia(media.id);
             },
-            child: const Text("Oui, Supprimer", style: TextStyle(color: Colors.red)),
+            child: const Text("Oui, Supprimer",
+                style: TextStyle(color: Colors.red)),
           ),
         ],
       ),

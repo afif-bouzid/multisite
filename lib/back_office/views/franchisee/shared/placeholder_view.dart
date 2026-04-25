@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 class ConfigurationPlaceholderView extends StatelessWidget {
   final String pageTitle;
   const ConfigurationPlaceholderView({super.key, required this.pageTitle});

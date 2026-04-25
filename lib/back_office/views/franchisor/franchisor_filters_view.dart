@@ -4,12 +4,28 @@ import 'package:uuid/uuid.dart';
 import '../../../core/auth_provider.dart';
 import '/models.dart';
 import '../../../core/repository/repository.dart';
+
 const List<String> _kLocalPalette = [
-  '#F44336', '#E91E63', '#9C27B0', '#673AB7', '#2196F3',
-  '#03A9F4', '#00BCD4', '#009688', '#4CAF50', '#8BC34A',
-  '#CDDC39', '#FFC107', '#FF9800', '#FF5722', '#795548',
-  '#9E9E9E', '#607D8B', '#000000'
+  '#F44336',
+  '#E91E63',
+  '#9C27B0',
+  '#673AB7',
+  '#2196F3',
+  '#03A9F4',
+  '#00BCD4',
+  '#009688',
+  '#4CAF50',
+  '#8BC34A',
+  '#CDDC39',
+  '#FFC107',
+  '#FF9800',
+  '#FF5722',
+  '#795548',
+  '#9E9E9E',
+  '#607D8B',
+  '#000000'
 ];
+
 class FiltersView extends StatelessWidget {
   const FiltersView({super.key});
   @override
@@ -18,7 +34,8 @@ class FiltersView extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.firebaseUser;
     if (user == null) {
-      return const Scaffold(body: Center(child: Text("Utilisateur non connecté")));
+      return const Scaffold(
+          body: Center(child: Text("Utilisateur non connecté")));
     }
     return Scaffold(
       backgroundColor: const Color(0xFFF5F7FA),
@@ -45,12 +62,15 @@ class FiltersView extends StatelessWidget {
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
-                      BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 8, offset: const Offset(0, 2))
-                    ]
-                ),
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.03),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2))
+                    ]),
                 child: ListTile(
                   leading: Container(
-                    width: 40, height: 40,
+                    width: 40,
+                    height: 40,
                     decoration: BoxDecoration(
                       color: color.withOpacity(0.2),
                       shape: BoxShape.circle,
@@ -58,17 +78,21 @@ class FiltersView extends StatelessWidget {
                     ),
                     child: Icon(Icons.label, color: color, size: 20),
                   ),
-                  title: Text(filter.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  title: Text(filter.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       IconButton(
                         icon: const Icon(Icons.edit, color: Colors.black54),
-                        onPressed: () => showFilterDialog(context, filter: filter),
+                        onPressed: () =>
+                            showFilterDialog(context, filter: filter),
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _confirmDelete(context, repository, filter),
+                        icon:
+                            const Icon(Icons.delete_outline, color: Colors.red),
+                        onPressed: () =>
+                            _confirmDelete(context, repository, filter),
                       ),
                     ],
                   ),
@@ -87,16 +111,21 @@ class FiltersView extends StatelessWidget {
       ),
     );
   }
-  void _confirmDelete(BuildContext context, FranchiseRepository repo, ProductFilter filter) {
+
+  void _confirmDelete(
+      BuildContext context, FranchiseRepository repo, ProductFilter filter) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text("Supprimer ?"),
         content: Text("Voulez-vous supprimer le filtre '${filter.name}' ?"),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text("Annuler")),
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text("Annuler")),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             onPressed: () async {
               await repo.deleteFilter(filter.id);
               if (ctx.mounted) Navigator.pop(ctx);
@@ -107,6 +136,7 @@ class FiltersView extends StatelessWidget {
       ),
     );
   }
+
   static void showFilterDialog(BuildContext context, {ProductFilter? filter}) {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final user = authProvider.firebaseUser;
@@ -138,8 +168,8 @@ class FiltersView extends StatelessWidget {
             onPressed: () async {
               if (nameController.text.isNotEmpty) {
                 await repository.saveFilter(
-                  franchisorId: user.uid, 
-                  id: filter?.id ?? const Uuid().v4(),        
+                  franchisorId: user.uid,
+                  id: filter?.id ?? const Uuid().v4(),
                   name: nameController.text.trim(),
                   color: selectedColorHex,
                 );
@@ -152,6 +182,7 @@ class FiltersView extends StatelessWidget {
       ),
     );
   }
+
   static Color _getColorFromHex(String? hexString) {
     if (hexString == null || hexString.isEmpty) return Colors.grey;
     try {
@@ -163,6 +194,7 @@ class FiltersView extends StatelessWidget {
     }
   }
 }
+
 class _FilterDialogContent extends StatefulWidget {
   final TextEditingController nameController;
   final Function(String?) onColorSelected;
@@ -175,6 +207,7 @@ class _FilterDialogContent extends StatefulWidget {
   @override
   State<_FilterDialogContent> createState() => _FilterDialogContentState();
 }
+
 class _FilterDialogContentState extends State<_FilterDialogContent> {
   String? _selectedColor;
   @override
@@ -182,6 +215,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
     super.initState();
     _selectedColor = widget.initialColor;
   }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -220,8 +254,12 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                       color: isSelected ? Colors.black : Colors.grey.shade300,
                       width: isSelected ? 2.5 : 1,
                     ),
-                    boxShadow: isSelected ? [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6)] : null
-                ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                                color: color.withOpacity(0.4), blurRadius: 6)
+                          ]
+                        : null),
                 child: isSelected
                     ? const Icon(Icons.check, color: Colors.white, size: 20)
                     : null,
