@@ -10896,7 +10896,8 @@
 ├── project_context.txt
 ├── pubspec.lock
 ├── pubspec.yaml
-└── reconstructeur.dart
+├── reconstructeur.dart
+└── unnamed.patch
 
 
 ==================================================
@@ -10905,7 +10906,7 @@ FILE PATH: pubspec.yaml
 name: ouiborne
 description: application de caisse.
 publish_to: 'none'
-version: 1.0.24+24
+version: 1.0.27+27
 environment:
   sdk: '>=3.2.0 <4.0.0'
 dependencies:
@@ -10963,7 +10964,7 @@ msix_config:
     publisher_display_name: "Ouiborne"
     identity_name: "Ouiborne.OUIBORNE"
     publisher: "CN=A25805F6-1384-40F1-B42A-44F83F8024DC"
-    msix_version: 1.0.24.0
+    msix_version: 1.0.27.0
     architecture: x64
     capabilities: internetClient, privateNetworkClientServer
     certificate_path: "ouiborne_cert.pfx"
@@ -10994,114 +10995,193 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
   }
   Future<void> _loadVersion() async {
     final packageInfo = await PackageInfo.fromPlatform();
-    if (mounted) {
-      setState(() {
-        _version = packageInfo.version;
-      });
-    }
+    if (mounted) setState(() => _version = packageInfo.version);
   }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("À propos"),
-      ),
+      appBar: AppBar(title: const Text("À propos")),
       body: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Card(
+              elevation: 2,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
               child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "OuiBorne Caisse",
-                      style:
-                          Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                fontWeight: FontWeight.bold,
+                padding: const EdgeInsets.all(20),
+                child: Consumer<UpdateProvider>(
+                  builder: (context, updateProv, _) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.system_update,
+                                color: Colors.blueGrey, size: 20),
+                            SizedBox(width: 8),
+                            Text(
+                              "SYSTÈME & MISE À JOUR",
+                              style: TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.blueGrey),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[100],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[300]!),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text("Version installée :",
+                                  style:
+                                  TextStyle(fontWeight: FontWeight.bold)),
+                              Text(
+                                _version,
+                                style: TextStyle(
+                                    color: Colors.blueGrey[800],
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.bold),
                               ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text("Version actuelle : $_version"),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: Consumer<UpdateProvider>(
-                        builder: (context, updateProvider, child) {
-                          if (updateProvider.isLoading) {
-                            return ElevatedButton.icon(
-                              icon: const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Row(
+                          children: [
+                            Icon(
+                              updateProv.hasUpdate
+                                  ? Icons.warning_amber_rounded
+                                  : Icons.check_circle_outline,
+                              color: updateProv.hasUpdate
+                                  ? Colors.orange
+                                  : Colors.green,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                updateProv.hasUpdate
+                                    ? "Nouvelle version disponible (v${updateProv.latestVersion})"
+                                    : "L'application est à jour",
+                                style: const TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        if (updateProv.isLoading && updateProv.progress > 0) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(5),
+                            child: LinearProgressIndicator(
+                              value: updateProv.progress,
+                              color: Colors.green,
+                              backgroundColor: Colors.green.withOpacity(0.15),
+                              minHeight: 10,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Center(
+                            child: Text(
+                              "Téléchargement : ${(updateProv.progress * 100).toStringAsFixed(0)}%",
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (updateProv.errorMessage != null) ...[
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.red.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline,
+                                    color: Colors.red, size: 18),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    updateProv.errorMessage!,
+                                    style: const TextStyle(
+                                        color: Colors.red, fontSize: 12),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        if (!(updateProv.isLoading && updateProv.progress > 0))
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 14),
+                                    foregroundColor: Colors.blueGrey,
+                                  ),
+                                  onPressed: updateProv.isLoading
+                                      ? null
+                                      : () => updateProv.checkNowForUpdate(),
+                                  icon: updateProv.isLoading
+                                      ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                          strokeWidth: 2))
+                                      : const Icon(Icons.refresh),
+                                  label: Text(updateProv.isLoading
+                                      ? "VÉRIFICATION..."
+                                      : "VÉRIFIER"),
                                 ),
                               ),
-                              label: const Text("Vérification..."),
-                              onPressed: null,
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: Colors.grey.shade600,
-                              ),
-                            );
-                          }
-                          if (updateProvider.hasUpdate) {
-                            return ElevatedButton.icon(
-                              icon: const Icon(Icons.download_for_offline),
-                              label: Text(
-                                  "Installer v${updateProvider.latestVersion ?? ''}"),
-                              onPressed: () {
-                                showDialog(
-                                    context: context,
-                                    builder: (ctx) => AlertDialog(
-                                            title: const Text("⚠️ Attention"),
-                                            content: const Text(
-                                                "Assurez-vous d'avoir une connexion internet très stable. Une coupure de réseau pendant la mise à jour peut bloquer définitivement la caisse.\n\nÊtes-vous sûr de vouloir lancer la mise à jour ?"),
-                                            actions: [
-                                              TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(ctx),
-                                                  child: const Text("Annuler")),
-                                              ElevatedButton(
-                                                  onPressed: () {
-                                                    Navigator.pop(ctx);
-                                                    updateProvider
-                                                        .downloadAndInstallUpdate();
-                                                  },
-                                                  style:
-                                                      ElevatedButton.styleFrom(
-                                                          backgroundColor:
-                                                              Colors.red),
-                                                  child: const Text(
-                                                      "Oui, Mettre à jour",
-                                                      style: TextStyle(
-                                                          color: Colors.white)))
-                                            ]));
-                              },
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green.shade700),
-                            );
-                          }
-                          return ElevatedButton.icon(
-                            icon: const Icon(Icons.system_update),
-                            label: const Text("Vérifier les mises à jour"),
-                            onPressed: () {
-                              updateProvider.checkNowForUpdate();
-                            },
-                          );
-                        },
-                      ),
-                    ),
-                  ],
+                              if (updateProv.hasUpdate) ...[
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.green.shade700,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                    ),
+                                    onPressed: updateProv.isLoading
+                                        ? null
+                                        : () => _confirmUpdate(
+                                        context, updateProv),
+                                    icon: const Icon(Icons.download),
+                                    label: const Text("INSTALLER"),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
             const SizedBox(height: 24),
             const Text(
-              "Cette application est distribuée en dehors du Play Store. Les mises à jour sont téléchargées depuis GitHub.",
+              "Cette application est distribuée en dehors du Play Store et du Microsoft Store. Les mises à jour sont téléchargées directement depuis GitHub.",
               style: TextStyle(color: Colors.grey),
             ),
           ],
@@ -11109,8 +11189,43 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
       ),
     );
   }
+  void _confirmUpdate(BuildContext context, UpdateProvider updateProv) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.warning_amber_rounded, color: Colors.orange),
+            SizedBox(width: 8),
+            Text("Confirmer la mise à jour"),
+          ],
+        ),
+        content: const Text(
+          "Assurez-vous d'avoir une connexion internet stable.\n\n"
+              "Une coupure pendant la mise à jour peut bloquer l'application.\n\n"
+              "Voulez-vous continuer ?",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Annuler"),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              updateProv.downloadAndInstallUpdate();
+            },
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green.shade700,
+                foregroundColor: Colors.white),
+            child: const Text("Oui, mettre à jour"),
+          ),
+        ],
+      ),
+    );
+  }
 }
-
 
 
 ==================================================
@@ -14707,7 +14822,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
         if (config.macAddress != null && _devices.isNotEmpty) {
           try {
             final device = _devices.firstWhere(
-              (d) => d.address == config.macAddress,
+                  (d) => d.address == config.macAddress,
             );
             setState(() {
               _selectedDevice = device;
@@ -14748,6 +14863,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   Future<void> _saveSettings() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
+      final existing = await _localService.getPrinterConfig();
       final newConfig = PrinterConfig(
         name: _useBluetooth
             ? (_selectedDevice?.name ?? 'Imprimante BT')
@@ -14756,6 +14872,7 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
         kitchenIpAddress: _kitchenIpController.text,
         isBluetooth: _useBluetooth,
         macAddress: _useBluetooth ? _selectedDevice?.address : null,
+        autoSendKitchenOnPayment: existing.autoSendKitchenOnPayment,
       );
       await _localService.savePrinterConfig(newConfig);
       if (_useBluetooth && _selectedDevice != null) {
@@ -14855,15 +14972,15 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
                         setState(() => _selectedDevice = device);
                       },
                       validator: (value) =>
-                          value == null ? "Sélectionnez une imprimante" : null,
+                      value == null ? "Sélectionnez une imprimante" : null,
                     ),
                   ),
                   IconButton(
                     icon: _isScanning
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2))
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.refresh),
                     onPressed: _isScanning ? null : _scanBluetoothDevices,
                   )
@@ -14945,6 +15062,7 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
       footerText: '',
       showVatDetails: true,
       printReceiptOnPayment: true);
+  bool _autoSendKitchenOnPayment = false;
   bool _isLoading = true;
   @override
   void initState() {
@@ -14960,27 +15078,50 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
   Future<void> _loadReceiptSettings() async {
     setState(() => _isLoading = true);
     final config = await _localService.getReceiptConfig();
+    final printerConfig = await _localService.getPrinterConfig();
     if (mounted) {
       setState(() {
         _config = config;
         headerController.text = config.headerText;
         footerController.text = config.footerText;
+        _autoSendKitchenOnPayment = printerConfig.autoSendKitchenOnPayment;
         _isLoading = false;
       });
     }
   }
+  Future<void> _saveAutoSendKitchen(bool value) async {
+    final existing = await _localService.getPrinterConfig();
+    final updated = PrinterConfig(
+      name: existing.name,
+      ipAddress: existing.ipAddress,
+      kitchenIpAddress: existing.kitchenIpAddress,
+      type: existing.type,
+      paperWidth: existing.paperWidth,
+      isKitchenPrintingEnabled: existing.isKitchenPrintingEnabled,
+      isBluetooth: existing.isBluetooth,
+      macAddress: existing.macAddress,
+      autoSendKitchenOnPayment: value,
+    );
+    await _localService.savePrinterConfig(updated);
+    if (mounted) {
+      setState(() => _autoSendKitchenOnPayment = value);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Préférences sauvegardées')),
+      );
+    }
+  }
   Future<void> _saveSettings(
       {String? headerText,
-      String? footerText,
-      bool? showVatDetails,
-      bool? printReceiptOnPayment}) async {
+        String? footerText,
+        bool? showVatDetails,
+        bool? printReceiptOnPayment}) async {
     setState(() => _isLoading = true);
     final newConfig = ReceiptConfig(
       headerText: headerText ?? headerController.text,
       footerText: footerText ?? footerController.text,
       showVatDetails: showVatDetails ?? _config.showVatDetails,
       printReceiptOnPayment:
-          printReceiptOnPayment ?? _config.printReceiptOnPayment,
+      printReceiptOnPayment ?? _config.printReceiptOnPayment,
     );
     await _localService.saveReceiptConfig(newConfig);
     if (mounted) {
@@ -15024,8 +15165,17 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
         const SizedBox(height: 16),
         SwitchListTile(
           title: const Text("Imprimer auto. après paiement"),
+          subtitle: const Text("Le ticket client sort automatiquement à l'encaissement."),
           value: _config.printReceiptOnPayment,
           onChanged: (value) => _saveSettings(printReceiptOnPayment: value),
+        ),
+        SwitchListTile(
+          title: const Text("Envoyer auto. en cuisine à l'encaissement"),
+          subtitle: const Text(
+            "Imprime le ticket cuisine au paiement uniquement s'il n'a pas déjà été envoyé.",
+          ),
+          value: _autoSendKitchenOnPayment,
+          onChanged: _saveAutoSendKitchen,
         ),
         SwitchListTile(
           title: const Text("Détail TVA"),
@@ -15045,7 +15195,6 @@ class _ReceiptSettingsFormState extends State<ReceiptSettingsForm> {
 }
 
 
-
 ==================================================
 FILE PATH: lib\back_office\views\franchisee\franchisee_stats_view.dart
 ==================================================
@@ -15060,6 +15209,7 @@ import '../../../core/auth_provider.dart';
 import '../../../core/cart_provider.dart';
 import '../../../core/repository/repository.dart';
 import '../../../core/services/printing_service.dart';
+import '../../../core/services/local_config_service.dart';
 import '/models.dart';
 import 'shared/transaction_dialogs.dart';
 import 'shared/payment_dialogs.dart';
@@ -15410,7 +15560,7 @@ class _SessionDetailPanel extends StatefulWidget {
 class _SessionDetailPanelState extends State<_SessionDetailPanel> {
   final _finalCashController = TextEditingController();
   bool _isClosing = false;
-  String _activeFilter = 'Toutes'; 
+  String _activeFilter = 'Toutes';
   @override
   void initState() {
     super.initState();
@@ -15984,14 +16134,28 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
         }
       }
       await _destroyGhostTransaction(order.franchiseeId, order.identifier);
+      PendingOrder freshOrder = order;
+      try {
+        final freshDoc = await FirebaseFirestore.instance
+            .collection('pending_orders')
+            .doc(order.id)
+            .get();
+        if (freshDoc.exists) {
+          freshOrder = PendingOrder.fromFirestore(freshDoc);
+        }
+      } catch (e) {
+        debugPrint("⚠️ Refetch pending_order échoué, on utilise la version locale: $e");
+      }
       final session = await _repository.getActiveSession(order.franchiseeId).first;
       final String? activeSessionId = session?.id;
       final String safeTransactionId = order.id;
-      final productMap = _loadedProducts ?? await _fetchAllProductsForOrder(order);
+      final productMap = _loadedProducts ?? await _fetchAllProductsForOrder(freshOrder);
       final List<Map<String, dynamic>> enrichedItems = [];
-      for (var itemMap in order.itemsAsMap) {
+      final List<CartItem> reconstructedItems = []; 
+      for (var itemMap in freshOrder.itemsAsMap) {
         final cItem = _reconstructCartItem(itemMap, productMap);
         if (cItem != null) {
+          reconstructedItems.add(cItem); 
           final double realUnitPrice = cItem.quantity > 0 ? (cItem.total / cItem.quantity) : cItem.price;
           final String pId = cItem.product.id;
           enrichedItems.add({
@@ -16037,6 +16201,48 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
         'paymentMethods': paymentMethods
       };
       await FirebaseFirestore.instance.collection('transactions').doc(safeTransactionId).set(transactionMap);
+      try {
+        final printerConfigForReceipt =
+        await _repository.getPrinterConfigStream(order.franchiseeId).first;
+        final localReceiptConfig = await LocalConfigService().getReceiptConfig();
+        if (localReceiptConfig.printReceiptOnPayment) {
+          await PrintingService().printReceipt(
+            printerConfig: printerConfigForReceipt,
+            transaction: transactionMap,
+            franchisee: {},
+            receiptConfig: localReceiptConfig.toMap(),
+          );
+        }
+      } catch (e) {
+        debugPrint("Erreur auto-impression ticket client (commande en attente): $e");
+      }
+      try {
+        final printerConfig =
+        await _repository.getPrinterConfigStream(order.franchiseeId).first;
+        final localPrinterConfig = await LocalConfigService().getPrinterConfig();
+        if (printerConfig.isKitchenPrintingEnabled &&
+            localPrinterConfig.autoSendKitchenOnPayment) {
+          final unsentItems =
+          reconstructedItems.where((i) => !i.isSentToKitchen).toList();
+          if (unsentItems.isNotEmpty) {
+            final String kitchenOrderType =
+            order.orderType.toLowerCase().contains('take') ||
+                order.orderType.toLowerCase().contains('emporter')
+                ? "A EMPORTER"
+                : "SUR PLACE";
+            await PrintingService().printKitchenTicketSafe(
+              printerConfig: printerConfig,
+              itemsToPrint: unsentItems,
+              identifier: order.identifier.isNotEmpty ? order.identifier : "CLIENT",
+              isUpdate: false,
+              isReprint: false,
+              orderType: kitchenOrderType,
+            );
+          }
+        }
+      } catch (e) {
+        debugPrint("Erreur auto-envoi cuisine (commande en attente): $e");
+      }
       await _repository.deletePendingOrder(order.id);
       if (_selectedOrder?.id == order.id) {
         setState(() => _selectedOrder = null);
@@ -16087,6 +16293,17 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
         isReprint: false,
         orderType: kitchenOrderType,
       );
+      try {
+        final updatedItems = order.itemsAsMap.map((itemMap) {
+          return {...itemMap, 'isSentToKitchen': true};
+        }).toList();
+        await FirebaseFirestore.instance
+            .collection('pending_orders')
+            .doc(order.id)
+            .update({'items': updatedItems});
+      } catch (e) {
+        debugPrint("⚠️ Erreur update isSentToKitchen sur pending_order: $e");
+      }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text("Envoyé en cuisine avec succès !"),
@@ -23202,13 +23419,13 @@ class _StatsDashboardState extends State<StatsDashboard> {
 FILE PATH: lib\back_office\views\franchisee\team_management_view.dart
 ==================================================
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/repository/repository.dart';
-final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 class TeamManagementView extends StatefulWidget {
   const TeamManagementView({super.key});
   @override
@@ -23376,13 +23593,16 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await _functions
-          .httpsCallable('createAssociateWithEmailInvite')
-          .call({
-        'email': _emailController.text.trim(),
-        'name': _nameController.text.trim(),
-        'role': 'employee', 
-      });
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https:
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'data': {
+          'email': _emailController.text.trim(),
+          'name': _nameController.text.trim(),
+          'role': 'employee',
+        }}),
+      ).timeout(const Duration(seconds: 30));
       await FirebaseAuth.instance
           .sendPasswordResetEmail(email: _emailController.text.trim());
       if (mounted) {
@@ -23468,13 +23688,16 @@ class _AddAssociateDialogState extends State<_AddAssociateDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await _functions
-          .httpsCallable('createAssociateWithEmailInvite')
-          .call({
-        'email': _emailController.text.trim(),
-        'name': _nameController.text.trim(),
-        'role': 'associate', 
-      });
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https:
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'data': {
+          'email': _emailController.text.trim(),
+          'name': _nameController.text.trim(),
+          'role': 'associate',
+        }}),
+      ).timeout(const Duration(seconds: 30));
       await FirebaseAuth.instance
           .sendPasswordResetEmail(email: _emailController.text.trim());
       if (mounted) {
@@ -26141,6 +26364,7 @@ import '../../../../../core/cart_provider.dart';
 import '/models.dart';
 import '../../../../../core/repository/repository.dart';
 import '../../../../../core/services/printing_service.dart';
+import '../../../../../core/services/local_config_service.dart';
 import '../../franchisee_stats_view.dart';
 import '../../shared/payment_dialogs.dart';
 import '../pos_dialogs.dart';
@@ -26612,12 +26836,24 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
         if (confirmed != true) return;
       }
       HapticFeedback.mediumImpact();
+      final printerConfigForAutoSend = widget.posData.printerConfig;
+      final localPrinterConfig = await LocalConfigService().getPrinterConfig();
+      final bool shouldAutoSendKitchen =
+          printerConfigForAutoSend.isKitchenPrintingEnabled &&
+              localPrinterConfig.autoSendKitchenOnPayment &&
+              cart.hasUnsentItems;
+      final List<CartItem> unsentItemsSnapshot = shouldAutoSendKitchen
+          ? cart.items.where((i) => !i.isSentToKitchen).toList()
+          : const [];
+      final String autoKitchenOrderType =
+      cart.orderType == OrderType.takeaway ? "A EMPORTER" : "SUR PLACE";
+      final String autoKitchenIdentifier = cart.orderIdentifier ?? '';
       final List<Map<String, dynamic>> itemsPayload = cart.items.map((item) {
         final double realUnitPrice = item.quantity > 0 ? (item.total / item.quantity) : item.price;
         final String pId = item.product.productId ?? '';
         return {
           'id': pId,
-          'masterProductId': pId, 
+          'masterProductId': pId,
           'productId': pId,
           'name': item.product.name,
           'quantity': item.quantity,
@@ -26657,6 +26893,34 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
         kioskName: null,
       );
       await FranchiseRepository().recordTransaction(transaction);
+      try {
+        final localReceiptConfig = await LocalConfigService().getReceiptConfig();
+        if (localReceiptConfig.printReceiptOnPayment) {
+          await PrintingService().printReceipt(
+            printerConfig: printerConfigForAutoSend,
+            transaction: transaction,
+            franchisee: {},
+            receiptConfig: localReceiptConfig.toMap(),
+          );
+        }
+      } catch (e) {
+        debugPrint("Erreur auto-impression ticket client: $e");
+      }
+      if (shouldAutoSendKitchen && unsentItemsSnapshot.isNotEmpty) {
+        try {
+          await PrintingService().printKitchenTicketSafe(
+            printerConfig: printerConfigForAutoSend,
+            itemsToPrint: unsentItemsSnapshot,
+            identifier: autoKitchenIdentifier.isNotEmpty ? autoKitchenIdentifier : "CLIENT",
+            isUpdate: false,
+            isReprint: false,
+            orderType: autoKitchenOrderType,
+          );
+          cart.markUnsentItemsAsSent();
+        } catch (e) {
+          debugPrint("Erreur auto-envoi cuisine: $e");
+        }
+      }
       cart.clearCart();
       if (!mounted) return;
       await showDialog(
@@ -35841,27 +36105,37 @@ class UpdateProvider with ChangeNotifier {
   bool _isLoading = false;
   bool _hasUpdate = false;
   String? _latestVersion;
-  String? _apkUrl;
+  String? _downloadUrl;
+  String? _fileName;
+  double _progress = 0.0;
+  String? _errorMessage;
   bool get isLoading => _isLoading;
   bool get hasUpdate => _hasUpdate;
   String? get latestVersion => _latestVersion;
-  String? get apkUrl => _apkUrl;
+  double get progress => _progress;
+  String? get errorMessage => _errorMessage;
   UpdateProvider() {
     checkNowForUpdate();
   }
   Future<void> checkNowForUpdate() async {
+    if (_isLoading) return;
     _isLoading = true;
-    _hasUpdate = false;
+    _progress = 0.0;
+    _errorMessage = null;
     notifyListeners();
     try {
       final updateInfo = await UpdateService.checkForUpdate();
       if (updateInfo != null) {
         _hasUpdate = true;
         _latestVersion = updateInfo['version'];
-        _apkUrl = updateInfo['apkUrl'];
+        _downloadUrl = updateInfo['url'];
+        _fileName = updateInfo['fileName'];
+      } else {
+        _hasUpdate = false;
       }
     } catch (e) {
       _hasUpdate = false;
+      _errorMessage = e.toString();
       debugPrint("Erreur (UpdateProvider): $e");
     } finally {
       _isLoading = false;
@@ -35869,12 +36143,24 @@ class UpdateProvider with ChangeNotifier {
     }
   }
   Future<void> downloadAndInstallUpdate() async {
-    if (_apkUrl == null || _isLoading) return;
+    if (_downloadUrl == null || _fileName == null || _isLoading) return;
     _isLoading = true;
+    _progress = 0.0;
+    _errorMessage = null;
     notifyListeners();
     try {
-      await UpdateService.downloadAndInstall(_apkUrl!);
+      await UpdateService.downloadAndInstall(
+        _downloadUrl!,
+        _fileName!,
+        onProgress: (received, total) {
+          if (total > 0) {
+            _progress = received / total;
+            notifyListeners();
+          }
+        },
+      );
     } catch (e) {
+      _errorMessage = "Échec de la mise à jour : $e";
       debugPrint("Erreur installation (UpdateProvider): $e");
       _isLoading = false;
       notifyListeners();
@@ -35883,17 +36169,17 @@ class UpdateProvider with ChangeNotifier {
 }
 
 
-
 ==================================================
 FILE PATH: lib\core\repository\repository.dart
 ==================================================
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../models.dart';
 class FranchiseRepository {
@@ -35911,7 +36197,7 @@ class FranchiseRepository {
   }) async {
     try {
       final docRef =
-          FirebaseFirestore.instance.collection('product_filters').doc(id);
+      FirebaseFirestore.instance.collection('product_filters').doc(id);
       await docRef.set({
         'id': id,
         'createdBy': franchisorId,
@@ -36005,15 +36291,13 @@ class FranchiseRepository {
       String franchisorId, String? dineInUrl, String? takeawayUrl) async {
     try {
       final docSnap =
-          await _firestore.collection('users').doc(franchisorId).get();
+      await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
           final oldDineIn = data['dineInImageUrl'] as String?;
           final oldTakeaway = data['takeawayImageUrl'] as String?;
-          if (dineInUrl != null &&
-              oldDineIn != null &&
-              oldDineIn != dineInUrl) {
+          if (dineInUrl != null && oldDineIn != null && oldDineIn != dineInUrl) {
             await _deleteFileFromUrl(oldDineIn);
           }
           if (takeawayUrl != null &&
@@ -36036,10 +36320,10 @@ class FranchiseRepository {
   Future<void> deleteGlobalButtonImage(
       String franchisorId, String typeKey) async {
     final String fieldName =
-        (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
+    (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
     try {
       final docSnap =
-          await _firestore.collection('users').doc(franchisorId).get();
+      await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final url = docSnap.data()?[fieldName] as String?;
         if (url != null) {
@@ -36087,7 +36371,7 @@ class FranchiseRepository {
   Future<void> deleteMasterMedia(String mediaId) async {
     try {
       final docSnap =
-          await _firestore.collection('kiosk_medias').doc(mediaId).get();
+      await _firestore.collection('kiosk_medias').doc(mediaId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
@@ -36109,7 +36393,7 @@ class FranchiseRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) =>
-            snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
+        snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
   }
   Future<void> setKioskActiveMedia(
       String franchiseeId, KioskMedia media) async {
@@ -36147,16 +36431,14 @@ class FranchiseRepository {
     }, SetOptions(merge: true));
   }
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _performChunkedQuery(
-          Query collectionQuery, String field, List<dynamic> ids) async {
-    if (ids.isEmpty) {
-      return [];
-    }
+  _performChunkedQuery(
+      Query collectionQuery, String field, List<dynamic> ids) async {
+    if (ids.isEmpty) return [];
     final List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
     for (var i = 0; i < ids.length; i += 30) {
       final sublist = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
       futures.add(collectionQuery.where(field, whereIn: sublist).get()
-          as Future<QuerySnapshot<Map<String, dynamic>>>);
+      as Future<QuerySnapshot<Map<String, dynamic>>>);
     }
     final snapshots = await Future.wait(futures);
     final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
@@ -36174,14 +36456,12 @@ class FranchiseRepository {
         .where('isVisible', isEqualTo: true)
         .get();
     final productIds = menuSnapshot.docs.map((doc) => doc.id).toList();
-    if (productIds.isEmpty) {
-      return [];
-    }
+    if (productIds.isEmpty) return [];
     final baseQuery = _firestore
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId);
     final productDocs =
-        await _performChunkedQuery(baseQuery, 'productId', productIds);
+    await _performChunkedQuery(baseQuery, 'productId', productIds);
     return productDocs
         .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
         .toList();
@@ -36197,14 +36477,12 @@ class FranchiseRepository {
         .snapshots()
         .asyncMap((menuSnapshot) async {
       final productIds = menuSnapshot.docs.map((doc) => doc.id).toList();
-      if (productIds.isEmpty) {
-        return [];
-      }
+      if (productIds.isEmpty) return [];
       final baseQuery = _firestore
           .collection('master_products')
           .where('createdBy', isEqualTo: franchisorId);
       final productDocs =
-          await _performChunkedQuery(baseQuery, 'productId', productIds);
+      await _performChunkedQuery(baseQuery, 'productId', productIds);
       final products = productDocs
           .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
           .toList();
@@ -36265,7 +36543,7 @@ class FranchiseRepository {
         if (masterProductsSnapshot.docs.isNotEmpty) {
           for (final productDoc in masterProductsSnapshot.docs) {
             final product =
-                MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
+            MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
             final newMenuItemRef = _firestore
                 .collection('users')
                 .doc(newUser.uid)
@@ -36323,7 +36601,7 @@ class FranchiseRepository {
     FirebaseApp? secondaryApp;
     try {
       final managerDoc =
-          await _firestore.collection('users').doc(managerId).get();
+      await _firestore.collection('users').doc(managerId).get();
       if (!managerDoc.exists) return "Erreur : Compte manager introuvable.";
       final String franchisorId = managerDoc.get('franchisorId');
       final Map<String, dynamic> enabledModules =
@@ -36334,7 +36612,7 @@ class FranchiseRepository {
       );
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
       UserCredential userCredential =
-          await secondaryAuth.createUserWithEmailAndPassword(
+      await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -36389,8 +36667,8 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
   Stream<List<FranchiseUser>> getFranchiseesStream(String franchisorId) {
     return _firestore
@@ -36399,8 +36677,8 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
   Stream<List<FranchiseUser>> getStoreEmployeesStream(String storeId) {
     return _firestore
@@ -36409,30 +36687,33 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'employee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
   Future<void> deleteEmployee(String employeeId) async {
     await _firestore.collection('users').doc(employeeId).delete();
   }
   Future<String?> deleteFranchiseeAccount(String franchiseeId) async {
     try {
-      final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
-      final callable = functions.httpsCallable('deleteFranchiseeData');
-      final result = await callable.call<Map<String, dynamic>>({
-        'franchiseeId': franchiseeId,
-      });
-      if (result.data['success'] == true) {
-        return null;
-      } else {
-        return result.data['message'] ?? "Une erreur inconnue est survenue.";
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      final response = await http.post(
+        Uri.parse('https:
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'franchiseeId': franchiseeId}}),
+      ).timeout(const Duration(seconds: 60));
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return body['result']?['success'] == true
+            ? null
+            : "Une erreur inconnue est survenue.";
       }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint("Erreur Cloud Function [${e.code}]: ${e.message}");
-      return e.message ??
-          "Une erreur est survenue lors de la communication avec le serveur.";
+      return body['error']?['message']?.toString() ??
+          "Une erreur est survenue (${response.statusCode}).";
     } catch (e) {
-      debugPrint("Erreur inattendue: $e");
+      debugPrint("Erreur deleteFranchiseeAccount: $e");
       return "Une erreur inattendue est survenue.";
     }
   }
@@ -36447,8 +36728,10 @@ class FranchiseRepository {
         .asyncMap((snapshot) async {
       List<KioskCategory> categories = [];
       for (var doc in snapshot.docs) {
-        final filtersSnapshot =
-            await doc.reference.collection('filters').orderBy('position').get();
+        final filtersSnapshot = await doc.reference
+            .collection('filters')
+            .orderBy('position')
+            .get();
         final filters = filtersSnapshot.docs
             .map((filterDoc) => KioskFilter.fromFirestore(filterDoc))
             .toList();
@@ -36495,23 +36778,29 @@ class FranchiseRepository {
       List<KioskCategory> sortedCategories) async {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedCategories.length; i++) {
-      final docRef =
-          _firestore.collection('kiosk_categories').doc(sortedCategories[i].id);
+      final docRef = _firestore
+          .collection('kiosk_categories')
+          .doc(sortedCategories[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
   }
   Future<void> deleteKioskCategory(String categoryId) async {
     try {
-      final docSnap =
-          await _firestore.collection('kiosk_categories').doc(categoryId).get();
+      final docSnap = await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null && data['imageUrl'] != null) {
           await _deleteFileFromUrl(data['imageUrl']);
         }
       }
-      await _firestore.collection('kiosk_categories').doc(categoryId).delete();
+      await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .delete();
     } catch (e) {
       rethrow;
     }
@@ -36608,7 +36897,7 @@ class FranchiseRepository {
         .where('createdBy', isEqualTo: franchisorId)
         .snapshots()
         .map((snapshot) =>
-            snapshot.docs.map(ProductFilter.fromFirestore).toList());
+        snapshot.docs.map(ProductFilter.fromFirestore).toList());
   }
   Future<void> addFilter(String name, String? color) async =>
       await _firestore.collection('product_filters').add({
@@ -36644,7 +36933,7 @@ class FranchiseRepository {
         final supplementPrices = {
           for (var itemDoc in itemDocs)
             itemDoc.data()['productId']:
-                (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+            (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
         };
         List<SectionItem> sectionItems = [];
         if (productIds.isNotEmpty) {
@@ -36655,7 +36944,7 @@ class FranchiseRepository {
           final productMap = {
             for (var doc in productDocs)
               doc.data()['productId']:
-                  MasterProduct.fromFirestore(doc.data(), doc.id)
+              MasterProduct.fromFirestore(doc.data(), doc.id)
           };
           for (var pid in productIds) {
             final product = productMap[pid];
@@ -36700,7 +36989,7 @@ class FranchiseRepository {
       final supplementPrices = {
         for (var itemDoc in itemDocs)
           itemDoc.data()['productId']:
-              (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+          (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
       };
       List<SectionItem> sectionItems = [];
       if (productIds.isNotEmpty) {
@@ -36709,7 +36998,7 @@ class FranchiseRepository {
         final productMap = {
           for (var doc in productDocs)
             doc.data()['productId']:
-                MasterProduct.fromFirestore(doc.data(), doc.id)
+            MasterProduct.fromFirestore(doc.data(), doc.id)
         };
         for (var pid in productIds) {
           final product = productMap[pid];
@@ -36725,7 +37014,7 @@ class FranchiseRepository {
     }
     return sectionIds
         .map((id) => fetchedSections.firstWhere((s) => s.sectionId == id,
-            orElse: () => ProductSection(id: '', sectionId: '')))
+        orElse: () => ProductSection(id: '', sectionId: '')))
         .where((s) => s.sectionId.isNotEmpty)
         .toList();
   }
@@ -36799,13 +37088,13 @@ class FranchiseRepository {
       query = query.where('filterIds', arrayContainsAny: filterIds);
     }
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
   }
   Future<void> saveSectionGroup(
       {String? groupId,
-      required String name,
-      required List<String> sectionIds,
-      required List<String> filterIds}) async {
+        required String name,
+        required List<String> sectionIds,
+        required List<String> filterIds}) async {
     final docRef = groupId != null
         ? _firestore.collection('section_groups').doc(groupId)
         : _firestore.collection('section_groups').doc();
@@ -36838,7 +37127,7 @@ class FranchiseRepository {
     }
     return query.snapshots().map((snapshot) => snapshot.docs
         .map((doc) => MasterProduct.fromFirestore(
-            doc.data() as Map<String, dynamic>, doc.id))
+        doc.data() as Map<String, dynamic>, doc.id))
         .toList());
   }
   Future<void> saveProduct({
@@ -36943,7 +37232,7 @@ class FranchiseRepository {
     }
     final batch = _firestore.batch();
     final masterProductRef =
-        _firestore.collection('master_products').doc(product.id);
+    _firestore.collection('master_products').doc(product.id);
     batch.delete(masterProductRef);
     final franchiseesSnapshot = await _firestore
         .collection('users')
@@ -36969,31 +37258,31 @@ class FranchiseRepository {
   Future<void> savePendingOrder(String franchiseeId, String identifier,
       List<CartItem> items, double total,
       {String source = 'pos',
-      String orderType = 'onSite',
-      bool isPaid = false,
-      String paymentMethod = ''}) async {
+        String orderType = 'onSite',
+        bool isPaid = false,
+        String paymentMethod = ''}) async {
     final itemsAsMap = items
         .map((item) => {
-              'masterProductId': item.product.id,
-              'basePrice': item.price,
-              'quantity': item.quantity,
-              'vatRate': item.vatRate,
-              'isSentToKitchen': item.isSentToKitchen,
-              'selectedOptions': item.selectedOptions.entries
-                  .map((entry) => {
-                        'sectionId': entry.key,
-                        'items': entry.value
-                            .map((sectionItem) => {
-                                  'masterProductId': sectionItem.product.id,
-                                  'supplementPrice':
-                                      sectionItem.supplementPrice,
-                                })
-                            .toList(),
-                      })
-                  .toList(),
-              'removedIngredientProductIds': item.removedIngredientProductIds,
-              'removedIngredientNames': item.removedIngredientNames,
-            })
+      'masterProductId': item.product.id,
+      'basePrice': item.price,
+      'quantity': item.quantity,
+      'vatRate': item.vatRate,
+      'isSentToKitchen': item.isSentToKitchen,
+      'selectedOptions': item.selectedOptions.entries
+          .map((entry) => {
+        'sectionId': entry.key,
+        'items': entry.value
+            .map((sectionItem) => {
+          'masterProductId': sectionItem.product.id,
+          'supplementPrice':
+          sectionItem.supplementPrice,
+        })
+            .toList(),
+      })
+          .toList(),
+      'removedIngredientProductIds': item.removedIngredientProductIds,
+      'removedIngredientNames': item.removedIngredientNames,
+    })
         .toList();
     await _firestore.collection('pending_orders').add({
       'franchiseeId': franchiseeId,
@@ -37005,7 +37294,7 @@ class FranchiseRepository {
       'orderType': orderType,
       'isPaid': isPaid,
       'paymentMethod':
-          paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
+      paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
       'status': isPaid ? 'paid' : 'pending',
     });
   }
@@ -37016,8 +37305,8 @@ class FranchiseRepository {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => PendingOrder.fromFirestore(doc))
-            .toList());
+        .map((doc) => PendingOrder.fromFirestore(doc))
+        .toList());
   }
   Future<void> deletePendingOrder(String orderId) async {
     await _firestore.collection('pending_orders').doc(orderId).delete();
@@ -37036,7 +37325,7 @@ class FranchiseRepository {
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
     }
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
   }
   Stream<List<Transaction>> getSessionTransactions(String sessionId) =>
       _firestore
@@ -37045,9 +37334,9 @@ class FranchiseRepository {
           .orderBy('timestamp', descending: true)
           .snapshots()
           .map((snapshot) =>
-              snapshot.docs.map(Transaction.fromFirestore).toList());
+          snapshot.docs.map(Transaction.fromFirestore).toList());
   Stream<List<Transaction>> getTransactionsInDateRange(String franchiseeId,
-      {DateTime? startDate, DateTime? endDate, int limit = 100}) {
+      {DateTime? startDate, DateTime? endDate, int? limit}) {
     Query query = _firestore
         .collection('transactions')
         .where('franchiseeId', isEqualTo: franchiseeId);
@@ -37059,9 +37348,9 @@ class FranchiseRepository {
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
     }
     query = query.orderBy('timestamp', descending: true);
-    query = query.limit(limit);
+    if (limit != null) query = query.limit(limit);
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(Transaction.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(Transaction.fromFirestore).toList());
   }
   Stream<TillSession?> getActiveSession(String franchiseeId) {
     return _firestore
@@ -37071,8 +37360,8 @@ class FranchiseRepository {
         .limit(1)
         .snapshots()
         .map((snapshot) => snapshot.docs.isNotEmpty
-            ? TillSession.fromFirestore(snapshot.docs.first)
-            : null);
+        ? TillSession.fromFirestore(snapshot.docs.first)
+        : null);
   }
   Future<String> openTillSession(
       {required String franchiseeId, required double initialCash}) async {
@@ -37105,7 +37394,7 @@ class FranchiseRepository {
         'isClosed': true
       });
       final sessionDoc =
-          await _firestore.collection('sessions').doc(sessionId).get();
+      await _firestore.collection('sessions').doc(sessionId).get();
       final franchiseeId = sessionDoc.data()?['franchiseeId'];
       if (franchiseeId != null) {
         await _firestore
@@ -37149,25 +37438,33 @@ class FranchiseRepository {
   }
   Future<void> reprintReceipt(String transactionId) async {
     try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('reprintReceipt');
-      await callable.call({'transactionId': transactionId});
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https:
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'transactionId': transactionId}}),
+      ).timeout(const Duration(seconds: 30));
     } catch (e) {
-      if (kDebugMode) {
-        print('Erreur lors de la réimpression : $e');
-      }
+      if (kDebugMode) print('Erreur lors de la réimpression : $e');
       rethrow;
     }
   }
   Future<void> reprintKitchenTicket(String transactionId) async {
     try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('reprintKitchenTicket');
-      await callable.call({'transactionId': transactionId});
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https:
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'transactionId': transactionId}}),
+      ).timeout(const Duration(seconds: 30));
     } catch (e) {
-      if (kDebugMode) {
-        print('Erreur réimpression cuisine : $e');
-      }
+      if (kDebugMode) print('Erreur réimpression cuisine : $e');
       rethrow;
     }
   }
@@ -37225,25 +37522,21 @@ class FranchiseRepository {
     return _firestore
         .collection('users')
         .where(Filter.or(
-          Filter('uid', isEqualTo: storeId),
-          Filter('storeId', isEqualTo: storeId),
-        ))
+      Filter('uid', isEqualTo: storeId),
+      Filter('storeId', isEqualTo: storeId),
+    ))
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
   Future<void> _deleteFileFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
       await _storage.refFromURL(url).delete();
-      if (kDebugMode) {
-        print("Fichier supprimé du stockage : $url");
-      }
+      if (kDebugMode) print("Fichier supprimé du stockage : $url");
     } catch (e) {
-      if (kDebugMode) {
-        print("Erreur suppression fichier (ou fichier introuvable) : $e");
-      }
+      if (kDebugMode) print("Erreur suppression fichier (ou fichier introuvable) : $url");
     }
   }
   Future<void> updateMasterProductsOrder(
@@ -37251,7 +37544,7 @@ class FranchiseRepository {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedProducts.length; i++) {
       final docRef =
-          _firestore.collection('master_products').doc(sortedProducts[i].id);
+      _firestore.collection('master_products').doc(sortedProducts[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
@@ -37312,9 +37605,7 @@ class FranchiseRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
-      if (kDebugMode) {
-        print("Erreur updateFranchiseeMenuItem: $e");
-      }
+      if (kDebugMode) print("Erreur updateFranchiseeMenuItem: $e");
       rethrow;
     }
   }
@@ -37326,11 +37617,10 @@ class FranchiseRepository {
         .collection('menu')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
-            .toList());
+        .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
+        .toList());
   }
 }
-
 
 
 ==================================================
@@ -37726,25 +38016,25 @@ Uint8List _encodeCP858(String text) {
   for (int i = 0; i < text.length; i++) {
     final int codeUnit = text.codeUnitAt(i);
     switch (codeUnit) {
-      case 0x20AC: bytes.add(0xD5); break; 
-      case 0x00E9: bytes.add(0x82); break; 
-      case 0x00E0: bytes.add(0x85); break; 
-      case 0x00E8: bytes.add(0x8A); break; 
-      case 0x00EA: bytes.add(0x88); break; 
-      case 0x00EB: bytes.add(0x89); break; 
-      case 0x00EE: bytes.add(0x8C); break; 
-      case 0x00EF: bytes.add(0x8B); break; 
-      case 0x00F4: bytes.add(0x93); break; 
-      case 0x00FB: bytes.add(0x96); break; 
-      case 0x00F9: bytes.add(0x97); break; 
-      case 0x00C9: bytes.add(0x90); break; 
-      case 0x00E7: bytes.add(0x87); break; 
-      case 0x00B0: bytes.add(0xF8); break; 
+      case 0x20AC: bytes.add(0xD5); break;
+      case 0x00E9: bytes.add(0x82); break;
+      case 0x00E0: bytes.add(0x85); break;
+      case 0x00E8: bytes.add(0x8A); break;
+      case 0x00EA: bytes.add(0x88); break;
+      case 0x00EB: bytes.add(0x89); break;
+      case 0x00EE: bytes.add(0x8C); break;
+      case 0x00EF: bytes.add(0x8B); break;
+      case 0x00F4: bytes.add(0x93); break;
+      case 0x00FB: bytes.add(0x96); break;
+      case 0x00F9: bytes.add(0x97); break;
+      case 0x00C9: bytes.add(0x90); break;
+      case 0x00E7: bytes.add(0x87); break;
+      case 0x00B0: bytes.add(0xF8); break;
       default:
         if (codeUnit <= 0x7F) {
           bytes.add(codeUnit);
         } else {
-          bytes.add(0x20); 
+          bytes.add(0x20);
         }
     }
   }
@@ -37752,20 +38042,20 @@ Uint8List _encodeCP858(String text) {
 }
 List<int> _forceCP858Commands() {
   return [
-    0x1B, 0x40,       
-    0x1C, 0x2E,       
-    0x1B, 0x74, 0x13, 
-    0x1B, 0x52, 0x00, 
-    0x1B, 0x74, 0x13, 
+    0x1B, 0x40,
+    0x1C, 0x2E,
+    0x1B, 0x74, 0x13,
+    0x1B, 0x52, 0x00,
+    0x1B, 0x74, 0x13,
   ];
 }
 List<int> _forceCP858Alternative() {
   return [
-    0x1B, 0x40,       
-    0x1B, 0x74, 0x13, 
-    0x1B, 0x74, 0x16, 
-    0x1C, 0x2E,       
-    0x1B, 0x74, 0x13, 
+    0x1B, 0x40,
+    0x1B, 0x74, 0x13,
+    0x1B, 0x74, 0x16,
+    0x1C, 0x2E,
+    0x1B, 0x74, 0x13,
   ];
 }
 String _formatRow(String left, String right, {int width = 32}) {
@@ -37797,7 +38087,7 @@ List<int> _generateKitchenBytes(Map<String, dynamic> params) {
   List<int> bytes = [];
   bytes += generator.reset();
   bytes += _forceCP858Commands();
-  bytes += [0x1B, 0x64, 0x02]; 
+  bytes += [0x1B, 0x64, 0x02];
   const styleOrderType = PosStyles(align: PosAlign.center, bold: true, reverse: true, width: PosTextSize.size3, height: PosTextSize.size3);
   const styleTitreProduit = PosStyles(bold: true, height: PosTextSize.size2, width: PosTextSize.size2);
   const styleInfo = PosStyles(bold: true, width: PosTextSize.size2);
@@ -37856,7 +38146,7 @@ List<int> _generateReceiptBytes(Map<String, dynamic> params) {
   List<int> bytes = [];
   bytes += generator.reset();
   bytes += _forceCP858Commands();
-  bytes += [0x1B, 0x64, 0x02]; 
+  bytes += [0x1B, 0x64, 0x02];
   const styleNormal = PosStyles();
   const styleGras = PosStyles(bold: true);
   const styleCentre = PosStyles(align: PosAlign.center);
@@ -38046,8 +38336,7 @@ class PrintingService {
           await bluetooth.writeBytes(Uint8List.fromList(bytes));
           debugPrint("✅ Impression Bluetooth envoyée à ${_selectedDevice?.name}");
         }
-      }
-      else if (isWifi && ip != null && ip.isNotEmpty) {
+      } else if (isWifi && ip != null && ip.isNotEmpty) {
         final bytes = await job.byteGenerator();
         if (bytes.isNotEmpty) {
           Socket? socket;
@@ -38151,8 +38440,17 @@ class PrintingService {
       try { priceVal = (item as dynamic).price; } catch (_) {}
       try { extractOpts((item as dynamic).selectedOptions); } catch (_) {}
     }
-    final List<String> removed = item is Map ? (item['removedIngredientNames'] as List? ?? []).map((e) => e.toString()).toList() : (item is! Map) ? (item as dynamic).removedIngredientNames ?? [] : [];
-    return {'name': name, 'qty': qtyVal, 'price': priceVal.toStringAsFixed(2), 'total': (priceVal * qtyVal).toStringAsFixed(2), 'options': options, 'removed': removed};
+    final List<String> removed = item is Map
+        ? (item['removedIngredientNames'] as List? ?? []).map((e) => e.toString()).toList()
+        : (item is! Map) ? (item as dynamic).removedIngredientNames ?? [] : [];
+    return {
+      'name': name,
+      'qty': qtyVal,
+      'price': priceVal.toStringAsFixed(2),
+      'total': (priceVal * qtyVal).toStringAsFixed(2),
+      'options': options,
+      'removed': removed
+    };
   }
   List<Map<String, dynamic>> _standardizeItems(dynamic inputItems) {
     List<Map<String, dynamic>> cleanList = [];
@@ -38181,8 +38479,10 @@ class PrintingService {
         String? freshIp = parsed['ipAddress'] ?? parsed['ip'] ?? parsed['receiptPrinterIp'] ?? parsed['host'];
         if (freshIp != null && freshIp.contains('.')) {
           m['ipAddress'] = freshIp;
-          m['isWifi'] = true;
-          m['isBluetooth'] = false;
+          if (m['isBluetooth'] != true) {
+            m['isWifi'] = true;
+            m['isBluetooth'] = false;
+          }
         }
       }
     } catch (e) {}
@@ -38201,13 +38501,23 @@ class PrintingService {
     }
     String detectedIp = m['ipAddress']?.toString() ?? m['ip']?.toString() ?? m['host']?.toString() ?? '';
     if (detectedIp.contains('.')) {
-      m['isWifi'] = true;
-      m['isBluetooth'] = false;
       m['ipAddress'] = detectedIp;
+      if (m['isBluetooth'] == null && m['isWifi'] == null) {
+        m['isWifi'] = true;
+        m['isBluetooth'] = false;
+      }
     }
     return m;
   }
-  Future<void> printKitchenTicketSafe({required dynamic printerConfig, required List itemsToPrint, required String identifier, bool isUpdate = false, bool isReprint = false, String? orderType, dynamic franchisee}) async {
+  Future<void> printKitchenTicketSafe({
+    required dynamic printerConfig,
+    required List itemsToPrint,
+    required String identifier,
+    bool isUpdate = false,
+    bool isReprint = false,
+    String? orderType,
+    dynamic franchisee
+  }) async {
     await _tryRestoreSavedDevice();
     final resolvedConfig = await _resolvePrinterConfig(printerConfig);
     final List<Map<String, dynamic>> lines = _standardizeItems(itemsToPrint);
@@ -38221,7 +38531,12 @@ class PrintingService {
       'profile': profile
     }), resolvedConfig);
   }
-  Future<void> printReceipt({required dynamic printerConfig, required dynamic transaction, dynamic franchisee, dynamic receiptConfig}) async {
+  Future<void> printReceipt({
+    required dynamic printerConfig,
+    required dynamic transaction,
+    dynamic franchisee,
+    dynamic receiptConfig
+  }) async {
     await _tryRestoreSavedDevice();
     final resolvedConfig = await _resolvePrinterConfig(printerConfig);
     Map<String, dynamic> tMap = _extractTransactionData(transaction);
@@ -38251,7 +38566,12 @@ class PrintingService {
       'profile': profile
     }), resolvedConfig);
   }
-  Future<void> printOrderAndReceipt({required dynamic printerConfig, required dynamic receiptConfig, required dynamic transaction, dynamic franchisee}) async {
+  Future<void> printOrderAndReceipt({
+    required dynamic printerConfig,
+    required dynamic receiptConfig,
+    required dynamic transaction,
+    dynamic franchisee
+  }) async {
     final resolvedConfig = await _resolvePrinterConfig(printerConfig);
     await printReceipt(printerConfig: resolvedConfig, receiptConfig: receiptConfig, transaction: transaction, franchisee: franchisee);
     List items = [];
@@ -38303,7 +38623,14 @@ class PrintingService {
   }
 }
 extension PrintingServiceZ on PrintingService {
-  Future<void> printZTicket({required dynamic printerConfig, required dynamic session, required List transactions, required double declaredCash, required bool isManager, required String userName}) async {
+  Future<void> printZTicket({
+    required dynamic printerConfig,
+    required dynamic session,
+    required List transactions,
+    required double declaredCash,
+    required bool isManager,
+    required String userName
+  }) async {
     await _tryRestoreSavedDevice();
     final resolvedConfig = await _resolvePrinterConfig(printerConfig);
     double totalSales = 0;
@@ -38411,38 +38738,45 @@ FILE PATH: lib\core\services\update_service.dart
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
+import 'package:open_filex/open_filex.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 class UpdateService {
   static const String repoOwner = 'afif-bouzid';
-  static const String repoName = 'pos_android';
-  static const platform = MethodChannel("apk_install");
+  static const String repoName = 'pos_android'; 
   static Future<Map<String, dynamic>?> checkForUpdate() async {
     try {
-      final response = await http.get(Uri.parse(
-          'https:
-      if (response.statusCode != 200) {
-        debugPrint("Erreur GitHub API: ${response.statusCode}");
+      String targetExtension = '';
+      if (Platform.isWindows) {
+        targetExtension = '.msix';
+      } else if (Platform.isAndroid) {
+        targetExtension = '.apk';
+      } else {
         return null;
       }
+      final url = Uri.parse(
+          'https:
+      final response = await http.get(url);
+      if (response.statusCode != 200) return null;
       final data = jsonDecode(response.body);
       final tagName = data['tag_name'];
       final assets = data['assets'] as List?;
       if (assets == null || assets.isEmpty) return null;
-      final apkAsset = assets.firstWhere(
-        (e) => e['name'].toString().toLowerCase().endsWith('.apk'),
+      final installerAsset = assets.firstWhere(
+            (e) => e['name'].toString().toLowerCase().endsWith(targetExtension),
         orElse: () => null,
       );
-      if (tagName == null || apkAsset == null) return null;
+      if (installerAsset == null) return null;
       final packageInfo = await PackageInfo.fromPlatform();
       final currentVersion = packageInfo.version;
-      final latestVersion = tagName.toString().replaceAll('v', '');
-      if (_isNewer(latestVersion, currentVersion)) {
+      final cleanTag = tagName.toString().replaceAll('v', '');
+      if (_isNewerVersion(cleanTag, currentVersion)) {
         return {
-          "version": latestVersion,
-          "apkUrl": apkAsset["browser_download_url"],
+          'version': cleanTag,
+          'url': installerAsset['browser_download_url'],
+          'fileName': installerAsset['name'],
+          'notes': data['body'] ?? "Mise à jour disponible.",
         };
       }
     } catch (e) {
@@ -38450,49 +38784,85 @@ class UpdateService {
     }
     return null;
   }
-  static bool _isNewer(String latest, String current) {
+  static bool _isNewerVersion(String latest, String current) {
     try {
-      final latestParts = latest.split('.').map(int.parse).toList();
-      final currentParts = current.split('.').map(int.parse).toList();
-      final maxLen = latestParts.length > currentParts.length
-          ? latestParts.length
-          : currentParts.length;
-      for (int i = 0; i < maxLen; i++) {
-        final l = (i < latestParts.length) ? latestParts[i] : 0;
-        final c = (i < currentParts.length) ? currentParts[i] : 0;
+      final lParts = latest.split('.').map(int.parse).toList();
+      final cParts = current.split('.').map(int.parse).toList();
+      final max = lParts.length > cParts.length ? lParts.length : cParts.length;
+      for (int i = 0; i < max; i++) {
+        final l = i < lParts.length ? lParts[i] : 0;
+        final c = i < cParts.length ? cParts[i] : 0;
         if (l > c) return true;
         if (l < c) return false;
       }
-    } catch (_) {
-      return false;
-    }
+    } catch (_) {}
     return false;
   }
-  static Future<void> downloadAndInstall(String apkUrl) async {
+  static Future<void> downloadAndInstall(
+      String downloadUrl,
+      String fileName, {
+        Function(int received, int total)? onProgress,
+      }) async {
     try {
       final dir = await getTemporaryDirectory();
-      final savePath = "${dir.path}/update.apk";
+      final savePath = "${dir.path}/$fileName";
       final file = File(savePath);
-      if (await file.exists()) {
-        await file.delete();
-      }
-      final request = http.Request('GET', Uri.parse(apkUrl));
-      final response = await http.Client().send(request);
+      if (await file.exists()) await file.delete();
+      debugPrint("Début téléchargement : $downloadUrl");
+      final client = http.Client();
+      final request = http.Request('GET', Uri.parse(downloadUrl));
+      final response = await client.send(request);
       if (response.statusCode != 200) {
-        throw Exception("Échec du téléchargement : ${response.statusCode}");
+        throw Exception("Erreur HTTP ${response.statusCode}");
       }
+      final totalBytes = response.contentLength ?? 0;
+      int receivedBytes = 0;
       final sink = file.openWrite();
-      await response.stream.pipe(sink);
-      await sink.close();
-      debugPrint("Téléchargement terminé : $savePath");
-      await platform.invokeMethod("installApk", {"path": savePath});
+      await response.stream.listen(
+            (List<int> chunk) {
+          sink.add(chunk);
+          receivedBytes += chunk.length;
+          if (onProgress != null && totalBytes > 0) {
+            onProgress(receivedBytes, totalBytes);
+          }
+        },
+        onDone: () async => await sink.close(),
+        onError: (e) {
+          sink.close();
+          throw e;
+        },
+        cancelOnError: true,
+      ).asFuture();
+      final len = await file.length();
+      if (len < 500000) {
+        throw Exception("Fichier corrompu (trop petit : ${len}b)");
+      }
+      debugPrint("Installation de $savePath...");
+      if (Platform.isWindows) {
+        final windowsPath = savePath.replaceAll('/', '\\');
+        debugPrint("Lancement MSIX : $windowsPath");
+        await Process.start(
+          'explorer.exe',
+          [windowsPath],
+          mode: ProcessStartMode.detached,
+        );
+        await Future.delayed(const Duration(seconds: 3));
+        exit(0);
+      } else if (Platform.isAndroid) {
+        final result = await OpenFilex.open(
+          savePath,
+          type: "application/vnd.android.package-archive",
+        );
+        if (result.type != ResultType.done) {
+          throw Exception("Erreur installation : ${result.message}");
+        }
+      }
     } catch (e) {
-      debugPrint("Erreur lors de la mise à jour : $e");
+      debugPrint("ERREUR MAJ : $e");
       rethrow;
     }
   }
 }
-
 
 
 ==================================================
@@ -39112,8 +39482,8 @@ class ProductOption {
   }
 }
 class MasterProduct {
-  final String id; 
-  final String productId; 
+  final String id;
+  final String productId;
   final String name;
   final String? description;
   final String? photoUrl;
@@ -39122,7 +39492,7 @@ class MasterProduct {
   final bool isComposite;
   final bool isIngredient;
   final bool isContainer;
-  final List<String> containerProductIds; 
+  final List<String> containerProductIds;
   final List<String> filterIds;
   final List<String> sectionIds;
   final List<String> kioskFilterIds;
@@ -39137,7 +39507,7 @@ class MasterProduct {
     this.description,
     this.photoUrl,
     this.color,
-    this.price, 
+    this.price,
     this.isComposite = false,
     this.isIngredient = false,
     this.isContainer = false,
@@ -39664,8 +40034,8 @@ class PendingOrder {
     required this.total,
     this.source = 'pos',
     this.orderType = 'onSite',
-    this.isPaid = false, 
-    this.paymentMethod = '', 
+    this.isPaid = false,
+    this.paymentMethod = '',
   });
   factory PendingOrder.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
@@ -39688,28 +40058,30 @@ enum PaperWidth { mm58, mm80 }
 class PrinterConfig {
   final String name;
   final String ipAddress;
-  final String? kitchenIpAddress; 
+  final String? kitchenIpAddress;
   final PrinterType type;
   final PaperWidth paperWidth;
   final bool isKitchenPrintingEnabled;
   final bool isBluetooth;
   final String? macAddress;
+  final bool autoSendKitchenOnPayment;
   PrinterConfig({
-    this.name = 'Imprimante Principale', 
+    this.name = 'Imprimante Principale',
     this.ipAddress = '192.168.1.200',
-    this.kitchenIpAddress, 
+    this.kitchenIpAddress,
     this.type = PrinterType.escpos,
     this.paperWidth = PaperWidth.mm80,
     this.isKitchenPrintingEnabled = true,
     this.isBluetooth = false,
     this.macAddress,
+    this.autoSendKitchenOnPayment = false,
   });
   factory PrinterConfig.fromFirestore(Map<String, dynamic> data) {
     return PrinterConfig(
       name: data['name'] ?? 'Imprimante Principale',
       ipAddress: data['ipAddress'] ?? '192.168.1.200',
       kitchenIpAddress: data[
-      'kitchenIpAddress'], 
+      'kitchenIpAddress'],
       type: PrinterType.values.firstWhere(
             (e) => e.toString() == data['type'],
         orElse: () => PrinterType.escpos,
@@ -39721,6 +40093,7 @@ class PrinterConfig {
       isKitchenPrintingEnabled: data['isKitchenPrintingEnabled'] ?? true,
       isBluetooth: data['isBluetooth'] ?? false,
       macAddress: data['macAddress'],
+      autoSendKitchenOnPayment: data['autoSendKitchenOnPayment'] ?? false,
     );
   }
   Map<String, dynamic> toMap() {
@@ -39734,6 +40107,7 @@ class PrinterConfig {
       'isKitchenPrintingEnabled': isKitchenPrintingEnabled,
       'isBluetooth': isBluetooth,
       'macAddress': macAddress,
+      'autoSendKitchenOnPayment': autoSendKitchenOnPayment,
     };
   }
 }

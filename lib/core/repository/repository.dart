@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart' hide Transaction;
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:uuid/uuid.dart';
 import '../../models.dart';
 
@@ -15,6 +16,7 @@ class FranchiseRepository {
   static final FranchiseRepository _instance = FranchiseRepository._internal();
   factory FranchiseRepository() => _instance;
   FranchiseRepository._internal();
+
   Future<void> saveFilter({
     required String franchisorId,
     required String id,
@@ -23,7 +25,7 @@ class FranchiseRepository {
   }) async {
     try {
       final docRef =
-          FirebaseFirestore.instance.collection('product_filters').doc(id);
+      FirebaseFirestore.instance.collection('product_filters').doc(id);
       await docRef.set({
         'id': id,
         'createdBy': franchisorId,
@@ -123,15 +125,13 @@ class FranchiseRepository {
       String franchisorId, String? dineInUrl, String? takeawayUrl) async {
     try {
       final docSnap =
-          await _firestore.collection('users').doc(franchisorId).get();
+      await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
           final oldDineIn = data['dineInImageUrl'] as String?;
           final oldTakeaway = data['takeawayImageUrl'] as String?;
-          if (dineInUrl != null &&
-              oldDineIn != null &&
-              oldDineIn != dineInUrl) {
+          if (dineInUrl != null && oldDineIn != null && oldDineIn != dineInUrl) {
             await _deleteFileFromUrl(oldDineIn);
           }
           if (takeawayUrl != null &&
@@ -155,10 +155,10 @@ class FranchiseRepository {
   Future<void> deleteGlobalButtonImage(
       String franchisorId, String typeKey) async {
     final String fieldName =
-        (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
+    (typeKey == 'dineIn') ? 'dineInImageUrl' : 'takeawayImageUrl';
     try {
       final docSnap =
-          await _firestore.collection('users').doc(franchisorId).get();
+      await _firestore.collection('users').doc(franchisorId).get();
       if (docSnap.exists) {
         final url = docSnap.data()?[fieldName] as String?;
         if (url != null) {
@@ -208,7 +208,7 @@ class FranchiseRepository {
   Future<void> deleteMasterMedia(String mediaId) async {
     try {
       final docSnap =
-          await _firestore.collection('kiosk_medias').doc(mediaId).get();
+      await _firestore.collection('kiosk_medias').doc(mediaId).get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null) {
@@ -231,7 +231,7 @@ class FranchiseRepository {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) =>
-            snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
+        snapshot.docs.map((doc) => KioskMedia.fromFirestore(doc)).toList());
   }
 
   Future<void> setKioskActiveMedia(
@@ -272,16 +272,14 @@ class FranchiseRepository {
   }
 
   Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
-      _performChunkedQuery(
-          Query collectionQuery, String field, List<dynamic> ids) async {
-    if (ids.isEmpty) {
-      return [];
-    }
+  _performChunkedQuery(
+      Query collectionQuery, String field, List<dynamic> ids) async {
+    if (ids.isEmpty) return [];
     final List<Future<QuerySnapshot<Map<String, dynamic>>>> futures = [];
     for (var i = 0; i < ids.length; i += 30) {
       final sublist = ids.sublist(i, i + 30 > ids.length ? ids.length : i + 30);
       futures.add(collectionQuery.where(field, whereIn: sublist).get()
-          as Future<QuerySnapshot<Map<String, dynamic>>>);
+      as Future<QuerySnapshot<Map<String, dynamic>>>);
     }
     final snapshots = await Future.wait(futures);
     final List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
@@ -300,14 +298,12 @@ class FranchiseRepository {
         .where('isVisible', isEqualTo: true)
         .get();
     final productIds = menuSnapshot.docs.map((doc) => doc.id).toList();
-    if (productIds.isEmpty) {
-      return [];
-    }
+    if (productIds.isEmpty) return [];
     final baseQuery = _firestore
         .collection('master_products')
         .where('createdBy', isEqualTo: franchisorId);
     final productDocs =
-        await _performChunkedQuery(baseQuery, 'productId', productIds);
+    await _performChunkedQuery(baseQuery, 'productId', productIds);
     return productDocs
         .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
         .toList();
@@ -324,14 +320,12 @@ class FranchiseRepository {
         .snapshots()
         .asyncMap((menuSnapshot) async {
       final productIds = menuSnapshot.docs.map((doc) => doc.id).toList();
-      if (productIds.isEmpty) {
-        return [];
-      }
+      if (productIds.isEmpty) return [];
       final baseQuery = _firestore
           .collection('master_products')
           .where('createdBy', isEqualTo: franchisorId);
       final productDocs =
-          await _performChunkedQuery(baseQuery, 'productId', productIds);
+      await _performChunkedQuery(baseQuery, 'productId', productIds);
       final products = productDocs
           .map((doc) => MasterProduct.fromFirestore(doc.data(), doc.id))
           .toList();
@@ -394,7 +388,7 @@ class FranchiseRepository {
         if (masterProductsSnapshot.docs.isNotEmpty) {
           for (final productDoc in masterProductsSnapshot.docs) {
             final product =
-                MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
+            MasterProduct.fromFirestore(productDoc.data(), productDoc.id);
             final newMenuItemRef = _firestore
                 .collection('users')
                 .doc(newUser.uid)
@@ -453,7 +447,7 @@ class FranchiseRepository {
     FirebaseApp? secondaryApp;
     try {
       final managerDoc =
-          await _firestore.collection('users').doc(managerId).get();
+      await _firestore.collection('users').doc(managerId).get();
       if (!managerDoc.exists) return "Erreur : Compte manager introuvable.";
       final String franchisorId = managerDoc.get('franchisorId');
       final Map<String, dynamic> enabledModules =
@@ -464,7 +458,7 @@ class FranchiseRepository {
       );
       final secondaryAuth = FirebaseAuth.instanceFor(app: secondaryApp);
       UserCredential userCredential =
-          await secondaryAuth.createUserWithEmailAndPassword(
+      await secondaryAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
@@ -521,8 +515,8 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<FranchiseUser>> getFranchiseesStream(String franchisorId) {
@@ -532,8 +526,8 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'franchisee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<FranchiseUser>> getStoreEmployeesStream(String storeId) {
@@ -543,32 +537,36 @@ class FranchiseRepository {
         .where('role', isEqualTo: 'employee')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
 
   Future<void> deleteEmployee(String employeeId) async {
     await _firestore.collection('users').doc(employeeId).delete();
   }
 
+  // ✅ HTTP direct — contourne le bug Pigeon Windows
   Future<String?> deleteFranchiseeAccount(String franchiseeId) async {
     try {
-      final functions = FirebaseFunctions.instanceFor(region: 'europe-west1');
-      final callable = functions.httpsCallable('deleteFranchiseeData');
-      final result = await callable.call<Map<String, dynamic>>({
-        'franchiseeId': franchiseeId,
-      });
-      if (result.data['success'] == true) {
-        return null;
-      } else {
-        return result.data['message'] ?? "Une erreur inconnue est survenue.";
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      final response = await http.post(
+        Uri.parse('https://europe-west1-tenka-caisse.cloudfunctions.net/deleteFranchiseeData'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'franchiseeId': franchiseeId}}),
+      ).timeout(const Duration(seconds: 60));
+      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      if (response.statusCode == 200) {
+        return body['result']?['success'] == true
+            ? null
+            : "Une erreur inconnue est survenue.";
       }
-    } on FirebaseFunctionsException catch (e) {
-      debugPrint("Erreur Cloud Function [${e.code}]: ${e.message}");
-      return e.message ??
-          "Une erreur est survenue lors de la communication avec le serveur.";
+      return body['error']?['message']?.toString() ??
+          "Une erreur est survenue (${response.statusCode}).";
     } catch (e) {
-      debugPrint("Erreur inattendue: $e");
+      debugPrint("Erreur deleteFranchiseeAccount: $e");
       return "Une erreur inattendue est survenue.";
     }
   }
@@ -584,8 +582,10 @@ class FranchiseRepository {
         .asyncMap((snapshot) async {
       List<KioskCategory> categories = [];
       for (var doc in snapshot.docs) {
-        final filtersSnapshot =
-            await doc.reference.collection('filters').orderBy('position').get();
+        final filtersSnapshot = await doc.reference
+            .collection('filters')
+            .orderBy('position')
+            .get();
         final filters = filtersSnapshot.docs
             .map((filterDoc) => KioskFilter.fromFirestore(filterDoc))
             .toList();
@@ -634,8 +634,9 @@ class FranchiseRepository {
       List<KioskCategory> sortedCategories) async {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedCategories.length; i++) {
-      final docRef =
-          _firestore.collection('kiosk_categories').doc(sortedCategories[i].id);
+      final docRef = _firestore
+          .collection('kiosk_categories')
+          .doc(sortedCategories[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
@@ -643,15 +644,20 @@ class FranchiseRepository {
 
   Future<void> deleteKioskCategory(String categoryId) async {
     try {
-      final docSnap =
-          await _firestore.collection('kiosk_categories').doc(categoryId).get();
+      final docSnap = await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .get();
       if (docSnap.exists) {
         final data = docSnap.data();
         if (data != null && data['imageUrl'] != null) {
           await _deleteFileFromUrl(data['imageUrl']);
         }
       }
-      await _firestore.collection('kiosk_categories').doc(categoryId).delete();
+      await _firestore
+          .collection('kiosk_categories')
+          .doc(categoryId)
+          .delete();
     } catch (e) {
       rethrow;
     }
@@ -752,7 +758,7 @@ class FranchiseRepository {
         .where('createdBy', isEqualTo: franchisorId)
         .snapshots()
         .map((snapshot) =>
-            snapshot.docs.map(ProductFilter.fromFirestore).toList());
+        snapshot.docs.map(ProductFilter.fromFirestore).toList());
   }
 
   Future<void> addFilter(String name, String? color) async =>
@@ -761,6 +767,7 @@ class FranchiseRepository {
         'createdBy': _currentUserId,
         'color': color,
       });
+
   Stream<List<ProductSection>> getSectionsStream(String franchisorId,
       {List<String> filterIds = const []}) {
     Query query = _firestore
@@ -789,7 +796,7 @@ class FranchiseRepository {
         final supplementPrices = {
           for (var itemDoc in itemDocs)
             itemDoc.data()['productId']:
-                (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+            (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
         };
         List<SectionItem> sectionItems = [];
         if (productIds.isNotEmpty) {
@@ -800,7 +807,7 @@ class FranchiseRepository {
           final productMap = {
             for (var doc in productDocs)
               doc.data()['productId']:
-                  MasterProduct.fromFirestore(doc.data(), doc.id)
+              MasterProduct.fromFirestore(doc.data(), doc.id)
           };
           for (var pid in productIds) {
             final product = productMap[pid];
@@ -846,7 +853,7 @@ class FranchiseRepository {
       final supplementPrices = {
         for (var itemDoc in itemDocs)
           itemDoc.data()['productId']:
-              (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
+          (itemDoc.data()['price'] as num?)?.toDouble() ?? 0.0
       };
       List<SectionItem> sectionItems = [];
       if (productIds.isNotEmpty) {
@@ -855,7 +862,7 @@ class FranchiseRepository {
         final productMap = {
           for (var doc in productDocs)
             doc.data()['productId']:
-                MasterProduct.fromFirestore(doc.data(), doc.id)
+            MasterProduct.fromFirestore(doc.data(), doc.id)
         };
         for (var pid in productIds) {
           final product = productMap[pid];
@@ -871,7 +878,7 @@ class FranchiseRepository {
     }
     return sectionIds
         .map((id) => fetchedSections.firstWhere((s) => s.sectionId == id,
-            orElse: () => ProductSection(id: '', sectionId: '')))
+        orElse: () => ProductSection(id: '', sectionId: '')))
         .where((s) => s.sectionId.isNotEmpty)
         .toList();
   }
@@ -948,14 +955,14 @@ class FranchiseRepository {
       query = query.where('filterIds', arrayContainsAny: filterIds);
     }
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(SectionGroup.fromFirestore).toList());
   }
 
   Future<void> saveSectionGroup(
       {String? groupId,
-      required String name,
-      required List<String> sectionIds,
-      required List<String> filterIds}) async {
+        required String name,
+        required List<String> sectionIds,
+        required List<String> filterIds}) async {
     final docRef = groupId != null
         ? _firestore.collection('section_groups').doc(groupId)
         : _firestore.collection('section_groups').doc();
@@ -969,6 +976,7 @@ class FranchiseRepository {
 
   Future<void> deleteSectionGroup(String groupId) async =>
       await _firestore.collection('section_groups').doc(groupId).delete();
+
   Future<void> duplicateSectionGroup(SectionGroup group) async {
     final newName = '${group.name} (Copie)';
     final docRef = _firestore.collection('section_groups').doc();
@@ -990,7 +998,7 @@ class FranchiseRepository {
     }
     return query.snapshots().map((snapshot) => snapshot.docs
         .map((doc) => MasterProduct.fromFirestore(
-            doc.data() as Map<String, dynamic>, doc.id))
+        doc.data() as Map<String, dynamic>, doc.id))
         .toList());
   }
 
@@ -1097,7 +1105,7 @@ class FranchiseRepository {
     }
     final batch = _firestore.batch();
     final masterProductRef =
-        _firestore.collection('master_products').doc(product.id);
+    _firestore.collection('master_products').doc(product.id);
     batch.delete(masterProductRef);
     final franchiseesSnapshot = await _firestore
         .collection('users')
@@ -1124,31 +1132,31 @@ class FranchiseRepository {
   Future<void> savePendingOrder(String franchiseeId, String identifier,
       List<CartItem> items, double total,
       {String source = 'pos',
-      String orderType = 'onSite',
-      bool isPaid = false,
-      String paymentMethod = ''}) async {
+        String orderType = 'onSite',
+        bool isPaid = false,
+        String paymentMethod = ''}) async {
     final itemsAsMap = items
         .map((item) => {
-              'masterProductId': item.product.id,
-              'basePrice': item.price,
-              'quantity': item.quantity,
-              'vatRate': item.vatRate,
-              'isSentToKitchen': item.isSentToKitchen,
-              'selectedOptions': item.selectedOptions.entries
-                  .map((entry) => {
-                        'sectionId': entry.key,
-                        'items': entry.value
-                            .map((sectionItem) => {
-                                  'masterProductId': sectionItem.product.id,
-                                  'supplementPrice':
-                                      sectionItem.supplementPrice,
-                                })
-                            .toList(),
-                      })
-                  .toList(),
-              'removedIngredientProductIds': item.removedIngredientProductIds,
-              'removedIngredientNames': item.removedIngredientNames,
-            })
+      'masterProductId': item.product.id,
+      'basePrice': item.price,
+      'quantity': item.quantity,
+      'vatRate': item.vatRate,
+      'isSentToKitchen': item.isSentToKitchen,
+      'selectedOptions': item.selectedOptions.entries
+          .map((entry) => {
+        'sectionId': entry.key,
+        'items': entry.value
+            .map((sectionItem) => {
+          'masterProductId': sectionItem.product.id,
+          'supplementPrice':
+          sectionItem.supplementPrice,
+        })
+            .toList(),
+      })
+          .toList(),
+      'removedIngredientProductIds': item.removedIngredientProductIds,
+      'removedIngredientNames': item.removedIngredientNames,
+    })
         .toList();
     await _firestore.collection('pending_orders').add({
       'franchiseeId': franchiseeId,
@@ -1160,7 +1168,7 @@ class FranchiseRepository {
       'orderType': orderType,
       'isPaid': isPaid,
       'paymentMethod':
-          paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
+      paymentMethod.isNotEmpty ? paymentMethod : (isPaid ? 'Card' : ''),
       'status': isPaid ? 'paid' : 'pending',
     });
   }
@@ -1172,8 +1180,8 @@ class FranchiseRepository {
         .orderBy('timestamp', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => PendingOrder.fromFirestore(doc))
-            .toList());
+        .map((doc) => PendingOrder.fromFirestore(doc))
+        .toList());
   }
 
   Future<void> deletePendingOrder(String orderId) async {
@@ -1194,7 +1202,7 @@ class FranchiseRepository {
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
     }
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
   }
 
   Stream<List<Transaction>> getSessionTransactions(String sessionId) =>
@@ -1204,9 +1212,10 @@ class FranchiseRepository {
           .orderBy('timestamp', descending: true)
           .snapshots()
           .map((snapshot) =>
-              snapshot.docs.map(Transaction.fromFirestore).toList());
+          snapshot.docs.map(Transaction.fromFirestore).toList());
+
   Stream<List<Transaction>> getTransactionsInDateRange(String franchiseeId,
-      {DateTime? startDate, DateTime? endDate, int limit = 100}) {
+      {DateTime? startDate, DateTime? endDate, int? limit}) {
     Query query = _firestore
         .collection('transactions')
         .where('franchiseeId', isEqualTo: franchiseeId);
@@ -1218,11 +1227,10 @@ class FranchiseRepository {
           isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
     }
     query = query.orderBy('timestamp', descending: true);
-    query = query.limit(limit);
+    if (limit != null) query = query.limit(limit);
     return query.snapshots().map(
-        (snapshot) => snapshot.docs.map(Transaction.fromFirestore).toList());
+            (snapshot) => snapshot.docs.map(Transaction.fromFirestore).toList());
   }
-
   Stream<TillSession?> getActiveSession(String franchiseeId) {
     return _firestore
         .collection('sessions')
@@ -1231,8 +1239,8 @@ class FranchiseRepository {
         .limit(1)
         .snapshots()
         .map((snapshot) => snapshot.docs.isNotEmpty
-            ? TillSession.fromFirestore(snapshot.docs.first)
-            : null);
+        ? TillSession.fromFirestore(snapshot.docs.first)
+        : null);
   }
 
   Future<String> openTillSession(
@@ -1267,7 +1275,7 @@ class FranchiseRepository {
         'isClosed': true
       });
       final sessionDoc =
-          await _firestore.collection('sessions').doc(sessionId).get();
+      await _firestore.collection('sessions').doc(sessionId).get();
       final franchiseeId = sessionDoc.data()?['franchiseeId'];
       if (franchiseeId != null) {
         await _firestore
@@ -1312,28 +1320,38 @@ class FranchiseRepository {
         .set(transaction.toMap());
   }
 
+  // ✅ HTTP direct — contourne le bug Pigeon Windows
   Future<void> reprintReceipt(String transactionId) async {
     try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('reprintReceipt');
-      await callable.call({'transactionId': transactionId});
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/reprintReceipt'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'transactionId': transactionId}}),
+      ).timeout(const Duration(seconds: 30));
     } catch (e) {
-      if (kDebugMode) {
-        print('Erreur lors de la réimpression : $e');
-      }
+      if (kDebugMode) print('Erreur lors de la réimpression : $e');
       rethrow;
     }
   }
 
+  // ✅ HTTP direct — contourne le bug Pigeon Windows
   Future<void> reprintKitchenTicket(String transactionId) async {
     try {
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('reprintKitchenTicket');
-      await callable.call({'transactionId': transactionId});
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/reprintKitchenTicket'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'data': {'transactionId': transactionId}}),
+      ).timeout(const Duration(seconds: 30));
     } catch (e) {
-      if (kDebugMode) {
-        print('Erreur réimpression cuisine : $e');
-      }
+      if (kDebugMode) print('Erreur réimpression cuisine : $e');
       rethrow;
     }
   }
@@ -1396,26 +1414,22 @@ class FranchiseRepository {
     return _firestore
         .collection('users')
         .where(Filter.or(
-          Filter('uid', isEqualTo: storeId),
-          Filter('storeId', isEqualTo: storeId),
-        ))
+      Filter('uid', isEqualTo: storeId),
+      Filter('storeId', isEqualTo: storeId),
+    ))
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
-            .toList());
+        .map((doc) => FranchiseUser.fromFirestore(doc.data(), doc.id))
+        .toList());
   }
 
   Future<void> _deleteFileFromUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
       await _storage.refFromURL(url).delete();
-      if (kDebugMode) {
-        print("Fichier supprimé du stockage : $url");
-      }
+      if (kDebugMode) print("Fichier supprimé du stockage : $url");
     } catch (e) {
-      if (kDebugMode) {
-        print("Erreur suppression fichier (ou fichier introuvable) : $e");
-      }
+      if (kDebugMode) print("Erreur suppression fichier (ou fichier introuvable) : $url");
     }
   }
 
@@ -1424,7 +1438,7 @@ class FranchiseRepository {
     final batch = _firestore.batch();
     for (int i = 0; i < sortedProducts.length; i++) {
       final docRef =
-          _firestore.collection('master_products').doc(sortedProducts[i].id);
+      _firestore.collection('master_products').doc(sortedProducts[i].id);
       batch.update(docRef, {'position': i});
     }
     await batch.commit();
@@ -1488,9 +1502,7 @@ class FranchiseRepository {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
-      if (kDebugMode) {
-        print("Erreur updateFranchiseeMenuItem: $e");
-      }
+      if (kDebugMode) print("Erreur updateFranchiseeMenuItem: $e");
       rethrow;
     }
   }
@@ -1503,7 +1515,7 @@ class FranchiseRepository {
         .collection('menu')
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
-            .toList());
+        .map((doc) => FranchiseeMenuItem.fromFirestore(doc.data()))
+        .toList());
   }
 }

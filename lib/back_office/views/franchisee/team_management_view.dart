@@ -1,36 +1,31 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import 'package:provider/provider.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/repository/repository.dart';
-
-final _functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
 class TeamManagementView extends StatefulWidget {
   const TeamManagementView({super.key});
   @override
   State<TeamManagementView> createState() => _TeamManagementViewState();
 }
-
 class _TeamManagementViewState extends State<TeamManagementView> {
   final FranchiseRepository _repository = FranchiseRepository();
-
   void _showAddEmployeeDialog() {
     showDialog(
       context: context,
       builder: (ctx) => _AddEmployeeDialog(repository: _repository),
     );
   }
-
   void _showAddAssociateDialog() {
     showDialog(
       context: context,
       builder: (ctx) => const _AddAssociateDialog(),
     );
   }
-
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
@@ -79,7 +74,6 @@ class _TeamManagementViewState extends State<TeamManagementView> {
               final data = employees[index].data() as Map<String, dynamic>;
               final String role = data['role'] ?? 'employee';
               final bool isAssociate = role == 'associate';
-
               return Card(
                 child: ListTile(
                   leading: CircleAvatar(
@@ -160,44 +154,41 @@ class _TeamManagementViewState extends State<TeamManagementView> {
   }
 }
 
-// ============================================================================
-// DIALOGUE EMPLOYÉ
-// ============================================================================
 class _AddEmployeeDialog extends StatefulWidget {
   final FranchiseRepository repository;
   const _AddEmployeeDialog({required this.repository});
   @override
   State<_AddEmployeeDialog> createState() => _AddEmployeeDialogState();
 }
-
 class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   bool _loading = false;
-
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
   }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await _functions
-          .httpsCallable('createAssociateWithEmailInvite')
-          .call({
-        'email': _emailController.text.trim(),
-        'name': _nameController.text.trim(),
-        'role': 'employee', // ✅ FIX
-      });
+      // ✅ HTTP direct — contourne le bug Pigeon Windows
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/createAssociateWithEmailInvite'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'data': {
+          'email': _emailController.text.trim(),
+          'name': _nameController.text.trim(),
+          'role': 'employee',
+        }}),
+      ).timeout(const Duration(seconds: 30));
 
       await FirebaseAuth.instance
           .sendPasswordResetEmail(email: _emailController.text.trim());
-
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -214,7 +205,6 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
       if (mounted) setState(() => _loading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -263,44 +253,40 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   }
 }
 
-// ============================================================================
-// DIALOGUE ASSOCIÉ
-// ============================================================================
 class _AddAssociateDialog extends StatefulWidget {
   const _AddAssociateDialog();
-
   @override
   State<_AddAssociateDialog> createState() => _AddAssociateDialogState();
 }
-
 class _AddAssociateDialogState extends State<_AddAssociateDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   bool _loading = false;
-
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     super.dispose();
   }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      await _functions
-          .httpsCallable('createAssociateWithEmailInvite')
-          .call({
-        'email': _emailController.text.trim(),
-        'name': _nameController.text.trim(),
-        'role': 'associate', // ✅ FIX
-      });
+      // ✅ HTTP direct — contourne le bug Pigeon Windows
+      final token = await FirebaseAuth.instance.currentUser!.getIdToken();
+      await http.post(
+        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/createAssociateWithEmailInvite'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
+        body: jsonEncode({'data': {
+          'email': _emailController.text.trim(),
+          'name': _nameController.text.trim(),
+          'role': 'associate',
+        }}),
+      ).timeout(const Duration(seconds: 30));
 
       await FirebaseAuth.instance
           .sendPasswordResetEmail(email: _emailController.text.trim());
-
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
@@ -321,7 +307,6 @@ class _AddAssociateDialogState extends State<_AddAssociateDialog> {
       if (mounted) setState(() => _loading = false);
     }
   }
-
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
