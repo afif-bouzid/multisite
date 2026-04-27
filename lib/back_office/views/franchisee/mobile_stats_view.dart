@@ -28,6 +28,19 @@ const kCardBgLight = Color(0xFF273449);
 const kAccentColor = Colors.indigoAccent;
 const int kBusinessDayStartHour = 5;
 
+// ✅ helper isBorne centralisé — utilisé partout de façon cohérente
+bool _isBorneTx(model.Transaction t) =>
+    t.source.toLowerCase() == 'borne' ||
+        t.paymentMethods.containsKey('Card_Kiosk') ||
+        t.orderType.toString().toLowerCase().contains('borne');
+
+// ✅ helper isSurPlace avec matching exact (évite false positive "website", "offsite")
+bool _isSurPlaceTx(model.Transaction t) {
+  final s = t.orderType.toString().toLowerCase();
+  return s == 'onsite' || s == 'dine_in' || s == 'dinein' ||
+      s.contains('place') || s.contains('dine');
+}
+
 // Helper : formatage monétaire cohérent (€ en suffixe, 2 décimales, virgule FR)
 String _money(num? value) {
   final v = value ?? 0;
@@ -54,15 +67,22 @@ class MobileStatsView extends StatefulWidget {
 class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderStateMixin {
   final _repository = FranchiseRepository();
   DateFilter _currentFilter = DateFilter.today;
-  late DateTimeRange _selectedRange;
+  // ✅ FIX — initialisé pour éviter le crash "late" avant le premier applyFilter
+  DateTimeRange _selectedRange = DateTimeRange(
+    start: DateTime.now().subtract(const Duration(hours: 19)),
+    end: DateTime.now(),
+  );
 
   Future<List<model.Transaction>>? _historicalFuture;
   Future<List<model.TillSession>>? _historySessionsFuture;
+  // ✅ NOUVEAU — comparaison période précédente
+  Future<List<model.Transaction>>? _compareFuture;
 
   bool _isLoadingFilter = false;
   bool _isExportingPdf = false;
   bool _isExportingCsv = false;
   String _globalSearchQuery = "";
+  bool _showComparison = false;
 
   @override
   void initState() {
@@ -119,7 +139,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         if (picked != null) {
           final diff = picked.end.difference(picked.start).inDays;
           if (diff > 31) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Limité à 31 jours pour protéger vos coûts serveurs."), backgroundColor: Colors.redAccent));
+            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("La période est limitée à 31 jours. Pour des exports plus longs, utilisez l'export mensuel."), backgroundColor: Colors.redAccent));
             setState(() => _isLoadingFilter = false);
             return;
           }
@@ -138,7 +158,21 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       _globalSearchQuery = "";
 
       _historicalFuture = _repository.getTransactionsInDateRange(storeId, startDate: start, endDate: end).first;
-      _historySessionsFuture = _repository.getFranchiseeSessions(storeId, startDate: start, endDate: end).first;
+
+      // ✅ FIX sessions cross-midnight — recule de 24h pour attraper les sessions
+      // ouvertes la veille et clôturées dans la période (ex: ouvert 23h, fermé 02h)
+      _historySessionsFuture = _repository.getFranchiseeSessions(
+        storeId,
+        startDate: start.subtract(const Duration(hours: 24)),
+        endDate: end,
+      ).first;
+
+      // ✅ NOUVEAU — période de comparaison (même durée, décalée en arrière)
+      final duration = end.difference(start);
+      final compareStart = start.subtract(duration);
+      final compareEnd = start.subtract(const Duration(seconds: 1));
+      _compareFuture = _repository.getTransactionsInDateRange(
+          storeId, startDate: compareStart, endDate: compareEnd).first;
 
       _isLoadingFilter = false;
     });
@@ -435,6 +469,9 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   // ── 2. BOUTONS EXPORT (PDF + CSV)
                   SliverToBoxAdapter(child: _buildExportButtons(user, storeId)),
 
+                  // ── 2.bis. ✅ NOUVEAU — KPIs FAST-FOOD (cadence, articles/ticket, rush, taux borne)
+                  SliverToBoxAdapter(child: _buildFastFoodKpis(stats, allTxs)),
+
                   // ── 3. KPIs COMPTABLES CLÉS
                   SliverToBoxAdapter(child: _buildAccountingKpis(stats)),
 
@@ -458,6 +495,10 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
 
                   // ── 10. TOP PRODUITS
                   SliverToBoxAdapter(child: _buildTopProductsSection(stats)),
+
+                  // ── 10.bis. ✅ NOUVEAU — TOP SUPPLÉMENTS / OPTIONS
+                  if (stats.topOptions.isNotEmpty)
+                    SliverToBoxAdapter(child: _buildTopOptionsSection(stats)),
 
                   // ── 11. FLOP PRODUITS
                   SliverToBoxAdapter(child: _buildFlopProductsSection(stats)),
@@ -989,6 +1030,126 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     );
   }
 
+  // ✅ NOUVEAU — KPIs spécifiques pour fast-food (cadence, articles, rush, taux borne)
+  Widget _buildFastFoodKpis(AdvancedStatsSummary stats, List<model.Transaction> txs) {
+    final periodHours = _selectedRange.end.difference(_selectedRange.start).inMinutes / 60.0;
+    final cadence = periodHours > 0 ? stats.count / periodHours : 0.0;
+    final borneRatio = stats.caTotal > 0 ? stats.borneCA / stats.caTotal : 0.0;
+
+    double avgItems = 0.0;
+    if (txs.isNotEmpty) {
+      final totalItems = txs.fold<int>(0, (acc, t) =>
+      acc + t.items.fold<int>(0, (a, item) => a + ((item['quantity'] as num?)?.toInt() ?? 1)));
+      avgItems = totalItems / txs.length;
+    }
+
+    String rushLabel = "-";
+    String rushSubtitle = "Pas de données";
+    if (stats.peakHour != null) {
+      rushLabel = "${stats.peakHour}h-${(stats.peakHour! + 1) % 24}h";
+      rushSubtitle = _money(stats.caPerHour[stats.peakHour] ?? 0);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 10),
+            child: Text("PERFORMANCE FAST-FOOD", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
+          ),
+          Row(children: [
+            Expanded(child: MetricCard(
+              title: "CADENCE",
+              value: "${cadence.toStringAsFixed(1)}/h",
+              subtitle: "Commandes par heure",
+              icon: Icons.speed,
+              color: cadence >= 15 ? Colors.greenAccent : cadence >= 8 ? Colors.amberAccent : Colors.redAccent,
+              small: true,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: MetricCard(
+              title: "ARTICLES/TICKET",
+              value: avgItems.toStringAsFixed(1),
+              subtitle: "Moy. produits par cmd",
+              icon: Icons.shopping_bag_outlined,
+              color: Colors.purpleAccent,
+              small: true,
+            )),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: MetricCard(
+              title: "HEURE DE RUSH",
+              value: rushLabel,
+              subtitle: rushSubtitle,
+              icon: Icons.local_fire_department,
+              color: Colors.orangeAccent,
+              small: true,
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: MetricCard(
+              title: "AUTONOMIE BORNE",
+              value: "${(borneRatio * 100).toStringAsFixed(0)}%",
+              subtitle: "${stats.borneCount} cmd · ${_money(stats.borneCA)}",
+              icon: Icons.touch_app,
+              color: Colors.tealAccent,
+              small: true,
+            )),
+          ]),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NOUVEAU — Top suppléments/options
+  Widget _buildTopOptionsSection(AdvancedStatsSummary stats) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            collapsedIconColor: Colors.white54,
+            iconColor: Colors.orangeAccent,
+            title: Row(children: const [
+              Icon(Icons.add_circle_outline, size: 14, color: Colors.orangeAccent),
+              SizedBox(width: 8),
+              Text("TOP SUPPLÉMENTS / OPTIONS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+            ]),
+            children: [
+              ...stats.topOptions.take(10).toList().asMap().entries.map((entry) {
+                final index = entry.key;
+                final e = entry.value;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                  child: Row(children: [
+                    Container(
+                      width: 22, height: 22, alignment: Alignment.center,
+                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                      child: Text("${index + 1}", style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      child: Text("${e.value}x", style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ]),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildFlopProductsSection(AdvancedStatsSummary stats) {
     // Les flops ne sont intéressants que s'il y a au moins quelques produits
     if (stats.productQty.length < 5) return const SizedBox.shrink();
@@ -1052,7 +1213,23 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
 
         final List<model.Transaction> allTxs = (snapshot.data?[0] as List<model.Transaction>?) ?? <model.Transaction>[];
         final List<model.TillSession> rawSessions = (snapshot.data?[1] as List<model.TillSession>?) ?? <model.TillSession>[];
-        final List<model.TillSession> historySessions = rawSessions.where((s) => s.isClosed == true).toList();
+        // ✅ FIX sessions cross-midnight — on affiche les sessions clôturées
+        // dont SOIT l'ouverture SOIT la fermeture est dans la période demandée
+        final start = _selectedRange.start;
+        final end = _selectedRange.end;
+        final List<model.TillSession> historySessions = rawSessions.where((s) {
+          if (s.isClosed != true) return false;
+          final closeTime = s.closingTime;
+          if (closeTime == null) return false;
+          final closeInRange = !closeTime.isBefore(start) && !closeTime.isAfter(end);
+          final openInRange = !s.openingTime.isBefore(start) && !s.openingTime.isAfter(end);
+          return closeInRange || openInRange;
+        }).toList()
+          ..sort((a, b) {
+            final at = a.closingTime ?? a.openingTime;
+            final bt = b.closingTime ?? b.openingTime;
+            return bt.compareTo(at);
+          });
 
         final filteredTxs = _globalSearchQuery.isEmpty
             ? <model.Transaction>[]
@@ -1139,6 +1316,12 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     final dateStr = DateFormat('dd/MM/yyyy').format(session.openingTime);
     final openTime = DateFormat('HH:mm').format(session.openingTime);
     final closeTime = session.closingTime != null ? DateFormat('HH:mm').format(session.closingTime!) : '--:--';
+    // ✅ FIX — détecte si la session a traversé minuit (ouvert un jour, fermé un autre)
+    final isCrossMidnight = session.closingTime != null &&
+        DateFormat('yyyy-MM-dd').format(session.closingTime!) !=
+            DateFormat('yyyy-MM-dd').format(session.openingTime);
+    final closeDate = session.closingTime != null
+        ? DateFormat('dd/MM').format(session.closingTime!) : '';
 
     final initialCash = session.initialCash;
     final finalCash = session.finalCash;
@@ -1190,7 +1373,19 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                             children: [
                               Icon(session.closingTime != null ? Icons.lock : Icons.lock_clock, color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, size: 12),
                               const SizedBox(width: 6),
-                              Text("Fermeture : $closeTime", style: TextStyle(color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+                              // ✅ FIX — affiche la date si cross-midnight (ex: ouvert 1er, fermé 2)
+                              Text(
+                                isCrossMidnight ? "Fermeture : $closeDate à $closeTime" : "Fermeture : $closeTime",
+                                style: TextStyle(color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                              ),
+                              if (isCrossMidnight) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                  decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                                  child: const Text("NUIT", style: TextStyle(color: Colors.orangeAccent, fontSize: 8, fontWeight: FontWeight.bold)),
+                                ),
+                              ],
                             ]
                         ),
                       ],
@@ -1326,7 +1521,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     if (key == 'Cash') return Colors.greenAccent;
     if (key == 'Card_Kiosk') return Colors.tealAccent;
     if (key == 'Ticket') return Colors.orangeAccent;
-    final isBorne = t.source.toLowerCase() == 'borne';
+    final isBorne = _isBorneTx(t);
     return isBorne ? Colors.tealAccent : Colors.indigoAccent;
   }
 
@@ -1335,7 +1530,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     final key = t.paymentMethods.keys.first;
     if (key == 'Cash') return Icon(Icons.payments, color: color, size: size);
     if (key == 'Ticket') return Icon(Icons.restaurant, color: color, size: size);
-    final isBorne = t.source.toLowerCase() == 'borne';
+    final isBorne = _isBorneTx(t);
     return Icon(isBorne ? Icons.touch_app : Icons.point_of_sale, color: color, size: size);
   }
 
@@ -1356,7 +1551,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
           else if (key == 'Card_Counter') { label = 'CB COMPTOIR'; c = Colors.indigoAccent; }
           else if (key == 'Ticket') { label = 'TICKET RESTO'; c = Colors.orangeAccent; }
           else if (key == 'Card') {
-            final isBorne = t.source.toLowerCase() == 'borne';
+            final isBorne = _isBorneTx(t);
             label = isBorne ? 'CB BORNE' : 'CB COMPTOIR';
             c = isBorne ? Colors.tealAccent : Colors.indigoAccent;
           }
@@ -1436,7 +1631,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
                 else if (method == 'Cash') cashSales += val;
                 else if (method == 'Ticket') ticketSales += val;
                 else if (method == 'Card') {
-                  final isBorne = t.source.toLowerCase() == 'borne';
+                  final isBorne = _isBorneTx(t);
                   if (isBorne) cbKioskSales += val;
                   else cbCounterSales += val;
                 }
@@ -1634,7 +1829,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
     if (key == 'Cash') return Colors.greenAccent;
     if (key == 'Card_Kiosk') return Colors.tealAccent;
     if (key == 'Ticket') return Colors.orangeAccent;
-    final isBorne = t.source.toLowerCase() == 'borne';
+    final isBorne = _isBorneTx(t);
     return isBorne ? Colors.tealAccent : Colors.indigoAccent;
   }
 
@@ -1643,7 +1838,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
     final key = t.paymentMethods.keys.first;
     if (key == 'Cash') return Icon(Icons.payments, color: color, size: size);
     if (key == 'Ticket') return Icon(Icons.restaurant, color: color, size: size);
-    final isBorne = t.source.toLowerCase() == 'borne';
+    final isBorne = _isBorneTx(t);
     return Icon(isBorne ? Icons.touch_app : Icons.point_of_sale, color: color, size: size);
   }
 
@@ -1664,7 +1859,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
           else if (key == 'Card_Counter') { label = 'CB COMPTOIR'; c = Colors.indigoAccent; }
           else if (key == 'Ticket') { label = 'TICKET RESTO'; c = Colors.orangeAccent; }
           else if (key == 'Card') {
-            final isBorne = t.source.toLowerCase() == 'borne';
+            final isBorne = _isBorneTx(t);
             label = isBorne ? 'CB BORNE' : 'CB COMPTOIR';
             c = isBorne ? Colors.tealAccent : Colors.indigoAccent;
           }
@@ -1916,6 +2111,8 @@ class AdvancedStatsSummary {
   // Produits
   Map<String, int> productQty = {};
   Map<String, double> productCA = {};
+  // ✅ NOUVEAU — top suppléments/options vendus
+  Map<String, int> optionQty = {};
 
   // Paiements
   Map<String, double> payments = {
@@ -1936,22 +2133,20 @@ class AdvancedStatsSummary {
   // Extrêmes
   double maxTicket = 0.0;
   String maxTicketLabel = "-";
-  double minTicket = 0.0;
+  // ✅ FIX — initialisé à double.maxFinite pour que la comparaison fonctionne
+  double minTicket = double.maxFinite;
   String minTicketLabel = "-";
   double bestDayCA = 0.0;
   String bestDayLabel = "-";
 
   AdvancedStatsSummary(List<model.Transaction> transactions) {
     count = transactions.length;
-    if (count == 0) return;
-
-    model.Transaction? maxTx;
-    model.Transaction? minTx;
+    if (count == 0) { minTicket = 0.0; return; }
 
     for (var t in transactions) {
       final txTotal = t.total.toDouble();
       caTotal += txTotal;
-      tvaTotal += t.vatTotal.toDouble();
+      // ✅ NOTE — tvaTotal sera recalculé depuis vatByRate à la fin (sync avec l'affichage légal)
 
       // Remises
       if (t.discountAmount > 0.001) {
@@ -1960,22 +2155,29 @@ class AdvancedStatsSummary {
       }
 
       // Extrêmes ticket
-      if (maxTx == null || t.total > maxTx.total) maxTx = t;
-      if (minTx == null || t.total < minTx.total) minTx = t;
+      if (txTotal > maxTicket) {
+        maxTicket = txTotal;
+        maxTicketLabel = DateFormat('dd/MM HH:mm').format(t.timestamp);
+      }
+      // ✅ FIX — minTicket comparé correctement
+      if (txTotal < minTicket && txTotal > 0) {
+        minTicket = txTotal;
+        minTicketLabel = DateFormat('dd/MM HH:mm').format(t.timestamp);
+      }
 
-      // Distribution horaire
+      // Distribution horaire (heure réelle pour le graphique)
       final hour = t.timestamp.hour;
       caPerHour[hour] = (caPerHour[hour] ?? 0.0) + txTotal;
 
-      // Distribution journalière
-      final dayKey = DateFormat('yyyy-MM-dd').format(t.timestamp);
+      // ✅ FIX — journée commerciale pour caPerDay (vente à 02h = jour précédent)
+      final businessTs = t.timestamp.hour < kBusinessDayStartHour
+          ? t.timestamp.subtract(const Duration(days: 1))
+          : t.timestamp;
+      final dayKey = DateFormat('yyyy-MM-dd').format(businessTs);
       caPerDay[dayKey] = (caPerDay[dayKey] ?? 0.0) + txTotal;
 
-      // Canal (Borne vs Caisse) — utilise directement t.source (typé String)
-      bool isBorne = t.source.toLowerCase() == 'borne'
-          || t.paymentMethods.containsKey('Card_Kiosk')
-          || t.orderType.toString().toLowerCase().contains('borne');
-
+      // Canal — ✅ FIX helper centralisé
+      bool isBorne = _isBorneTx(t);
       if (isBorne) {
         borneCount++;
         borneCA += txTotal;
@@ -1984,10 +2186,8 @@ class AdvancedStatsSummary {
         caisseCA += txTotal;
       }
 
-      // Service (Sur Place vs À Emporter)
-      final typeStr = t.orderType.toString().toLowerCase();
-      final isSurPlace = typeStr.contains('place') || typeStr.contains('dine') || typeStr.contains('site') || typeStr.contains('onsite');
-      if (isSurPlace) {
+      // Service — ✅ FIX helper centralisé
+      if (_isSurPlaceTx(t)) {
         surPlaceCount++;
         surPlaceCA += txTotal;
       } else {
@@ -1995,9 +2195,14 @@ class AdvancedStatsSummary {
         emporterCA += txTotal;
       }
 
-      // Paiements
+      // Paiements — ✅ FIX cast sécurisé (supporte String et num)
       t.paymentMethods.forEach((method, val) {
-        double amount = (val as num).toDouble();
+        double amount = 0.0;
+        if (val is num) {
+          amount = val.toDouble();
+        } else if (val is String) {
+          amount = double.tryParse(val) ?? 0.0;
+        }
         if (method == 'Cash') payments['Espèces'] = (payments['Espèces'] ?? 0) + amount;
         else if (method == 'Ticket') payments['Tickets Resto'] = (payments['Tickets Resto'] ?? 0) + amount;
         else if (method == 'Card_Kiosk') payments['CB Borne'] = (payments['CB Borne'] ?? 0) + amount;
@@ -2008,13 +2213,12 @@ class AdvancedStatsSummary {
         } else payments['Autres'] = (payments['Autres'] ?? 0) + amount;
       });
 
-      // Ventilation TVA par taux (depuis les items) — prise en compte du discount proportionnel
+      // Ventilation TVA par taux (depuis les items)
       final itemsTtcSum = t.items.fold<double>(0.0, (acc, item) {
         final p = (item['price'] as num?)?.toDouble() ?? 0.0;
         final q = (item['quantity'] as num?)?.toDouble() ?? 1.0;
         return acc + (p * q);
       });
-      // Ratio pour appliquer proportionnellement la remise si présente
       final discountRatio = (itemsTtcSum > 0.001 && t.discountAmount > 0.001)
           ? (1.0 - (t.discountAmount / itemsTtcSum)).clamp(0.0, 1.0)
           : 1.0;
@@ -2025,12 +2229,10 @@ class AdvancedStatsSummary {
         final qty = (item['quantity'] as num?)?.toInt() ?? 1;
         final taxRate = (item['vatRate'] as num?)?.toDouble() ?? (item['taxRate'] as num?)?.toDouble() ?? 10.0;
 
-        // Application du discount proportionnel
         final itemCaTtc = price * qty * discountRatio;
         final itemHt = itemCaTtc / (1 + (taxRate / 100));
         final itemTva = itemCaTtc - itemHt;
 
-        // Clé TVA
         String rateKey;
         if ((taxRate - 5.5).abs() < 0.001) rateKey = '5.5%';
         else if ((taxRate - 20.0).abs() < 0.001) rateKey = '20%';
@@ -2040,28 +2242,39 @@ class AdvancedStatsSummary {
         entry.baseHt += itemHt;
         entry.tva += itemTva;
 
-        // Top produits (on utilise le prix TTC non remisé ici pour garder le vrai prix unitaire dans le rang)
         if (price > 0) {
           productQty[name] = (productQty[name] ?? 0) + qty;
-          productCA[name] = (productCA[name] ?? 0.0) + (price * qty);
+          // ✅ FIX — productCA avec discount appliqué (cohérent avec caTotal)
+          productCA[name] = (productCA[name] ?? 0.0) + (price * qty * discountRatio);
+        }
+
+        // ✅ NOUVEAU — collecter les suppléments/options
+        final options = item['options'] as List? ?? [];
+        for (var section in options) {
+          if (section is Map) {
+            final sectionItems = section['items'] as List? ?? [];
+            for (var opt in sectionItems) {
+              if (opt is Map) {
+                final optName = opt['name']?.toString() ?? '';
+                if (optName.isNotEmpty) {
+                  optionQty[optName] = (optionQty[optName] ?? 0) + qty;
+                }
+              }
+            }
+          }
         }
       }
     }
 
-    // Calculs dérivés
+    // ✅ FIX — tvaTotal recalculé depuis vatByRate pour être synchro avec l'affichage légal
+    tvaTotal = vatByRate.values.fold(0.0, (acc, e) => acc + e.tva);
     caHt = caTotal - tvaTotal;
+
+    // ✅ FIX — minTicket à 0 si aucune transaction valide
+    if (minTicket == double.maxFinite) minTicket = 0.0;
 
     if (caPerHour.isNotEmpty) {
       peakHour = caPerHour.entries.reduce((a, b) => a.value > b.value ? a : b).key;
-    }
-
-    if (maxTx != null) {
-      maxTicket = maxTx.total;
-      maxTicketLabel = "${DateFormat('dd/MM HH:mm').format(maxTx.timestamp)}";
-    }
-    if (minTx != null) {
-      minTicket = minTx.total;
-      minTicketLabel = "${DateFormat('dd/MM HH:mm').format(minTx.timestamp)}";
     }
 
     if (caPerDay.isNotEmpty) {
@@ -2078,6 +2291,8 @@ class AdvancedStatsSummary {
   double get panierMoyen => count > 0 ? caTotal / count : 0.0;
   List<MapEntry<String, int>> get sortedProductsByQty => productQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   List<MapEntry<String, double>> get sortedProductsByRevenue => productCA.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  // ✅ NOUVEAU — top options/suppléments triés par quantité
+  List<MapEntry<String, int>> get topOptions => optionQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2611,14 +2826,15 @@ class StatsCsvExporter {
     ]]);
     final txsSorted = [...transactions]..sort((a, b) => a.timestamp.compareTo(b.timestamp));
     for (final t in txsSorted) {
-      final isBorne = t.source.toLowerCase() == 'borne'
-          || t.paymentMethods.containsKey('Card_Kiosk')
-          || t.orderType.toString().toLowerCase().contains('borne');
-      final typeStr = t.orderType.toString().toLowerCase();
-      final isSurPlace = typeStr.contains('place') || typeStr.contains('dine') || typeStr.contains('site') || typeStr.contains('onsite');
-      final paymentStr = t.paymentMethods.entries
-          .map((e) => "${e.key.replaceAll('Card_Kiosk', 'CB Borne').replaceAll('Card_Counter', 'CB Comptoir').replaceAll('Cash', 'Especes').replaceAll('Ticket', 'TR')}:${money((e.value as num).toDouble())}")
-          .join(' | ');
+      // ✅ FIX — utilise les helpers globaux + cast sécurisé pour paiements
+      final isBorne = _isBorneTx(t);
+      final isSurPlace = _isSurPlaceTx(t);
+      final paymentStr = t.paymentMethods.entries.map((e) {
+        final amt = e.value is num
+            ? (e.value as num).toDouble()
+            : double.tryParse(e.value.toString()) ?? 0.0;
+        return "${e.key.replaceAll('Card_Kiosk', 'CB Borne').replaceAll('Card_Counter', 'CB Comptoir').replaceAll('Cash', 'Especes').replaceAll('Ticket', 'TR')}:${money(amt)}";
+      }).join(' | ');
       writeRows([[
         DateFormat('yyyy-MM-dd').format(t.timestamp),
         DateFormat('HH:mm:ss').format(t.timestamp),
