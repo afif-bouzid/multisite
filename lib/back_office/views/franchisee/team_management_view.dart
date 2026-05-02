@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' hide AuthProvider;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:provider/provider.dart';
@@ -154,6 +155,11 @@ class _TeamManagementViewState extends State<TeamManagementView> {
   }
 }
 
+// =============================================================================
+// DIALOGUE : Création d'un EMPLOYÉ / CAISSIER
+// Le manager définit lui-même un mot de passe → l'employé se connecte direct.
+// Pas d'email envoyé.
+// =============================================================================
 class _AddEmployeeDialog extends StatefulWidget {
   final FranchiseRepository repository;
   const _AddEmployeeDialog({required this.repository});
@@ -164,75 +170,175 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _loading = false;
+  bool _passwordVisible = false;
+
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      // ✅ HTTP direct — contourne le bug Pigeon Windows
       final token = await FirebaseAuth.instance.currentUser!.getIdToken();
-      await http.post(
-        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/createAssociateWithEmailInvite'),
-        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token'},
-        body: jsonEncode({'data': {
-          'email': _emailController.text.trim(),
-          'name': _nameController.text.trim(),
-          'role': 'employee',
-        }}),
+      final response = await http.post(
+        Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/createEmployee'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'data': {
+            'email': _emailController.text.trim(),
+            'name': _nameController.text.trim(),
+            'password': _passwordController.text,
+          }
+        }),
       ).timeout(const Duration(seconds: 30));
 
-      await FirebaseAuth.instance
-          .sendPasswordResetEmail(email: _emailController.text.trim());
+      if (response.statusCode != 200) {
+        throw Exception("Le serveur a refusé la requête (Code ${response.statusCode}).");
+      }
+      final responseData = jsonDecode(response.body);
+      if (responseData.containsKey('error')) {
+        throw Exception(responseData['error']['message'] ?? "Erreur inconnue côté serveur.");
+      }
+
       if (mounted) {
+        // On affiche un récap avec les identifiants à donner à l'employé
         Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-            content: Text("Employé créé et invitation envoyée !"),
-            backgroundColor: Colors.green));
+        await _showCredentialsRecap(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text("Erreur : ${e.toString()}"),
+            duration: const Duration(seconds: 5),
             backgroundColor: Colors.red));
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
   }
+
+  Future<void> _showCredentialsRecap({
+    required String email,
+    required String password,
+  }) async {
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.check_circle, color: Colors.green),
+            SizedBox(width: 8),
+            Text("Employé créé !"),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              "Transmettez ces identifiants à votre employé. Il pourra se connecter immédiatement.",
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            _CredentialRow(label: "Email", value: email),
+            const SizedBox(height: 8),
+            _CredentialRow(label: "Mot de passe", value: password),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.orange.shade200),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber, size: 16, color: Colors.orange),
+                  SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      "Notez bien le mot de passe : il ne sera plus affiché.",
+                      style: TextStyle(fontSize: 11, color: Colors.orange),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("OK, j'ai noté"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text("Nouvel Employé"),
       content: Form(
         key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              "L'employé recevra un email pour définir son mot de passe.",
-              style: TextStyle(fontSize: 12, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _nameController,
-              decoration: const InputDecoration(labelText: "Prénom / Nom"),
-              validator: (v) => v!.isEmpty ? "Requis" : null,
-            ),
-            const SizedBox(height: 10),
-            TextFormField(
-              controller: _emailController,
-              decoration: const InputDecoration(labelText: "Email de connexion"),
-              keyboardType: TextInputType.emailAddress,
-              validator: (v) =>
-              v!.contains("@") ? null : "Email invalide",
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Définissez les identifiants. L'employé pourra se connecter immédiatement.",
+                style: TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(labelText: "Prénom / Nom"),
+                validator: (v) => v!.isEmpty ? "Requis" : null,
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _emailController,
+                decoration: const InputDecoration(labelText: "Email de connexion"),
+                keyboardType: TextInputType.emailAddress,
+                validator: (v) =>
+                v != null && v.contains("@") ? null : "Email invalide",
+              ),
+              const SizedBox(height: 10),
+              TextFormField(
+                controller: _passwordController,
+                decoration: InputDecoration(
+                  labelText: "Mot de passe (min. 6 caractères)",
+                  suffixIcon: IconButton(
+                    icon: Icon(_passwordVisible
+                        ? Icons.visibility_off
+                        : Icons.visibility),
+                    onPressed: () =>
+                        setState(() => _passwordVisible = !_passwordVisible),
+                  ),
+                ),
+                obscureText: !_passwordVisible,
+                validator: (v) => v != null && v.length >= 6
+                    ? null
+                    : "6 caractères minimum",
+              ),
+            ],
+          ),
         ),
       ),
       actions: [
@@ -253,6 +359,59 @@ class _AddEmployeeDialogState extends State<_AddEmployeeDialog> {
   }
 }
 
+// Petit widget réutilisé pour afficher email/mdp avec bouton copier
+class _CredentialRow extends StatelessWidget {
+  final String label;
+  final String value;
+  const _CredentialRow({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 100,
+            child: Text(
+              label,
+              style: const TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey,
+                  fontWeight: FontWeight.bold),
+            ),
+          ),
+          Expanded(
+            child: SelectableText(
+              value,
+              style: const TextStyle(
+                  fontSize: 13, fontFamily: 'monospace'),
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.copy, size: 16),
+            tooltip: "Copier",
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: value));
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text("$label copié"),
+                duration: const Duration(seconds: 1),
+              ));
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// =============================================================================
+// DIALOGUE : Invitation d'un ASSOCIÉ (inchangé — envoie un email)
+// =============================================================================
 class _AddAssociateDialog extends StatefulWidget {
   const _AddAssociateDialog();
   @override
@@ -273,7 +432,6 @@ class _AddAssociateDialogState extends State<_AddAssociateDialog> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _loading = true);
     try {
-      // ✅ HTTP direct — contourne le bug Pigeon Windows
       final token = await FirebaseAuth.instance.currentUser!.getIdToken();
       await http.post(
         Uri.parse('https://us-central1-tenka-caisse.cloudfunctions.net/createAssociateWithEmailInvite'),

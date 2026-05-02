@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:pdf/pdf.dart';
@@ -12,6 +11,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:csv/csv.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:ouiborne/core/repository/repository.dart';
 import 'package:ouiborne/core/auth_provider.dart';
 import 'package:ouiborne/models.dart' as model;
@@ -75,14 +75,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
 
   Future<List<model.Transaction>>? _historicalFuture;
   Future<List<model.TillSession>>? _historySessionsFuture;
-  // ✅ NOUVEAU — comparaison période précédente
-  Future<List<model.Transaction>>? _compareFuture;
 
   bool _isLoadingFilter = false;
   bool _isExportingPdf = false;
   bool _isExportingCsv = false;
   String _globalSearchQuery = "";
-  bool _showComparison = false;
 
   @override
   void initState() {
@@ -159,20 +156,16 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
 
       _historicalFuture = _repository.getTransactionsInDateRange(storeId, startDate: start, endDate: end).first;
 
-      // ✅ FIX sessions cross-midnight — recule de 24h pour attraper les sessions
-      // ouvertes la veille et clôturées dans la période (ex: ouvert 23h, fermé 02h)
+      // ✅ FIX sessions cross-midnight — large fenêtre côté repository :
+      //   - 7 jours en arrière : couvre les sessions exceptionnellement longues
+      //     (ex: oubli de fermeture pendant un week-end)
+      //   - +24h après end : sessions qui dépassent minuit en fin de période
+      // Le filtrage précis du chevauchement se fait ensuite côté UI.
       _historySessionsFuture = _repository.getFranchiseeSessions(
         storeId,
-        startDate: start.subtract(const Duration(hours: 24)),
-        endDate: end,
+        startDate: start.subtract(const Duration(days: 7)),
+        endDate: end.add(const Duration(hours: 24)),
       ).first;
-
-      // ✅ NOUVEAU — période de comparaison (même durée, décalée en arrière)
-      final duration = end.difference(start);
-      final compareStart = start.subtract(duration);
-      final compareEnd = start.subtract(const Duration(seconds: 1));
-      _compareFuture = _repository.getTransactionsInDateRange(
-          storeId, startDate: compareStart, endDate: compareEnd).first;
 
       _isLoadingFilter = false;
     });
@@ -297,7 +290,39 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         appBar: AppBar(
           backgroundColor: kDarkBg,
           elevation: 0,
-          title: Text(user.restaurantName?.toUpperCase() ?? "TABLEAU DE BORD", style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16)),
+          centerTitle: true,
+          // ✅ Logo Ouiborne (prestataire) à gauche
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Image.asset(
+              'assets/web-app-manifest-192x192.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Center(
+                child: Text(
+                  "",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 14,
+                    letterSpacing: 1.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          leadingWidth: 56,
+          // ✅ Nom du client centré, en blanc
+          title: Text(
+            user.restaurantName?.toUpperCase() ?? "TABLEAU DE BORD",
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 15,
+              letterSpacing: 0.8,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
           actions: [
             IconButton(icon: const Icon(Icons.language, color: Colors.amber, size: 20), onPressed: _launchPospixel, tooltip: 'Pospixel'),
             IconButton(icon: const Icon(Icons.logout, color: Colors.white54, size: 20), onPressed: () => _handleSignOut(context)),
@@ -472,6 +497,9 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   // ── 2.bis. ✅ NOUVEAU — KPIs FAST-FOOD (cadence, articles/ticket, rush, taux borne)
                   SliverToBoxAdapter(child: _buildFastFoodKpis(stats, allTxs)),
 
+                  // ── 2.ter. ✅ NOUVEAU — GRAPHIQUES PRO (donut paiements, line CA, pie service)
+                  SliverToBoxAdapter(child: _buildChartsSection(stats, isMultiDay)),
+
                   // ── 3. KPIs COMPTABLES CLÉS
                   SliverToBoxAdapter(child: _buildAccountingKpis(stats)),
 
@@ -496,9 +524,13 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   // ── 10. TOP PRODUITS
                   SliverToBoxAdapter(child: _buildTopProductsSection(stats)),
 
-                  // ── 10.bis. ✅ NOUVEAU — TOP SUPPLÉMENTS / OPTIONS
-                  if (stats.topOptions.isNotEmpty)
-                    SliverToBoxAdapter(child: _buildTopOptionsSection(stats)),
+                  // ── 10.bis. ✅ NOUVEAU — TOP SUPPLÉMENTS PAYANTS (avec CA)
+                  if (stats.topPaidOptions.isNotEmpty)
+                    SliverToBoxAdapter(child: _buildTopPaidOptionsSection(stats)),
+
+                  // ── 10.ter. ✅ NOUVEAU — TOP CHOIX GRATUITS (sauces, options incluses)
+                  if (stats.topFreeOptions.isNotEmpty)
+                    SliverToBoxAdapter(child: _buildTopFreeOptionsSection(stats)),
 
                   // ── 11. FLOP PRODUITS
                   SliverToBoxAdapter(child: _buildFlopProductsSection(stats)),
@@ -1103,8 +1135,445 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     );
   }
 
-  // ✅ NOUVEAU — Top suppléments/options
-  Widget _buildTopOptionsSection(AdvancedStatsSummary stats) {
+  // ✅ NOUVEAU — Section graphiques pro (donut paiements + line CA + pie service)
+  Widget _buildChartsSection(AdvancedStatsSummary stats, bool isMultiDay) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(left: 4, bottom: 10),
+            child: Text("VISUALISATIONS", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
+          ),
+
+          // ── Donut chart : Répartition paiements
+          _buildPaymentsDonutChart(stats),
+          const SizedBox(height: 12),
+
+          // ── Pie chart : Sur place vs À emporter
+          if (stats.surPlaceCount > 0 || stats.emporterCount > 0)
+            _buildServicePieChart(stats),
+
+          // ── Line chart : Évolution CA cumulé
+          if (isMultiDay && stats.caPerDay.length > 1) ...[
+            const SizedBox(height: 12),
+            _buildDailyLineChart(stats),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // Donut paiements
+  Widget _buildPaymentsDonutChart(AdvancedStatsSummary stats) {
+    final entries = [
+      ('CB Borne', stats.payments['CB Borne'] ?? 0.0, Colors.tealAccent),
+      ('CB Comptoir', stats.payments['CB Comptoir'] ?? 0.0, Colors.indigoAccent),
+      ('Espèces', stats.payments['Espèces'] ?? 0.0, Colors.greenAccent),
+      ('Tickets Resto', stats.payments['Tickets Resto'] ?? 0.0, Colors.orangeAccent),
+      ('Autres', stats.payments['Autres'] ?? 0.0, Colors.blueGrey),
+    ].where((e) => e.$2 > 0.01).toList();
+
+    if (entries.isEmpty) return const SizedBox.shrink();
+
+    final total = entries.fold<double>(0, (acc, e) => acc + e.$2);
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("RÉPARTITION DES PAIEMENTS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+
+          // ── Donut centré + total au milieu (Stack)
+          SizedBox(
+            height: 220,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                PieChart(
+                  PieChartData(
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 60,
+                    startDegreeOffset: -90,
+                    sections: entries.map((e) {
+                      final pct = (e.$2 / total) * 100;
+                      return PieChartSectionData(
+                        value: e.$2,
+                        // Affichage du % uniquement si la part est >= 7% (sinon illisible sur mobile)
+                        title: pct >= 7 ? "${pct.toStringAsFixed(0)}%" : "",
+                        color: e.$3,
+                        radius: 38,
+                        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                // Total au centre du donut
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("TOTAL", style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    const SizedBox(height: 2),
+                    Text(_money(total), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                    const SizedBox(height: 2),
+                    Text("${entries.length} mode${entries.length > 1 ? 's' : ''}", style: const TextStyle(color: Colors.white38, fontSize: 10)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // ── Légende en cartes empilées (1 par ligne, optimisé portrait mobile)
+          ...entries.map((e) {
+            final pct = (e.$2 / total) * 100;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(
+                      width: 10, height: 10,
+                      decoration: BoxDecoration(color: e.$3, shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(e.$1, style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+                    Text(_money(e.$2), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: e.$3.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                      child: Text(
+                        "${pct.toStringAsFixed(0)}%",
+                        style: TextStyle(color: e.$3, fontSize: 10, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: pct / 100,
+                      minHeight: 4,
+                      backgroundColor: Colors.white.withOpacity(0.05),
+                      valueColor: AlwaysStoppedAnimation(e.$3),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // Pie service
+  Widget _buildServicePieChart(AdvancedStatsSummary stats) {
+    final total = stats.surPlaceCA + stats.emporterCA;
+    if (total < 0.01) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text("TYPE DE SERVICE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 160,
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 0,
+                      sections: [
+                        if (stats.surPlaceCA > 0)
+                          PieChartSectionData(
+                            value: stats.surPlaceCA,
+                            title: "${((stats.surPlaceCA / total) * 100).toStringAsFixed(0)}%",
+                            color: Colors.purpleAccent,
+                            radius: 65,
+                            titleStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                        if (stats.emporterCA > 0)
+                          PieChartSectionData(
+                            value: stats.emporterCA,
+                            title: "${((stats.emporterCA / total) * 100).toStringAsFixed(0)}%",
+                            color: Colors.lightBlueAccent,
+                            radius: 65,
+                            titleStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle)),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text("Sur place", style: TextStyle(color: Colors.white70, fontSize: 12))),
+                        ]),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 18),
+                          child: Text("${stats.surPlaceCount} cmd · ${_money(stats.surPlaceCA)}", style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(children: [
+                          Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.lightBlueAccent, shape: BoxShape.circle)),
+                          const SizedBox(width: 8),
+                          const Expanded(child: Text("À emporter", style: TextStyle(color: Colors.white70, fontSize: 12))),
+                        ]),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 18),
+                          child: Text("${stats.emporterCount} cmd · ${_money(stats.emporterCA)}", style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Line chart CA cumulé sur la période
+  Widget _buildDailyLineChart(AdvancedStatsSummary stats) {
+    final entries = stats.caPerDay.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
+    if (entries.length < 2) return const SizedBox.shrink();
+
+    final spots = <FlSpot>[];
+    double cumul = 0;
+    for (int i = 0; i < entries.length; i++) {
+      cumul += entries[i].value;
+      spots.add(FlSpot(i.toDouble(), cumul));
+    }
+    final maxY = spots.last.y * 1.15;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: kCardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("ÉVOLUTION DU CA CUMULÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text(_money(cumul), style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 180,
+            child: LineChart(
+              LineChartData(
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 4,
+                  getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withOpacity(0.05), strokeWidth: 1),
+                ),
+                titlesData: FlTitlesData(
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 40,
+                      interval: maxY / 4,
+                      getTitlesWidget: (value, meta) => Text(
+                        "${value.toInt()}€",
+                        style: const TextStyle(color: Colors.white38, fontSize: 9),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      reservedSize: 30,
+                      interval: 1,
+                      getTitlesWidget: (value, meta) {
+                        if (value.toInt() < 0 || value.toInt() >= entries.length) return const SizedBox();
+                        if (entries.length > 7 && value.toInt() % 2 != 0) return const SizedBox();
+                        try {
+                          final date = DateFormat('yyyy-MM-dd').parse(entries[value.toInt()].key);
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              DateFormat('dd/MM').format(date),
+                              style: const TextStyle(color: Colors.white38, fontSize: 9),
+                            ),
+                          );
+                        } catch (_) {
+                          return const SizedBox();
+                        }
+                      },
+                    ),
+                  ),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                ),
+                borderData: FlBorderData(show: false),
+                minX: 0, maxX: (entries.length - 1).toDouble(),
+                minY: 0, maxY: maxY,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    color: Colors.greenAccent,
+                    barWidth: 3,
+                    dotData: FlDotData(
+                      show: true,
+                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                        radius: 4,
+                        color: Colors.greenAccent,
+                        strokeWidth: 2,
+                        strokeColor: kDarkBg,
+                      ),
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [Colors.greenAccent.withOpacity(0.3), Colors.greenAccent.withOpacity(0.0)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ],
+                lineTouchData: LineTouchData(
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipColor: (_) => Colors.black87,
+                    getTooltipItems: (touchedSpots) => touchedSpots.map((spot) {
+                      final idx = spot.x.toInt();
+                      String dateLabel = "";
+                      try {
+                        if (idx >= 0 && idx < entries.length) {
+                          dateLabel = DateFormat('dd/MM/yyyy').format(DateFormat('yyyy-MM-dd').parse(entries[idx].key));
+                        }
+                      } catch (_) {}
+                      return LineTooltipItem(
+                        "$dateLabel\n${_money(spot.y)}",
+                        const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ✅ NOUVEAU — Top suppléments PAYANTS (avec CA généré)
+  Widget _buildTopPaidOptionsSection(AdvancedStatsSummary stats) {
+    final totalCA = stats.paidOptionsTotalCA;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Container(
+        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16)),
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            initiallyExpanded: true,
+            collapsedIconColor: Colors.white54,
+            iconColor: Colors.amberAccent,
+            title: Row(children: [
+              const Icon(Icons.euro, size: 14, color: Colors.amberAccent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text("SUPPLÉMENTS PAYANTS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+              ),
+              if (totalCA > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                  child: Text("+${_money(totalCA)}", style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.w900, fontSize: 11)),
+                ),
+            ]),
+            children: [
+              ...stats.topPaidOptions.take(10).toList().asMap().entries.map((entry) {
+                final index = entry.key;
+                final e = entry.value;
+                final ca = stats.paidOptionCA[e.key] ?? 0.0;
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                  child: Row(children: [
+                    Container(
+                      width: 22, height: 22, alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: index < 3 ? Colors.amberAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text("${index + 1}", style: TextStyle(color: index < 3 ? Colors.amberAccent : Colors.white54, fontWeight: FontWeight.bold, fontSize: 10)),
+                    ),
+                    const SizedBox(width: 10),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      child: Text("${e.value}x", style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    Text(_money(ca), style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12)),
+                  ]),
+                );
+              }),
+              // Footer total
+              if (stats.topPaidOptions.length > 10) Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
+                child: Text("+ ${stats.topPaidOptions.length - 10} autres suppléments...",
+                    textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ✅ NOUVEAU — Top choix GRATUITS (sauces, options incluses)
+  Widget _buildTopFreeOptionsSection(AdvancedStatsSummary stats) {
+    final total = stats.topFreeOptions.fold<int>(0, (a, b) => a + b.value);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Container(
@@ -1113,36 +1582,70 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
           data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
           child: ExpansionTile(
             collapsedIconColor: Colors.white54,
-            iconColor: Colors.orangeAccent,
-            title: Row(children: const [
-              Icon(Icons.add_circle_outline, size: 14, color: Colors.orangeAccent),
-              SizedBox(width: 8),
-              Text("TOP SUPPLÉMENTS / OPTIONS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+            iconColor: Colors.cyanAccent,
+            title: Row(children: [
+              const Icon(Icons.local_dining, size: 14, color: Colors.cyanAccent),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text("CHOIX GRATUITS / SAUCES", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(color: Colors.cyan.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text("$total demandes", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 11)),
+              ),
             ]),
             children: [
-              ...stats.topOptions.take(10).toList().asMap().entries.map((entry) {
+              ...stats.topFreeOptions.take(15).toList().asMap().entries.map((entry) {
                 final index = entry.key;
                 final e = entry.value;
+                final ratio = total > 0 ? e.value / total : 0.0;
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
-                  child: Row(children: [
-                    Container(
-                      width: 22, height: 22, alignment: Alignment.center,
-                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
-                      child: Text("${index + 1}", style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 10)),
-                    ),
-                    const SizedBox(width: 10),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.orange.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
-                      child: Text("${e.value}x", style: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 11)),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
-                  ]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        Container(
+                          width: 22, height: 22, alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: index < 3 ? Colors.cyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text("${index + 1}", style: TextStyle(color: index < 3 ? Colors.cyanAccent : Colors.white54, fontWeight: FontWeight.bold, fontSize: 10)),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          decoration: BoxDecoration(color: Colors.cyan.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                          child: Text("${e.value}x", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                        Text("${(ratio * 100).toStringAsFixed(0)}%",
+                            style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11)),
+                      ]),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(3),
+                        child: LinearProgressIndicator(
+                          value: ratio,
+                          minHeight: 3,
+                          backgroundColor: Colors.white.withOpacity(0.05),
+                          valueColor: const AlwaysStoppedAnimation(Colors.cyanAccent),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               }),
+              if (stats.topFreeOptions.length > 15) Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
+                child: Text("+ ${stats.topFreeOptions.length - 15} autres choix...",
+                    textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
+              ),
             ],
           ),
         ),
@@ -1213,17 +1716,25 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
 
         final List<model.Transaction> allTxs = (snapshot.data?[0] as List<model.Transaction>?) ?? <model.Transaction>[];
         final List<model.TillSession> rawSessions = (snapshot.data?[1] as List<model.TillSession>?) ?? <model.TillSession>[];
-        // ✅ FIX sessions cross-midnight — on affiche les sessions clôturées
-        // dont SOIT l'ouverture SOIT la fermeture est dans la période demandée
+        // ✅ FIX sessions complet — logique de CHEVAUCHEMENT
+        // Une session "touche" la période si elle ne se finit pas avant le début
+        // ET ne commence pas après la fin. Couvre tous les cas :
+        //   - Session entièrement dans la période ✓
+        //   - Session ouverte avant, fermée pendant ✓
+        //   - Session ouverte pendant, fermée après ✓
+        //   - Session ouverte avant, fermée après (chevauche entièrement) ✓
+        //   - Session encore ouverte qui a commencé avant la fin de la période ✓
         final start = _selectedRange.start;
         final end = _selectedRange.end;
         final List<model.TillSession> historySessions = rawSessions.where((s) {
+          // On ne montre que les sessions clôturées (l'active est gérée séparément)
           if (s.isClosed != true) return false;
-          final closeTime = s.closingTime;
-          if (closeTime == null) return false;
-          final closeInRange = !closeTime.isBefore(start) && !closeTime.isAfter(end);
-          final openInRange = !s.openingTime.isBefore(start) && !s.openingTime.isAfter(end);
-          return closeInRange || openInRange;
+          final close = s.closingTime;
+          if (close == null) return false;
+          // Chevauchement = pas de gap des deux côtés
+          final endsAfterStart = !close.isBefore(start);   // fermée à >= start
+          final startsBeforeEnd = !s.openingTime.isAfter(end); // ouverte à <= end
+          return endsAfterStart && startsBeforeEnd;
         }).toList()
           ..sort((a, b) {
             final at = a.closingTime ?? a.openingTime;
@@ -2111,8 +2622,10 @@ class AdvancedStatsSummary {
   // Produits
   Map<String, int> productQty = {};
   Map<String, double> productCA = {};
-  // ✅ NOUVEAU — top suppléments/options vendus
-  Map<String, int> optionQty = {};
+  // ✅ NOUVEAU — top suppléments/options séparés gratuits / payants
+  Map<String, int> freeOptionQty = {};       // Sauces, choix sans coût
+  Map<String, int> paidOptionQty = {};       // Extras payants (qty)
+  Map<String, double> paidOptionCA = {};     // Extras payants (CA généré)
 
   // Paiements
   Map<String, double> payments = {
@@ -2248,7 +2761,7 @@ class AdvancedStatsSummary {
           productCA[name] = (productCA[name] ?? 0.0) + (price * qty * discountRatio);
         }
 
-        // ✅ NOUVEAU — collecter les suppléments/options
+        // ✅ NOUVEAU — collecter les suppléments/options en séparant gratuits et payants
         final options = item['options'] as List? ?? [];
         for (var section in options) {
           if (section is Map) {
@@ -2256,8 +2769,18 @@ class AdvancedStatsSummary {
             for (var opt in sectionItems) {
               if (opt is Map) {
                 final optName = opt['name']?.toString() ?? '';
-                if (optName.isNotEmpty) {
-                  optionQty[optName] = (optionQty[optName] ?? 0) + qty;
+                if (optName.isEmpty) continue;
+                // Lecture du prix du supplément (clés possibles : price, supplementPrice)
+                final optPrice = (opt['supplementPrice'] as num?)?.toDouble()
+                    ?? (opt['price'] as num?)?.toDouble()
+                    ?? 0.0;
+                if (optPrice > 0.001) {
+                  // Supplément payant
+                  paidOptionQty[optName] = (paidOptionQty[optName] ?? 0) + qty;
+                  paidOptionCA[optName] = (paidOptionCA[optName] ?? 0.0) + (optPrice * qty * discountRatio);
+                } else {
+                  // Choix gratuit / option incluse
+                  freeOptionQty[optName] = (freeOptionQty[optName] ?? 0) + qty;
                 }
               }
             }
@@ -2291,8 +2814,20 @@ class AdvancedStatsSummary {
   double get panierMoyen => count > 0 ? caTotal / count : 0.0;
   List<MapEntry<String, int>> get sortedProductsByQty => productQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
   List<MapEntry<String, double>> get sortedProductsByRevenue => productCA.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
-  // ✅ NOUVEAU — top options/suppléments triés par quantité
-  List<MapEntry<String, int>> get topOptions => optionQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  // ✅ NOUVEAU — top options séparés
+  List<MapEntry<String, int>> get topFreeOptions =>
+      freeOptionQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  List<MapEntry<String, int>> get topPaidOptions =>
+      paidOptionQty.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  // ✅ Garder l'ancien getter pour rétro-compatibilité (combinaison des deux)
+  List<MapEntry<String, int>> get topOptions {
+    final combined = <String, int>{};
+    freeOptionQty.forEach((k, v) => combined[k] = (combined[k] ?? 0) + v);
+    paidOptionQty.forEach((k, v) => combined[k] = (combined[k] ?? 0) + v);
+    return combined.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+  }
+  // CA total généré par les suppléments payants
+  double get paidOptionsTotalCA => paidOptionCA.values.fold(0.0, (a, b) => a + b);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2817,6 +3352,25 @@ class StatsCsvExporter {
       ["Produit", "Quantité", "CA TTC"],
       ...stats.sortedProductsByQty.map((e) => [e.key, e.value, money(stats.productCA[e.key] ?? 0)]),
     ]);
+
+    // ─── ✅ NOUVEAU — SUPPLEMENTS PAYANTS (avec CA) ───
+    if (stats.topPaidOptions.isNotEmpty) {
+      writeSection("SUPPLEMENTS PAYANTS");
+      writeRows([
+        ["Supplément", "Quantité vendue", "CA TTC généré"],
+        ...stats.topPaidOptions.map((e) => [e.key, e.value, money(stats.paidOptionCA[e.key] ?? 0)]),
+        ["TOTAL", "", money(stats.paidOptionsTotalCA)],
+      ]);
+    }
+
+    // ─── ✅ NOUVEAU — CHOIX GRATUITS / SAUCES ───
+    if (stats.topFreeOptions.isNotEmpty) {
+      writeSection("CHOIX GRATUITS / SAUCES");
+      writeRows([
+        ["Choix / Sauce", "Nombre de demandes"],
+        ...stats.topFreeOptions.map((e) => [e.key, e.value]),
+      ]);
+    }
 
     // ─── DÉTAIL DES TRANSACTIONS ───
     writeSection("DETAIL DES TRANSACTIONS");

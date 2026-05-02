@@ -1301,6 +1301,7 @@ class _StockManagementDialogState extends State<StockManagementDialog> {
   }
 
   Future<void> _loadData() async {
+
     final repo = FranchiseRepository();
     try {
       final results = await Future.wait([

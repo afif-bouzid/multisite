@@ -1,33 +1,182 @@
 import 'package:blue_thermal_printer/blue_thermal_printer.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+// Imports Core
+import '../../../core/auth_provider.dart';
 import '../../../core/services/local_config_service.dart';
 import '../../../core/services/printing_service.dart';
 import '../../../models.dart';
+
 class FranchiseeSettingsView extends StatelessWidget {
   const FranchiseeSettingsView({super.key});
+
   @override
   Widget build(BuildContext context) {
+    final user = Provider.of<AuthProvider>(context).franchiseUser;
+    final bool hasWeb = user?.enabledModules['click_and_collect'] == true;
+
     return DefaultTabController(
-      length: 2,
+      length: hasWeb ? 3 : 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text("Paramètres"),
-          bottom: const TabBar(
+          bottom: TabBar(
             tabs: [
-              Tab(icon: Icon(Icons.print_outlined), text: "Imprimantes"),
-              Tab(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  text: "Ticket de caisse"),
+              const Tab(icon: Icon(Icons.print_outlined), text: "Imprimantes"),
+              const Tab(icon: Icon(Icons.receipt_long_outlined), text: "Ticket de caisse"),
+              if (hasWeb)
+                const Tab(icon: Icon(Icons.notifications_active_outlined), text: "Web & Impression"),
             ],
           ),
         ),
-        body: const TabBarView(
-          children: [PrinterSettingsForm(), ReceiptSettingsForm()],
+        body: TabBarView(
+          children: [
+            const PrinterSettingsForm(),
+            const ReceiptSettingsForm(),
+            if (hasWeb) const ClickAndCollectPrintSettingsForm(),
+          ],
         ),
       ),
     );
   }
 }
+
+// =========================================================================
+// NOUVEAU FORMULAIRE : CONFIGURATION IMPRESSION WEB & ALERTES
+// =========================================================================
+class ClickAndCollectPrintSettingsForm extends StatefulWidget {
+  const ClickAndCollectPrintSettingsForm({super.key});
+
+  @override
+  State<ClickAndCollectPrintSettingsForm> createState() => _ClickAndCollectPrintSettingsFormState();
+}
+
+class _ClickAndCollectPrintSettingsFormState extends State<ClickAndCollectPrintSettingsForm> {
+  final LocalConfigService _localService = LocalConfigService();
+  bool _isLoading = true;
+
+  // Options de réglages
+  bool _autoPrintWebKitchen = true;
+  bool _autoPrintWebReceipt = false;
+  bool _enableSoundAlert = true;
+  bool _repeatAlertUntilAction = true;
+  int _kitchenCopies = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSettings();
+  }
+
+  Future<void> _loadSettings() async {
+    final user = Provider.of<AuthProvider>(context, listen: false).franchiseUser;
+    if (user == null) return;
+
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.effectiveStoreId).get();
+    if (doc.exists) {
+      final data = doc.data()?['printConfigWeb'] as Map<String, dynamic>? ?? {};
+      setState(() {
+        _autoPrintWebKitchen = data['autoPrintKitchen'] ?? true;
+        _autoPrintWebReceipt = data['autoPrintReceipt'] ?? false;
+        _enableSoundAlert = data['enableSoundAlert'] ?? true;
+        _repeatAlertUntilAction = data['repeatAlert'] ?? true;
+        _kitchenCopies = data['kitchenCopies'] ?? 1;
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    setState(() => _isLoading = true);
+    final user = Provider.of<AuthProvider>(context, listen: false).franchiseUser;
+
+    await FirebaseFirestore.instance.collection('users').doc(user?.effectiveStoreId).set({
+      'printConfigWeb': {
+        'autoPrintKitchen': _autoPrintWebKitchen,
+        'autoPrintReceipt': _autoPrintWebReceipt,
+        'enableSoundAlert': _enableSoundAlert,
+        'repeatAlert': _repeatAlertUntilAction,
+        'kitchenCopies': _kitchenCopies,
+      }
+    }, SetOptions(merge: true));
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Réglages Web enregistrés'), backgroundColor: Colors.green),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) return const Center(child: CircularProgressIndicator());
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        const Text("Automatisation Web", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        SwitchListTile(
+          title: const Text("Impression auto. Cuisine"),
+          subtitle: const Text("Lance le ticket cuisine dès qu'une commande est payée en ligne."),
+          value: _autoPrintWebKitchen,
+          onChanged: (v) => setState(() => _autoPrintWebKitchen = v),
+        ),
+        SwitchListTile(
+          title: const Text("Impression auto. Ticket Client"),
+          subtitle: const Text("Sort le ticket de caisse immédiatement (pour le sac)."),
+          value: _autoPrintWebReceipt,
+          onChanged: (v) => setState(() => _autoPrintWebReceipt = v),
+        ),
+        const Divider(height: 40),
+
+        const Text("Alertes & Notifications", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 10),
+        SwitchListTile(
+          secondary: const Icon(Icons.volume_up, color: Colors.orange),
+          title: const Text("Sonnerie type 'Uber Eats'"),
+          subtitle: const Text("Alerte sonore répétée lors d'une nouvelle commande web."),
+          value: _enableSoundAlert,
+          onChanged: (v) => setState(() => _enableSoundAlert = v),
+        ),
+        if (_enableSoundAlert)
+          SwitchListTile(
+            title: const Text("Répéter jusqu'à validation"),
+            subtitle: const Text("Le son continue tant que la commande n'est pas consultée."),
+            value: _repeatAlertUntilAction,
+            onChanged: (v) => setState(() => _repeatAlertUntilAction = v),
+          ),
+        const Divider(height: 40),
+
+        const Text("Copies & Sorties", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 16),
+        ListTile(
+          title: const Text("Nombre de copies cuisine (Web)"),
+          trailing: DropdownButton<int>(
+            value: _kitchenCopies,
+            items: [1, 2, 3].map((e) => DropdownMenuItem(value: e, child: Text("$e"))).toList(),
+            onChanged: (v) => setState(() => _kitchenCopies = v ?? 1),
+          ),
+        ),
+        const SizedBox(height: 32),
+        ElevatedButton.icon(
+          onPressed: _saveSettings,
+          icon: const Icon(Icons.save),
+          label: const Text("ENREGISTRER LES PRÉFÉRENCES"),
+          style: ElevatedButton.styleFrom(padding: const EdgeInsets.all(16), backgroundColor: Colors.black, foregroundColor: Colors.white),
+        )
+      ],
+    );
+  }
+}
+
+// =========================================================================
+// VOS CLASSES ORIGINALES (PrinterSettingsForm & ReceiptSettingsForm)
+// =========================================================================
+
 class PrinterSettingsForm extends StatefulWidget {
   const PrinterSettingsForm({super.key});
   @override
@@ -110,8 +259,6 @@ class _PrinterSettingsFormState extends State<PrinterSettingsForm> {
   Future<void> _saveSettings() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
-      // Préserve autoSendKitchenOnPayment qui est géré dans l'onglet "Reçu"
-      // (relu juste avant le save pour ne pas l'écraser).
       final existing = await _localService.getPrinterConfig();
       final newConfig = PrinterConfig(
         name: _useBluetooth

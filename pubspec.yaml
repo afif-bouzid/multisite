@@ -67,3 +67,5 @@ msix_config:
     certificate_password: "Secret2026!"
 flutter:
   uses-material-design: true
+  assets:
+    - assets/web-app-manifest-192x192.png

@@ -26,6 +26,7 @@ import 'core/theme/app_colors.dart';
 
 // --- IMPORT DE LA VUE MOBILE STATS ---
 import 'back_office/views/franchisee/mobile_stats_view.dart';
+import 'models/click_and_collect_config.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -189,6 +190,9 @@ class AppRouter {
                 path: '/franchisee_kiosk_config',
                 builder: (context, state) => const FranchiseeKioskConfigView()),
             GoRoute(
+                path: '/franchisee_click_collect',
+                builder: (context, state) => const ClickAndCollectManager()),
+            GoRoute(
                 path: '/franchisee_stats',
                 builder: (context, state) => const FranchiseeStatsView()),
             GoRoute(
@@ -205,31 +209,52 @@ class AppRouter {
       ],
       redirect: (BuildContext context, GoRouterState state) {
         final isLoggedIn = authProvider.firebaseUser != null;
-
-        // Compatibilité avec les différentes versions de GoRouter
         final String location = state.uri.toString();
         final isLoggingIn = location == '/login';
-
         final user = authProvider.franchiseUser;
 
-        // 1. Si l'utilisateur n'est pas connecté, le forcer sur /login
+        // 1. Protection de base : Pas de session = Login
         if (!isLoggedIn) return isLoggingIn ? null : '/login';
 
-        // 2. Gestion de la redirection au moment précis de la connexion
+        // 2. Aiguillage au moment de la connexion
         if (isLoggingIn && isLoggedIn) {
           if (user?.isFranchisor == true) {
             return '/franchisor_dashboard';
           }
-          // 🔥 CORRECTION ICI : On vérifie 'isAssociate' OU 'isEmployee'
-          else if (user?.isAssociate == true || user?.isEmployee == true) {
+
+          // 🔥 SÉPARATION STRICTE DES FLUX
+          if (user?.isEmployee == true) {
+            // L'employé (Caissier) est aspiré directement par la caisse
+            return '/franchisee_dashboard';
+          }
+
+          if (user?.isAssociate == true) {
+            // L'associé (Partenaire) va consulter les stats mobiles
             return '/mobile_stats';
           }
-          else {
-            return '/launcher'; // Le franchisé (patron) atterrit sur le Launcher
+
+          // Le franchisé (Patron) choisit son mode sur le launcher
+          return '/launcher';
+        }
+
+        // 3. SÉCURITÉ ACTIVE : Le Vigile (Route Guard)
+        // On bloque l'accès de l'employé aux routes interdites
+        if (user?.isEmployee == true) {
+          final forbiddenRoutes = [
+            '/mobile_stats',
+            '/launcher', // Pas de choix de mode pour lui
+            '/franchisee_stats',
+            '/franchisee_settings',
+            '/franchisee_team',
+            '/franchisee_kiosk_config'
+          ];
+
+          if (forbiddenRoutes.contains(location)) {
+            debugPrint("🔒 ACCÈS REFUSÉ : Tentative illégale de l'employé sur $location");
+            return '/franchisee_dashboard';
           }
         }
 
-        // 3. Aucune redirection forcée par la suite.
         return null;
       },
     );
