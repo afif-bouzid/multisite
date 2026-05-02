@@ -12,18 +12,46 @@ import '../../models.dart';
 class AccountingExportService {
   final dateFormatter = DateFormat('dd/MM/yyyy HH:mm');
   final currencyFormatter = NumberFormat.currency(locale: 'fr_FR', symbol: '€');
+  static const int kBusinessDayStartHour = 5;
 
-  /// Génère le contenu CSV avec une ventilation détaillée des paiements
+  /// Vérifie si la transaction provient d'une borne
+  bool _isBorne(dynamic tx) {
+    try {
+      final source = tx.source?.toString().toLowerCase() ?? '';
+      if (source == 'borne' || source == 'kiosk') return true;
+      
+      final methods = tx.paymentMethods as Map<String, dynamic>? ?? {};
+      if (methods.containsKey('Card_Kiosk')) return true;
+
+      final type = tx.orderType?.toString().toLowerCase() ?? '';
+      if (type.contains('borne')) return true;
+    } catch (_) {}
+    return false;
+  }
+
+  /// Calcule la date commerciale (si avant 05h00, jour précédent)
+  DateTime _getBusinessDate(DateTime ts) {
+    if (ts.hour < kBusinessDayStartHour) {
+      return ts.subtract(const Duration(days: 1));
+    }
+    return ts;
+  }
+
+  /// Génère le contenu CSV avec ventilation TVA et journée commerciale
   String generateCSV(List<dynamic> transactions) {
     List<List<dynamic>> rows = [];
 
-    // En-tête avec colonnes ventilées
+    // En-tête enrichi
     rows.add([
-      "Date",
+      "Date Civile",
+      "Date Comptable",
       "Heure",
       "ID Transaction",
       "Type",
       "Total TTC",
+      "TVA 5.5%",
+      "TVA 10%",
+      "TVA 20%",
       "Espèces",
       "CB Borne",
       "CB Comptoir",
@@ -33,37 +61,62 @@ class AccountingExportService {
 
     for (var tx in transactions) {
       double cash = 0, cbKiosk = 0, cbCounter = 0, ticket = 0, others = 0;
+      double v55 = 0, v10 = 0, v20 = 0;
 
-      // Ventilation identique au reste du système
-      (tx.paymentMethods as Map<String, dynamic>).forEach((method, amount) {
+      // 1. Ventilation Paiements
+      final isBorne = _isBorne(tx);
+      (tx.paymentMethods as Map<String, dynamic>? ?? {}).forEach((method, amount) {
         double val = (amount as num).toDouble();
-
-        if (method == 'Cash') {
-          cash += val;
-        } else if (method == 'Ticket') {
-          ticket += val;
-        } else if (method == 'Card_Kiosk') {
-          cbKiosk += val;
-        } else if (method == 'Card_Counter') {
-          cbCounter += val;
-        } else if (method == 'Card') {
-          // Détection automatique de la borne pour les anciens tickets
-          bool isBorne = false;
-          try { if (tx.source?.toString() == 'borne') isBorne = true; } catch (_) {}
-          try { if (tx.origin?.toString() == 'kiosk') isBorne = true; } catch (_) {}
-
+        if (method == 'Cash') cash += val;
+        else if (method == 'Ticket') ticket += val;
+        else if (method == 'Card_Kiosk') cbKiosk += val;
+        else if (method == 'Card_Counter') cbCounter += val;
+        else if (method == 'Card') {
           if (isBorne) cbKiosk += val; else cbCounter += val;
-        } else {
-          others += val;
-        }
+        } else others += val;
       });
+
+      // 2. Ventilation TVA (basée sur les items si disponibles)
+      try {
+        final items = tx.items as List<dynamic>? ?? [];
+        final itemsTtcSum = items.fold<double>(0.0, (acc, item) {
+          final p = (item['price'] as num?)?.toDouble() ?? 0.0;
+          final q = (item['quantity'] as num?)?.toDouble() ?? 1.0;
+          return acc + (p * q);
+        });
+        
+        final discountAmount = (tx.discountAmount as num?)?.toDouble() ?? 0.0;
+        final discountRatio = (itemsTtcSum > 0.001 && discountAmount > 0.001)
+            ? (1.0 - (discountAmount / itemsTtcSum)).clamp(0.0, 1.0)
+            : 1.0;
+
+        for (var item in items) {
+          final price = (item['price'] as num?)?.toDouble() ?? 0.0;
+          final qty = (item['quantity'] as num?)?.toInt() ?? 1;
+          final taxRate = (item['vatRate'] as num?)?.toDouble() ?? 
+                         (item['taxRate'] as num?)?.toDouble() ?? 10.0;
+
+          final itemTtc = price * qty * discountRatio;
+          final itemTva = itemTtc - (itemTtc / (1 + (taxRate / 100)));
+
+          if ((taxRate - 5.5).abs() < 0.1) v55 += itemTva;
+          else if ((taxRate - 20.0).abs() < 0.1) v20 += itemTva;
+          else v10 += itemTva;
+        }
+      } catch (e) {
+        // En cas d'erreur de parsing, on laisse la TVA à 0 ou on pourrait logger
+      }
 
       rows.add([
         DateFormat('dd/MM/yyyy').format(tx.timestamp),
+        DateFormat('dd/MM/yyyy').format(_getBusinessDate(tx.timestamp)),
         DateFormat('HH:mm').format(tx.timestamp),
         tx.id,
         tx.orderType,
         tx.total,
+        v55.toStringAsFixed(2),
+        v10.toStringAsFixed(2),
+        v20.toStringAsFixed(2),
         cash.toStringAsFixed(2),
         cbKiosk.toStringAsFixed(2),
         cbCounter.toStringAsFixed(2),

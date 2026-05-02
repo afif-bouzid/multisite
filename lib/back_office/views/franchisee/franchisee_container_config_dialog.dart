@@ -31,12 +31,12 @@ class _FranchiseeContainerConfigDialogState
   void _initializeControllers() {
     final children = _getContainerChildren();
     for (var child in children) {
-      double currentPrice = 0.0;
+      String initialPrice = '';
       if (widget.franchiseeSettings.containsKey(child.productId)) {
-        currentPrice = widget.franchiseeSettings[child.productId]!.price;
+        final settings = widget.franchiseeSettings[child.productId]!;
+        initialPrice = settings.price?.toStringAsFixed(2) ?? '';
       }
-      _controllers[child.id] =
-          TextEditingController(text: currentPrice.toStringAsFixed(2));
+      _controllers[child.id] = TextEditingController(text: initialPrice);
     }
   }
 
@@ -124,11 +124,12 @@ class _FranchiseeContainerConfigDialogState
                         controller: controller,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: "Prix €",
-                          border: OutlineInputBorder(),
-                          contentPadding:
-                              EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+                          hintText: child.price?.toStringAsFixed(2) ?? "0.00",
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 0),
                         ),
                         onChanged: (val) {},
                       ),

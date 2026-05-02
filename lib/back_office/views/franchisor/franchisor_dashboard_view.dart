@@ -404,9 +404,11 @@ class _FranchisorDashboardViewState extends State<FranchisorDashboardView>
                                 const SnackBar(content: Text("Succès !")));
                           }
                         } catch (e) {
-                          setStateDialog(() => isLoading = false);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text("Erreur: $e")));
+                          if (mounted) {
+                            setStateDialog(() => isLoading = false);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Erreur: $e")));
+                          }
                         }
                       },
                 child: const Text("Enregistrer"),
@@ -449,10 +451,12 @@ class _FranchisorGlobalConfigViewState
             auth.firebaseUser!.uid, currentOtherUrl, url);
       }
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      }
     } finally {
-      setState(() => _isUpdating = false);
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 
@@ -463,10 +467,12 @@ class _FranchisorGlobalConfigViewState
       final repo = FranchiseRepository();
       await repo.deleteGlobalButtonImage(auth.firebaseUser!.uid, typeKey);
     } catch (e) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Erreur: $e")));
+      }
     } finally {
-      setState(() => _isUpdating = false);
+      if (mounted) setState(() => _isUpdating = false);
     }
   }
 
@@ -675,7 +681,7 @@ class _FranchisorGlobalConfigViewState
               border: Border.all(
                   color: url != null
                       ? Colors.transparent
-                      : accentColor.withOpacity(0.3),
+                      : accentColor.withValues(alpha: 0.3),
                   width: 2),
               image: url != null
                   ? DecorationImage(
@@ -683,7 +689,7 @@ class _FranchisorGlobalConfigViewState
                   : null,
             ),
             child: url == null
-                ? Icon(icon, size: 40, color: accentColor.withOpacity(0.5))
+                ? Icon(icon, size: 40, color: accentColor.withValues(alpha: 0.5))
                 : null,
           ),
         ),

@@ -156,7 +156,7 @@ class _FranchiseeMenuViewState extends State<FranchiseeMenuView> {
   Widget _buildStandardProductCard(
       MasterProduct product, FranchiseeMenuItem? config) {
     final isVisible = config?.isVisible ?? false;
-    final price = config?.price ?? 0.0;
+    final price = config?.price ?? product.price ?? 0.0;
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       elevation: 1,

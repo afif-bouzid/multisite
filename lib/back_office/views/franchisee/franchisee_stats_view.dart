@@ -59,6 +59,7 @@ class _FranchiseeStatsViewState extends State<FranchiseeStatsView> {
       },
     );
     if (pickedRange != null) {
+      if (!mounted) return;
       setState(() {
         _startDate = pickedRange.start;
         _endDate = pickedRange.end;
@@ -273,7 +274,7 @@ class _FranchiseeStatsViewState extends State<FranchiseeStatsView> {
       onTap: () => setState(() => _selectedSession = session),
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? Colors.indigo.withOpacity(0.05) : Colors.white,
+          color: isSelected ? Colors.indigo.withValues(alpha: 0.05) : Colors.white,
           border: Border(
             left: BorderSide(
               color: isSelected
@@ -283,17 +284,17 @@ class _FranchiseeStatsViewState extends State<FranchiseeStatsView> {
             ),
           ),
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isActive
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.indigo.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: isActive
+                  ? Colors.green.withValues(alpha: 0.1)
+                  : Colors.indigo.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
               child: Icon(
                 isActive ? Icons.point_of_sale : Icons.history,
                 color: isActive ? Colors.green : Colors.indigo,
@@ -563,7 +564,7 @@ class _SessionDetailPanelState extends State<_SessionDetailPanel> {
                   side: BorderSide(color: Colors.grey.shade200)),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: primaryColor.withOpacity(0.1),
+                  backgroundColor: primaryColor.withValues(alpha: 0.1),
                   child: _getPaymentIcon(tx, size: 20, color: primaryColor),
                 ),
                 title: Text("Ticket #${tx.id.substring(0, 6)} - ${DateFormat('HH:mm').format(tx.timestamp)}",
@@ -617,9 +618,9 @@ class _SessionDetailPanelState extends State<_SessionDetailPanel> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: color.withOpacity(0.3))),
+          border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
@@ -681,7 +682,7 @@ class _SessionDetailPanelState extends State<_SessionDetailPanel> {
   Widget _buildSummaryCard(String label, double amount, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(children: [Icon(icon, size: 14, color: color), const SizedBox(width: 4), Expanded(child: Text(label, style: TextStyle(color: Colors.grey.shade700, fontWeight: FontWeight.bold, fontSize: 10), overflow: TextOverflow.ellipsis))]),
         const SizedBox(height: 8),
@@ -718,15 +719,31 @@ class _SessionDetailPanelState extends State<_SessionDetailPanel> {
       const SizedBox(height: 16),
       Container(
         padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.grey.shade200)),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.grey.shade200),
+        ),
         child: Row(children: [
           Expanded(child: _buildInfoRow("Fond Déclaré", real, isBold: true)),
           if (isManager) ...[
             Container(width: 1, height: 40, color: Colors.grey.shade300),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-              const Text("Écart", style: TextStyle(color: Colors.grey)),
-              Text("${disc > 0 ? '+' : ''}${disc.toStringAsFixed(2)} €", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: disc.abs() < 0.05 ? Colors.green : Colors.red)),
-            ])),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  const Text("Écart", style: TextStyle(color: Colors.grey)),
+                  Text(
+                    "${disc > 0 ? '+' : ''}${disc.toStringAsFixed(2)} €",
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: disc.abs() < 0.05 ? Colors.green : Colors.red,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ]
         ]),
       ),
@@ -1418,7 +1435,7 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
       onTap: () => _selectOrder(order),
       child: Container(
         decoration: BoxDecoration(
-          color: isSelected ? activeColor.withOpacity(0.08) : Colors.white,
+          color: isSelected ? activeColor.withValues(alpha: 0.08) : Colors.white,
           border: Border(
               left: BorderSide(
                   color: isSelected ? activeColor : Colors.transparent,
@@ -1621,7 +1638,7 @@ class _PendingOrdersViewState extends State<PendingOrdersView> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(color: Colors.white, boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.05),
+                color: Colors.black.withValues(alpha: 0.05),
                 blurRadius: 10,
                 offset: const Offset(0, -5))
           ]),

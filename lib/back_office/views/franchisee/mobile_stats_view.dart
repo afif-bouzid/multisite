@@ -101,7 +101,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
   }
 
   void _applyFilter(DateFilter filter, String storeId) async {
-    setState(() => _isLoadingFilter = true);
+    if (mounted) setState(() => _isLoadingFilter = true);
     final now = DateTime.now();
     final businessNow = _getBusinessDate(now);
 
@@ -136,39 +136,45 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         if (picked != null) {
           final diff = picked.end.difference(picked.start).inDays;
           if (diff > 31) {
-            if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("La période est limitée à 31 jours. Pour des exports plus longs, utilisez l'export mensuel."), backgroundColor: Colors.redAccent));
-            setState(() => _isLoadingFilter = false);
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                  content: Text("La période est limitée à 31 jours. Pour des exports plus longs, utilisez l'export mensuel."),
+                  backgroundColor: Colors.redAccent));
+              setState(() => _isLoadingFilter = false);
+            }
             return;
           }
           start = DateTime(picked.start.year, picked.start.month, picked.start.day, kBusinessDayStartHour, 0, 0);
           end = DateTime(picked.end.year, picked.end.month, picked.end.day + 1, kBusinessDayStartHour - 1, 59, 59);
         } else {
-          setState(() => _isLoadingFilter = false);
+          if (mounted) setState(() => _isLoadingFilter = false);
           return;
         }
         break;
     }
 
-    setState(() {
-      _currentFilter = filter;
-      _selectedRange = DateTimeRange(start: start, end: end);
-      _globalSearchQuery = "";
+    if (mounted) {
+      setState(() {
+        _currentFilter = filter;
+        _selectedRange = DateTimeRange(start: start, end: end);
+        _globalSearchQuery = "";
 
-      _historicalFuture = _repository.getTransactionsInDateRange(storeId, startDate: start, endDate: end).first;
+        _historicalFuture = _repository.getTransactionsInDateRange(storeId, startDate: start, endDate: end).first;
 
-      // ✅ FIX sessions cross-midnight — large fenêtre côté repository :
-      //   - 7 jours en arrière : couvre les sessions exceptionnellement longues
-      //     (ex: oubli de fermeture pendant un week-end)
-      //   - +24h après end : sessions qui dépassent minuit en fin de période
-      // Le filtrage précis du chevauchement se fait ensuite côté UI.
-      _historySessionsFuture = _repository.getFranchiseeSessions(
-        storeId,
-        startDate: start.subtract(const Duration(days: 7)),
-        endDate: end.add(const Duration(hours: 24)),
-      ).first;
+        // ✅ FIX sessions cross-midnight — large fenêtre côté repository :
+        //   - 7 jours en arrière : couvre les sessions exceptionnellement longues
+        //     (ex: oubli de fermeture pendant un week-end)
+        //   - +24h après end : sessions qui dépassent minuit en fin de période
+        // Le filtrage précis du chevauchement se fait ensuite côté UI.
+        _historySessionsFuture = _repository.getFranchiseeSessions(
+          storeId,
+          startDate: start.subtract(const Duration(days: 7)),
+          endDate: end.add(const Duration(hours: 24)),
+        ).first;
 
-      _isLoadingFilter = false;
-    });
+        _isLoadingFilter = false;
+      });
+    }
   }
 
   Future<void> _launchPospixel() async {
@@ -231,7 +237,8 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         filterLabel: _filterLabel(_currentFilter),
       );
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur génération PDF : $e"), backgroundColor: Colors.redAccent));
       }
     } finally {
@@ -259,7 +266,8 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         endDate: _selectedRange.end,
       );
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Erreur génération CSV : $e"), backgroundColor: Colors.redAccent));
       }
     } finally {
@@ -388,7 +396,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 children: [
                   Container(
                     margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.withOpacity(0.3))),
+                    decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.withValues(alpha: 0.3))),
                     child: Row(
                       children: [
                         const PulseDot(color: Colors.greenAccent),
@@ -399,7 +407,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         ])),
                         ElevatedButton(
                           onPressed: () => _openSessionDetailModal(session),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.2), foregroundColor: Colors.greenAccent, elevation: 0),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.2), foregroundColor: Colors.greenAccent, elevation: 0),
                           child: const Text("DÉTAILS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                         )
                       ],
@@ -417,7 +425,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   ),
                   Container(
                     margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+                    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -574,7 +582,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         decoration: BoxDecoration(
           gradient: const LinearGradient(colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)]),
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [BoxShadow(color: Colors.indigo.withOpacity(0.3), blurRadius: 24, offset: const Offset(0, 8))],
+          boxShadow: [BoxShadow(color: Colors.indigo.withValues(alpha: 0.3), blurRadius: 24, offset: const Offset(0, 8))],
         ),
         child: Column(
           children: [
@@ -583,8 +591,14 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               children: [
                 const Icon(Icons.account_balance_wallet_outlined, color: Colors.white70, size: 14),
                 const SizedBox(width: 8),
-                Text("CHIFFRE D'AFFAIRES TTC · ${_filterLabel(_currentFilter).toUpperCase()}",
-                    style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                Flexible(
+                  child: Text(
+                    "CHIFFRE D'AFFAIRES TTC · ${_filterLabel(_currentFilter).toUpperCase()}",
+                    style: const TextStyle(color: Colors.white70, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 12),
@@ -614,11 +628,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   : const Icon(Icons.picture_as_pdf, size: 16),
               label: Text(_isExportingPdf ? "GÉNÉRATION..." : "EXPORT PDF", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.redAccent.withOpacity(0.2),
+                backgroundColor: Colors.redAccent.withValues(alpha: 0.2),
                 foregroundColor: Colors.redAccent,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.redAccent.withOpacity(0.3))),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.redAccent.withValues(alpha: 0.3))),
               ),
             ),
           ),
@@ -631,11 +645,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   : const Icon(Icons.table_chart, size: 16),
               label: Text(_isExportingCsv ? "GÉNÉRATION..." : "EXPORT CSV", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.5)),
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.greenAccent.withOpacity(0.15),
+                backgroundColor: Colors.greenAccent.withValues(alpha: 0.15),
                 foregroundColor: Colors.greenAccent,
                 elevation: 0,
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.greenAccent.withOpacity(0.3))),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.greenAccent.withValues(alpha: 0.3))),
               ),
             ),
           ),
@@ -675,7 +689,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       padding: const EdgeInsets.all(16),
       child: Container(
         padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -686,7 +700,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 if (stats.peakHour != null)
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(color: Colors.orangeAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                    decoration: BoxDecoration(color: Colors.orangeAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                     child: Row(children: [
                       const Icon(Icons.local_fire_department, size: 12, color: Colors.orangeAccent),
                       const SizedBox(width: 4),
@@ -722,7 +736,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         decoration: BoxDecoration(
           color: kCardBg,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.amberAccent.withOpacity(0.2)),
+          border: Border.all(color: Colors.amberAccent.withValues(alpha: 0.2)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -734,7 +748,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(color: Colors.amberAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                decoration: BoxDecoration(color: Colors.amberAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
                 child: const Text("COMPTABILITÉ", style: TextStyle(color: Colors.amberAccent, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.8)),
               ),
             ]),
@@ -774,7 +788,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       child: Row(children: [
         Expanded(flex: 2, child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(color: Colors.amberAccent.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+          decoration: BoxDecoration(color: Colors.amberAccent.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
           child: Text(label, style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
         )),
         Expanded(flex: 3, child: Text(_money(data.baseHt), textAlign: TextAlign.right, style: const TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w600))),
@@ -798,7 +812,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -829,7 +843,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                       child: LinearProgressIndicator(
                         value: ratio,
                         minHeight: 6,
-                        backgroundColor: Colors.white.withOpacity(0.05),
+                        backgroundColor: Colors.white.withValues(alpha: 0.05),
                         valueColor: AlwaysStoppedAnimation(e.$3),
                       ),
                     ),
@@ -904,7 +918,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
           child: LinearProgressIndicator(
             value: ratio,
             minHeight: 4,
-            backgroundColor: Colors.white.withOpacity(0.05),
+            backgroundColor: Colors.white.withValues(alpha: 0.05),
             valueColor: AlwaysStoppedAnimation(color),
           ),
         ),
@@ -966,7 +980,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       padding: const EdgeInsets.all(16),
       child: Container(
         padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withOpacity(0.05))),
+        decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -991,7 +1005,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                       child: LinearProgressIndicator(
                         value: ratio,
                         minHeight: 4,
-                        backgroundColor: Colors.white.withOpacity(0.05),
+                        backgroundColor: Colors.white.withValues(alpha: 0.05),
                         valueColor: AlwaysStoppedAnimation(isBest ? Colors.amberAccent : Colors.indigoAccent),
                       ),
                     ),
@@ -1031,13 +1045,13 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   final revenue = stats.productCA[e.key] ?? 0.0;
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                    decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
                     child: Row(
                       children: [
                         Container(
                           width: 22, height: 22, alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: index < 3 ? Colors.amberAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                            color: index < 3 ? Colors.amberAccent.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text("${index + 1}", style: TextStyle(color: index < 3 ? Colors.amberAccent : Colors.white54, fontWeight: FontWeight.bold, fontSize: 10)),
@@ -1045,7 +1059,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.indigo.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                          decoration: BoxDecoration(color: Colors.indigo.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                           child: Text("${e.value}x", style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                         ),
                         const SizedBox(width: 10),
@@ -1180,28 +1194,38 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     final total = entries.fold<double>(0, (acc, e) => acc + e.$2);
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: kCardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("RÉPARTITION DES PAIEMENTS", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
-          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("RÉPARTITION DES PAIEMENTS", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.tealAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text(_money(total), style: const TextStyle(color: Colors.tealAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
 
           // ── Donut centré + total au milieu (Stack)
           SizedBox(
-            height: 220,
+            height: 200,
             child: Stack(
               alignment: Alignment.center,
               children: [
                 PieChart(
                   PieChartData(
                     sectionsSpace: 3,
-                    centerSpaceRadius: 60,
+                    centerSpaceRadius: 55,
                     startDegreeOffset: -90,
                     sections: entries.map((e) {
                       final pct = (e.$2 / total) * 100;
@@ -1210,7 +1234,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         // Affichage du % uniquement si la part est >= 7% (sinon illisible sur mobile)
                         title: pct >= 7 ? "${pct.toStringAsFixed(0)}%" : "",
                         color: e.$3,
-                        radius: 38,
+                        radius: 35,
                         titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: Colors.black87),
                       );
                     }).toList(),
@@ -1230,13 +1254,13 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               ],
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 20),
 
           // ── Légende en cartes empilées (1 par ligne, optimisé portrait mobile)
           ...entries.map((e) {
             final pct = (e.$2 / total) * 100;
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -1251,20 +1275,20 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                     const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: e.$3.withOpacity(0.15), borderRadius: BorderRadius.circular(4)),
+                      decoration: BoxDecoration(color: e.$3.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
                       child: Text(
                         "${pct.toStringAsFixed(0)}%",
                         style: TextStyle(color: e.$3, fontSize: 10, fontWeight: FontWeight.w900),
                       ),
                     ),
                   ]),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   ClipRRect(
                     borderRadius: BorderRadius.circular(3),
                     child: LinearProgressIndicator(
                       value: pct / 100,
                       minHeight: 4,
-                      backgroundColor: Colors.white.withOpacity(0.05),
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
                       valueColor: AlwaysStoppedAnimation(e.$3),
                     ),
                   ),
@@ -1282,83 +1306,103 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     final total = stats.surPlaceCA + stats.emporterCA;
     if (total < 0.01) return const SizedBox.shrink();
 
+    final entries = [
+      ('Sur place', stats.surPlaceCA, stats.surPlaceCount, Colors.purpleAccent),
+      ('À emporter', stats.emporterCA, stats.emporterCount, Colors.lightBlueAccent),
+    ].where((e) => e.$2 > 0.01).toList();
+
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: kCardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text("TYPE DE SERVICE", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
-          const SizedBox(height: 14),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("TYPE DE SERVICE", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(color: Colors.purpleAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
+                child: Text(_money(total), style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
           SizedBox(
-            height: 160,
-            child: Row(
+            height: 200,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                Expanded(
-                  flex: 3,
-                  child: PieChart(
-                    PieChartData(
-                      sectionsSpace: 2,
-                      centerSpaceRadius: 0,
-                      sections: [
-                        if (stats.surPlaceCA > 0)
-                          PieChartSectionData(
-                            value: stats.surPlaceCA,
-                            title: "${((stats.surPlaceCA / total) * 100).toStringAsFixed(0)}%",
-                            color: Colors.purpleAccent,
-                            radius: 65,
-                            titleStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                        if (stats.emporterCA > 0)
-                          PieChartSectionData(
-                            value: stats.emporterCA,
-                            title: "${((stats.emporterCA / total) * 100).toStringAsFixed(0)}%",
-                            color: Colors.lightBlueAccent,
-                            radius: 65,
-                            titleStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white),
-                          ),
-                      ],
-                    ),
+                PieChart(
+                  PieChartData(
+                    sectionsSpace: 3,
+                    centerSpaceRadius: 55,
+                    sections: entries.map((e) {
+                      final pct = (e.$2 / total) * 100;
+                      return PieChartSectionData(
+                        value: e.$2,
+                        title: pct >= 10 ? "${pct.toStringAsFixed(0)}%" : "",
+                        color: e.$4,
+                        radius: 35,
+                        titleStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+                      );
+                    }).toList(),
                   ),
                 ),
-                Expanded(
-                  flex: 4,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(children: [
-                          Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.purpleAccent, shape: BoxShape.circle)),
-                          const SizedBox(width: 8),
-                          const Expanded(child: Text("Sur place", style: TextStyle(color: Colors.white70, fontSize: 12))),
-                        ]),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 18),
-                          child: Text("${stats.surPlaceCount} cmd · ${_money(stats.surPlaceCA)}", style: const TextStyle(color: Colors.purpleAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(children: [
-                          Container(width: 10, height: 10, decoration: const BoxDecoration(color: Colors.lightBlueAccent, shape: BoxShape.circle)),
-                          const SizedBox(width: 8),
-                          const Expanded(child: Text("À emporter", style: TextStyle(color: Colors.white70, fontSize: 12))),
-                        ]),
-                        Padding(
-                          padding: const EdgeInsets.only(left: 18),
-                          child: Text("${stats.emporterCount} cmd · ${_money(stats.emporterCA)}", style: const TextStyle(color: Colors.lightBlueAccent, fontSize: 11, fontWeight: FontWeight.bold)),
-                        ),
-                      ],
-                    ),
-                  ),
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("TOTAL", style: TextStyle(color: Colors.white38, fontSize: 9, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
+                    Text(_money(total), style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w900)),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(height: 20),
+
+          ...entries.map((e) {
+            final pct = (e.$2 / total) * 100;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(children: [
+                    Container(width: 10, height: 10, decoration: BoxDecoration(color: e.$4, shape: BoxShape.circle)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text("${e.$1} (${e.$3} cmd)", style: const TextStyle(color: Colors.white70, fontSize: 12, fontWeight: FontWeight.w600))),
+                    Text(_money(e.$2), style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(color: e.$4.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)),
+                      child: Text(
+                        "${pct.toStringAsFixed(0)}%",
+                        style: TextStyle(color: e.$4, fontSize: 10, fontWeight: FontWeight.w900),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: pct / 100,
+                      minHeight: 4,
+                      backgroundColor: Colors.white.withValues(alpha: 0.05),
+                      valueColor: AlwaysStoppedAnimation(e.$4),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -1378,11 +1422,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     final maxY = spots.last.y * 1.15;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: kCardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1390,15 +1434,15 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("ÉVOLUTION DU CA CUMULÉ", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12, letterSpacing: 0.5)),
+              const Text("ÉVOLUTION DU CA CUMULÉ", style: TextStyle(color: Colors.white54, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: Colors.greenAccent.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                 child: Text(_money(cumul), style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.bold)),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 25),
           SizedBox(
             height: 180,
             child: LineChart(
@@ -1406,15 +1450,15 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 gridData: FlGridData(
                   show: true,
                   drawVerticalLine: false,
-                  horizontalInterval: maxY / 4,
-                  getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withOpacity(0.05), strokeWidth: 1),
+                  horizontalInterval: maxY > 0 ? maxY / 4 : 1,
+                  getDrawingHorizontalLine: (value) => FlLine(color: Colors.white.withValues(alpha: 0.05), strokeWidth: 1),
                 ),
                 titlesData: FlTitlesData(
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 40,
-                      interval: maxY / 4,
+                      interval: maxY > 0 ? maxY / 4 : 1,
                       getTitlesWidget: (value, meta) => Text(
                         "${value.toInt()}€",
                         style: const TextStyle(color: Colors.white38, fontSize: 9),
@@ -1469,7 +1513,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                     belowBarData: BarAreaData(
                       show: true,
                       gradient: LinearGradient(
-                        colors: [Colors.greenAccent.withOpacity(0.3), Colors.greenAccent.withOpacity(0.0)],
+                        colors: [Colors.greenAccent.withValues(alpha: 0.3), Colors.greenAccent.withValues(alpha: 0.0)],
                         begin: Alignment.topCenter,
                         end: Alignment.bottomCenter,
                       ),
@@ -1524,7 +1568,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               if (totalCA > 0)
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(color: Colors.amber.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                  decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                   child: Text("+${_money(totalCA)}", style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.w900, fontSize: 11)),
                 ),
             ]),
@@ -1535,12 +1579,12 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 final ca = stats.paidOptionCA[e.key] ?? 0.0;
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
                   child: Row(children: [
                     Container(
                       width: 22, height: 22, alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: index < 3 ? Colors.amberAccent.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                        color: index < 3 ? Colors.amberAccent.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text("${index + 1}", style: TextStyle(color: index < 3 ? Colors.amberAccent : Colors.white54, fontWeight: FontWeight.bold, fontSize: 10)),
@@ -1548,7 +1592,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                     const SizedBox(width: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                      decoration: BoxDecoration(color: Colors.amber.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                      decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                       child: Text("${e.value}x", style: const TextStyle(color: Colors.amberAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                     ),
                     const SizedBox(width: 10),
@@ -1560,7 +1604,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               // Footer total
               if (stats.topPaidOptions.length > 10) Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1)))),
                 child: Text("+ ${stats.topPaidOptions.length - 10} autres suppléments...",
                     textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
               ),
@@ -1591,7 +1635,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(color: Colors.cyan.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                decoration: BoxDecoration(color: Colors.cyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                 child: Text("$total demandes", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.w900, fontSize: 11)),
               ),
             ]),
@@ -1602,7 +1646,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 final ratio = total > 0 ? e.value / total : 0.0;
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -1610,7 +1654,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         Container(
                           width: 22, height: 22, alignment: Alignment.center,
                           decoration: BoxDecoration(
-                            color: index < 3 ? Colors.cyan.withOpacity(0.2) : Colors.white.withOpacity(0.05),
+                            color: index < 3 ? Colors.cyan.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text("${index + 1}", style: TextStyle(color: index < 3 ? Colors.cyanAccent : Colors.white54, fontWeight: FontWeight.bold, fontSize: 10)),
@@ -1618,7 +1662,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         const SizedBox(width: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(color: Colors.cyan.withOpacity(0.1), borderRadius: BorderRadius.circular(6)),
+                          decoration: BoxDecoration(color: Colors.cyan.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
                           child: Text("${e.value}x", style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                         ),
                         const SizedBox(width: 10),
@@ -1632,7 +1676,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         child: LinearProgressIndicator(
                           value: ratio,
                           minHeight: 3,
-                          backgroundColor: Colors.white.withOpacity(0.05),
+                          backgroundColor: Colors.white.withValues(alpha: 0.05),
                           valueColor: const AlwaysStoppedAnimation(Colors.cyanAccent),
                         ),
                       ),
@@ -1642,7 +1686,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
               }),
               if (stats.topFreeOptions.length > 15) Container(
                 padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.1)))),
+                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.1)))),
                 child: Text("+ ${stats.topFreeOptions.length - 15} autres choix...",
                     textAlign: TextAlign.center, style: const TextStyle(color: Colors.white38, fontSize: 11)),
               ),
@@ -1677,12 +1721,12 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 final revenue = stats.productCA[e.key] ?? 0.0;
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                  decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
                   child: Row(
                     children: [
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(6)),
+                        decoration: BoxDecoration(color: Colors.red.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(6)),
                         child: Text("${e.value}x", style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold, fontSize: 11)),
                       ),
                       const SizedBox(width: 10),
@@ -1761,7 +1805,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Colors.white.withValues(alpha: 0.05),
                   hintText: "Rechercher un ticket (Nom client, N°...)",
                   hintStyle: const TextStyle(color: Colors.white38),
                   prefixIcon: const Icon(Icons.search, color: Colors.indigoAccent),
@@ -1842,7 +1886,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       color: kCardBg,
       shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: isActive ? Colors.greenAccent.withOpacity(0.4) : Colors.white.withOpacity(0.05))
+          side: BorderSide(color: isActive ? Colors.greenAccent.withValues(alpha: 0.4) : Colors.white.withValues(alpha: 0.05))
       ),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),
@@ -1857,7 +1901,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isActive ? Colors.greenAccent.withOpacity(0.1) : Colors.indigoAccent.withOpacity(0.1),
+                      color: isActive ? Colors.greenAccent.withValues(alpha: 0.1) : Colors.indigoAccent.withValues(alpha: 0.1),
                       shape: BoxShape.circle,
                     ),
                     child: Icon(isActive ? Icons.point_of_sale : Icons.history, color: isActive ? Colors.greenAccent : Colors.indigoAccent, size: 24),
@@ -1870,13 +1914,21 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         Text(
                           isActive ? "SESSION EN COURS" : "SESSION DU $dateStr",
                           style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? Colors.greenAccent : Colors.white, fontSize: 15),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 6),
                         Row(
                             children: [
                               const Icon(Icons.lock_open, color: Colors.greenAccent, size: 12),
                               const SizedBox(width: 6),
-                              Text("Ouverture : $openTime", style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.w600)),
+                              Expanded(
+                                child: Text("Ouverture : $openTime",
+                                  style: const TextStyle(color: Colors.greenAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
                             ]
                         ),
                         const SizedBox(height: 2),
@@ -1885,15 +1937,19 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                               Icon(session.closingTime != null ? Icons.lock : Icons.lock_clock, color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, size: 12),
                               const SizedBox(width: 6),
                               // ✅ FIX — affiche la date si cross-midnight (ex: ouvert 1er, fermé 2)
-                              Text(
-                                isCrossMidnight ? "Fermeture : $closeDate à $closeTime" : "Fermeture : $closeTime",
-                                style: TextStyle(color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                              Flexible(
+                                child: Text(
+                                  isCrossMidnight ? "Fermeture : $closeDate à $closeTime" : "Fermeture : $closeTime",
+                                  style: TextStyle(color: session.closingTime != null ? Colors.redAccent : Colors.amberAccent, fontSize: 11, fontWeight: FontWeight.w600),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               if (isCrossMidnight) ...[
                                 const SizedBox(width: 6),
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                  decoration: BoxDecoration(color: Colors.orange.withOpacity(0.2), borderRadius: BorderRadius.circular(4)),
+                                  decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(4)),
                                   child: const Text("NUIT", style: TextStyle(color: Colors.orangeAccent, fontSize: 8, fontWeight: FontWeight.bold)),
                                 ),
                               ],
@@ -1944,7 +2000,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   icon: const Icon(Icons.receipt_long, size: 16),
                   label: const Text("VOIR LE DÉTAIL & COMMANDES", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1.1)),
                   style: ElevatedButton.styleFrom(
-                      backgroundColor: isActive ? Colors.greenAccent.withOpacity(0.15) : Colors.indigoAccent.withOpacity(0.15),
+                      backgroundColor: isActive ? Colors.greenAccent.withValues(alpha: 0.15) : Colors.indigoAccent.withValues(alpha: 0.15),
                       foregroundColor: isActive ? Colors.greenAccent : Colors.indigoAccent,
                       elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
@@ -1966,7 +2022,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
   Widget _buildFilterBar(String storeId) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1992,9 +2048,9 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.white.withOpacity(0.07),
+          color: active ? Colors.white : Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? Colors.white : Colors.white.withOpacity(0.15)),
+          border: Border.all(color: active ? Colors.white : Colors.white.withValues(alpha: 0.15)),
         ),
         child: Row(
           children: [
@@ -2014,10 +2070,10 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
-      color: Colors.white.withOpacity(0.04),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+      color: Colors.white.withValues(alpha: 0.04),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       child: ListTile(
-        leading: CircleAvatar(backgroundColor: primaryColor.withOpacity(0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
+        leading: CircleAvatar(backgroundColor: primaryColor.withValues(alpha: 0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
         title: Text("$mainTitle - ${DateFormat('HH:mm').format(tx.timestamp)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: _buildPaymentChips(tx)),
         trailing: Text(_money(tx.total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
@@ -2075,7 +2131,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
   Widget _chipBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
@@ -2119,6 +2175,8 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
   @override
   Widget build(BuildContext context) {
     final bool isActive = !widget.session.isClosed;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isSmallScreen = screenWidth < 400;
 
     return DraggableScrollableSheet(
       initialChildSize: 0.9, minChildSize: 0.5, maxChildSize: 0.95, expand: false,
@@ -2137,14 +2195,21 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
               totalSales += t.total;
               t.paymentMethods.forEach((method, amount) {
                 double val = (amount as num).toDouble();
-                if (method == 'Card_Kiosk') cbKioskSales += val;
-                else if (method == 'Card_Counter') cbCounterSales += val;
-                else if (method == 'Cash') cashSales += val;
-                else if (method == 'Ticket') ticketSales += val;
-                else if (method == 'Card') {
+                if (method == 'Card_Kiosk') {
+                  cbKioskSales += val;
+                } else if (method == 'Card_Counter') {
+                  cbCounterSales += val;
+                } else if (method == 'Cash') {
+                  cashSales += val;
+                } else if (method == 'Ticket') {
+                  ticketSales += val;
+                } else if (method == 'Card') {
                   final isBorne = _isBorneTx(t);
-                  if (isBorne) cbKioskSales += val;
-                  else cbCounterSales += val;
+                  if (isBorne) {
+                    cbKioskSales += val;
+                  } else {
+                    cbCounterSales += val;
+                  }
                 }
               });
             }
@@ -2194,9 +2259,28 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
                         const Text("BILAN DE CAISSE", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white54, letterSpacing: 1.1)),
                         const SizedBox(height: 16),
                         Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
-                          child: Row(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
+                          child: isSmallScreen
+                              ? Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(child: _buildInfoRow("Fond Initial", widget.session.initialCash, Colors.white)),
+                                  Expanded(child: _buildInfoRow("Théorique", theoreticalTotal, Colors.amberAccent)),
+                                ],
+                              ),
+                              const Padding(padding: EdgeInsets.symmetric(vertical: 8), child: Divider(color: Colors.white10)),
+                              Row(
+                                children: [
+                                  Expanded(child: _buildInfoRow("Réel Déclaré", isActive ? 0.0 : realTotal, Colors.white)),
+                                  if (!isActive) Expanded(child: _buildInfoRow("Écart", discrepancy, discrepancy.abs() < 0.05 ? Colors.greenAccent : Colors.redAccent)),
+                                  if (isActive) const Spacer(),
+                                ],
+                              ),
+                            ],
+                          )
+                              : Row(
                             children: [
                               Expanded(child: _buildInfoRow("Fond Initial", widget.session.initialCash, Colors.white)),
                               Expanded(child: _buildInfoRow("Théorique", theoreticalTotal, Colors.amberAccent)),
@@ -2212,7 +2296,27 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
                         const SizedBox(height: 32),
                         const Text("RÉPARTITION DES VENTES", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white54, letterSpacing: 1.1)),
                         const SizedBox(height: 16),
-                        Row(
+                        isSmallScreen
+                            ? Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(child: _buildSummaryCard("BORNES", cbKioskSales, Icons.touch_app, Colors.tealAccent)),
+                                const SizedBox(width: 8),
+                                Expanded(child: _buildSummaryCard("COMPTOIR", cbCounterSales, Icons.point_of_sale, Colors.indigoAccent)),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(child: _buildSummaryCard("ESPECES", cashSales, Icons.payments, Colors.greenAccent)),
+                                const SizedBox(width: 8),
+                                Expanded(child: _buildSummaryCard("T. RESTO", ticketSales, Icons.restaurant, Colors.orangeAccent)),
+                              ],
+                            ),
+                          ],
+                        )
+                            : Row(
                           children: [
                             Expanded(child: _buildSummaryCard("BORNES", cbKioskSales, Icons.touch_app, Colors.tealAccent)),
                             const SizedBox(width: 8),
@@ -2270,7 +2374,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
   Widget _buildSummaryCard(String label, double amount, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2322,10 +2426,10 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),
-      color: Colors.white.withOpacity(0.04),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+      color: Colors.white.withValues(alpha: 0.04),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       child: ListTile(
-        leading: CircleAvatar(backgroundColor: primaryColor.withOpacity(0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
+        leading: CircleAvatar(backgroundColor: primaryColor.withValues(alpha: 0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
         title: Text("$mainTitle - ${DateFormat('HH:mm').format(tx.timestamp)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: _buildPaymentChips(tx)),
         trailing: Text(_money(tx.total), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
@@ -2383,7 +2487,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
   Widget _chipBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
@@ -2405,7 +2509,7 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(small ? 14 : 20),
-      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withOpacity(0.2))),
+      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(16), border: Border.all(color: color.withValues(alpha: 0.2))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -2436,7 +2540,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
   @override
   void dispose() { _c.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) { return FadeTransition(opacity: Tween(begin: 0.4, end: 1.0).animate(_c), child: Container(width: 10, height: 10, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: widget.color.withOpacity(0.6), blurRadius: 6)]))); }
+  Widget build(BuildContext context) { return FadeTransition(opacity: Tween(begin: 0.4, end: 1.0).animate(_c), child: Container(width: 10, height: 10, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.6), blurRadius: 6)]))); }
 }
 
 class HourlyChart extends StatelessWidget {
@@ -2716,14 +2820,23 @@ class AdvancedStatsSummary {
         } else if (val is String) {
           amount = double.tryParse(val) ?? 0.0;
         }
-        if (method == 'Cash') payments['Espèces'] = (payments['Espèces'] ?? 0) + amount;
-        else if (method == 'Ticket') payments['Tickets Resto'] = (payments['Tickets Resto'] ?? 0) + amount;
-        else if (method == 'Card_Kiosk') payments['CB Borne'] = (payments['CB Borne'] ?? 0) + amount;
-        else if (method == 'Card_Counter') payments['CB Comptoir'] = (payments['CB Comptoir'] ?? 0) + amount;
-        else if (method == 'Card') {
-          if (isBorne) payments['CB Borne'] = (payments['CB Borne'] ?? 0) + amount;
-          else payments['CB Comptoir'] = (payments['CB Comptoir'] ?? 0) + amount;
-        } else payments['Autres'] = (payments['Autres'] ?? 0) + amount;
+        if (method == 'Cash') {
+          payments['Espèces'] = (payments['Espèces'] ?? 0) + amount;
+        } else if (method == 'Ticket') {
+          payments['Tickets Resto'] = (payments['Tickets Resto'] ?? 0) + amount;
+        } else if (method == 'Card_Kiosk') {
+          payments['CB Borne'] = (payments['CB Borne'] ?? 0) + amount;
+        } else if (method == 'Card_Counter') {
+          payments['CB Comptoir'] = (payments['CB Comptoir'] ?? 0) + amount;
+        } else if (method == 'Card') {
+          if (isBorne) {
+            payments['CB Borne'] = (payments['CB Borne'] ?? 0) + amount;
+          } else {
+            payments['CB Comptoir'] = (payments['CB Comptoir'] ?? 0) + amount;
+          }
+        } else {
+          payments['Autres'] = (payments['Autres'] ?? 0) + amount;
+        }
       });
 
       // Ventilation TVA par taux (depuis les items)
@@ -2747,9 +2860,13 @@ class AdvancedStatsSummary {
         final itemTva = itemCaTtc - itemHt;
 
         String rateKey;
-        if ((taxRate - 5.5).abs() < 0.001) rateKey = '5.5%';
-        else if ((taxRate - 20.0).abs() < 0.001) rateKey = '20%';
-        else rateKey = '10%';
+        if ((taxRate - 5.5).abs() < 0.001) {
+          rateKey = '5.5%';
+        } else if ((taxRate - 20.0).abs() < 0.001) {
+          rateKey = '20%';
+        } else {
+          rateKey = '10%';
+        }
 
         final entry = vatByRate[rateKey]!;
         entry.baseHt += itemHt;

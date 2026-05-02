@@ -1199,7 +1199,7 @@ class FranchiseRepository {
     }
     if (endDate != null) {
       query = query.where('openingTime',
-          isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
+          isLessThanOrEqualTo: endDate);
     }
     return query.snapshots().map(
             (snapshot) => snapshot.docs.map(TillSession.fromFirestore).toList());
@@ -1224,7 +1224,7 @@ class FranchiseRepository {
     }
     if (endDate != null) {
       query = query.where('timestamp',
-          isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
+          isLessThanOrEqualTo: endDate);
     }
     query = query.orderBy('timestamp', descending: true);
     if (limit != null) query = query.limit(limit);

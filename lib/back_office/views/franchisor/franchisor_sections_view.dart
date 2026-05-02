@@ -74,7 +74,7 @@ class SectionsView extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.03),
+                color: Colors.black.withValues(alpha: 0.03),
                 blurRadius: 8,
                 offset: const Offset(0, 2))
           ]),
@@ -189,8 +189,8 @@ class SectionsView extends StatelessWidget {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.2)),
-          color: color.withOpacity(0.1),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
+          color: color.withValues(alpha: 0.1),
         ),
         child: Icon(icon, size: 18, color: color),
       ),
@@ -204,13 +204,13 @@ class SectionsView extends StatelessWidget {
     Color? bgColor,
     bool isBold = false,
   }) {
-    final background = bgColor ?? color.withOpacity(0.12);
+    final background = bgColor ?? color.withValues(alpha: 0.12);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.15)),
+        border: Border.all(color: color.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -380,6 +380,7 @@ class _SectionFormViewState extends State<SectionFormView> {
         initialSelection: _items.map((e) => e.product).toList(),
       ),
     );
+    if (!mounted) return;
     if (selected != null) {
       setState(() {
         final newItems = <SectionItem>[];
@@ -430,7 +431,7 @@ class _SectionFormViewState extends State<SectionFormView> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 10,
                         offset: const Offset(0, 4))
                   ]),

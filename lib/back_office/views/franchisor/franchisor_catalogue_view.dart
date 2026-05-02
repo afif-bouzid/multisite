@@ -205,7 +205,7 @@ class _CatalogueViewState extends State<CatalogueView> {
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [
         BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             offset: const Offset(0, 4),
             blurRadius: 10)
       ]),
@@ -323,7 +323,7 @@ class _CatalogueViewState extends State<CatalogueView> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 6,
                       offset: const Offset(0, 3))
                 ]
@@ -576,11 +576,11 @@ class _CatalogueViewState extends State<CatalogueView> {
         border: Border.all(color: Colors.grey.shade200),
         boxShadow: [
           BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 15,
               offset: const Offset(0, 8)),
           BoxShadow(
-              color: Colors.black.withOpacity(0.02),
+              color: Colors.black.withValues(alpha: 0.02),
               blurRadius: 4,
               offset: const Offset(0, 2))
         ],
@@ -681,17 +681,17 @@ class _CatalogueViewState extends State<CatalogueView> {
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 8, vertical: 3),
                                 decoration: BoxDecoration(
-                                  color: color.withOpacity(0.1),
+                                  color: color.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(6),
                                   border: Border.all(
-                                      color: color.withOpacity(0.4), width: 1),
+                                      color: color.withValues(alpha: 0.4), width: 1),
                                 ),
                                 child: Text(
                                   filter.name.toUpperCase(),
                                   style: TextStyle(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w700,
-                                    color: color.withOpacity(1.0),
+                                    color: color.withValues(alpha: 1.0),
                                     letterSpacing: 0.5,
                                   ),
                                 ),
@@ -921,12 +921,12 @@ class _CatalogueViewState extends State<CatalogueView> {
         decoration: BoxDecoration(
             color: sectionColor,
             gradient: LinearGradient(
-                colors: [sectionColor, sectionColor.withOpacity(0.85)],
+                colors: [sectionColor, sectionColor.withValues(alpha: 0.85)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
+                  color: Colors.black.withValues(alpha: 0.15),
                   blurRadius: 2,
                   offset: const Offset(0, 1))
             ]),
@@ -935,7 +935,7 @@ class _CatalogueViewState extends State<CatalogueView> {
           children: [
             Icon(
               _getSectionIcon(section.type),
-              color: textColor.withOpacity(0.95),
+              color: textColor.withValues(alpha: 0.95),
               size: 14,
             ),
             const SizedBox(width: 6),
@@ -956,7 +956,7 @@ class _CatalogueViewState extends State<CatalogueView> {
                 Text(
                   "${_getTypeLabel(section.type)} • ${section.selectionMin}-${section.selectionMax}",
                   style: TextStyle(
-                      color: textColor.withOpacity(0.9),
+                      color: textColor.withValues(alpha: 0.9),
                       fontSize: 9,
                       fontWeight: FontWeight.w600,
                       height: 1.0),
@@ -1735,7 +1735,7 @@ class _ProductFormViewState extends State<ProductFormView>
             Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                    color: color.withOpacity(0.1), shape: BoxShape.circle),
+                    color: color.withValues(alpha: 0.1), shape: BoxShape.circle),
                 child: Icon(icon, color: color, size: 28)),
             const SizedBox(width: 12),
             Expanded(

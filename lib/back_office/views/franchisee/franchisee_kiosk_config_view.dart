@@ -195,7 +195,7 @@ class _FranchiseeKioskConfigViewState extends State<FranchiseeKioskConfigView> {
                                   fit: BoxFit.cover,
                                   colorFilter: isSelected
                                       ? ColorFilter.mode(
-                                          Colors.black.withOpacity(0.4),
+                                          Colors.black.withValues(alpha: 0.4),
                                           BlendMode.darken)
                                       : null,
                                 ),

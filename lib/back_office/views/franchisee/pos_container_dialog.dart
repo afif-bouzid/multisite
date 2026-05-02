@@ -83,7 +83,7 @@ class PosContainerDialog extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.grey.shade200),
           boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 4)
+            BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)
           ],
         ),
         child: Column(

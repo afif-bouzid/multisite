@@ -94,7 +94,7 @@ class _TeamManagementViewState extends State<TeamManagementView> {
                             horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
                           color: (isAssociate ? Colors.blue : Colors.orange)
-                              .withOpacity(0.1),
+                              .withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(

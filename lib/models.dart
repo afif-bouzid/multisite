@@ -521,7 +521,7 @@ class Transaction {
 }
 class FranchiseeMenuItem {
   final String masterProductId;
-  final double price;
+  final double? price;
   final Map<String, double> optionPrices;
   final bool isVisible;
   final double vatRate;
@@ -533,7 +533,7 @@ class FranchiseeMenuItem {
   final bool hidePriceOnCard;
   FranchiseeMenuItem({
     required this.masterProductId,
-    this.price = 0.0,
+    this.price,
     this.optionPrices = const {},
     this.isVisible = false,
     this.vatRate = 10.0,
@@ -551,7 +551,7 @@ class FranchiseeMenuItem {
         {};
     return FranchiseeMenuItem(
       masterProductId: data['masterProductId'] ?? '',
-      price: (data['price'] as num?)?.toDouble() ?? 0.0,
+      price: (data['price'] as num?)?.toDouble(),
       optionPrices: parsedOptionPrices,
       isVisible: data['isVisible'] ?? false,
       vatRate: (data['vatRate'] as num?)?.toDouble() ?? 10.0,

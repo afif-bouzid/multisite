@@ -334,7 +334,7 @@ class AppLauncher extends StatelessWidget {
       decoration: BoxDecoration(
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: Colors.black.withValues(alpha: 0.1),
             blurRadius: 10,
             offset: const Offset(0, 4),
           )
@@ -367,7 +367,7 @@ class AppLauncher extends StatelessWidget {
                   Text(subtitle,
                       style: TextStyle(
                           fontSize: 14,
-                          color: textColor.withOpacity(0.7),
+                          color: textColor.withValues(alpha: 0.7),
                           inherit: false)),
                 ],
               ),

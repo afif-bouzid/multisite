@@ -158,7 +158,8 @@ class _ProductViewContentState extends State<ProductViewContent> {
   }
 
   void _handleProductTap(MasterProduct product, FranchiseeMenuItem settings) {
-    if (product.isContainer || (product.containerProductIds.isNotEmpty)) {
+    // Un produit est un dossier SEULEMENT si le flag isContainer est actif
+    if (product.isContainer) {
       setState(() => _folderStack.add(product));
       return;
     }
@@ -168,22 +169,29 @@ class _ProductViewContentState extends State<ProductViewContent> {
   void _addProductToCart(
       MasterProduct product, FranchiseeMenuItem settings) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
-    bool hasOptions = product.sectionIds.isNotEmpty ||
+    final double resolvedPrice = settings.price ?? product.price ?? 0.0;
+
+    // On résout d'abord les sections pour voir s'il y en a de réelles
+    final sections = product.sectionIds
+        .map((id) => widget.posData.allSections
+            .firstWhereOrNull((s) => s.sectionId == id))
+        .whereType<ProductSection>()
+        .toList();
+
+    // Le produit a des options SEULEMENT s'il a des sections valides, 
+    // s'il est composite (menu) ou s'il a des ingrédients modifiables
+    bool hasOptions = sections.isNotEmpty ||
         product.isComposite ||
         product.ingredientProductIds.isNotEmpty;
+
     if (hasOptions) {
-      final sections = product.sectionIds
-          .map((id) => widget.posData.allSections
-              .firstWhereOrNull((s) => s.sectionId == id))
-          .whereType<ProductSection>()
-          .toList();
       final CartItem? configuredItem = await Navigator.of(context).push(
         MaterialPageRoute(
           fullscreenDialog: true,
           builder: (ctx) => ProductOptionsPage(
             franchiseeId: widget.franchiseeId,
             product: product,
-            basePrice: settings.price,
+            basePrice: resolvedPrice,
             vatRate: settings.vatRate,
             sections: sections,
             allProductsRef: widget.posData.products,
@@ -200,7 +208,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
       cart.addItem(CartItem(
         product: product,
         quantity: 1,
-        price: settings.price,
+        price: resolvedPrice,
         vatRate: settings.vatRate,
         selectedOptions: {},
       ));
@@ -379,13 +387,18 @@ class _ProductViewContentState extends State<ProductViewContent> {
 
   Widget _buildUltraFastCard(MasterProduct product, FranchiseeMenuItem settings,
       {required VoidCallback? onTap}) {
-    final bool isContainer =
-        product.isContainer || (product.containerProductIds.isNotEmpty);
+    // On se base uniquement sur le flag officiel isContainer
+    final bool isContainer = product.isContainer;
+    
     Color placeholderColor =
         _colorFromHex(product.color) ?? Colors.grey.shade100;
     if (isContainer) placeholderColor = const Color(0xFFFFCC80);
-    final bool hasCustomization = product.ingredientProductIds.isNotEmpty ||
-        product.sectionIds.isNotEmpty;
+
+    // On vérifie si les sections existent vraiment avant de dire qu'il est personnalisable
+    final hasRealSections = product.sectionIds.any((id) => 
+      widget.posData.allSections.any((s) => s.sectionId == id));
+      
+    final bool hasCustomization = product.ingredientProductIds.isNotEmpty || hasRealSections;
     return BouncingButton(
       onTap: onTap,
       haptic: true,
@@ -395,7 +408,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.1),
+                color: Colors.black.withValues(alpha: 0.1),
                 blurRadius: 8,
                 offset: const Offset(0, 4))
           ],
@@ -484,7 +497,8 @@ class _ProductViewContentState extends State<ProductViewContent> {
                         decoration: BoxDecoration(
                             color: Colors.black,
                             borderRadius: BorderRadius.circular(6)),
-                        child: Text("${settings.price.toStringAsFixed(2)} €",
+                        child: Text(
+                            "${(settings.price ?? product.price ?? 0.0).toStringAsFixed(2)} €",
                             style: const TextStyle(
                                 fontWeight: FontWeight.w900,
                                 fontSize: 17,
@@ -543,7 +557,7 @@ class _ProductViewContentState extends State<ProductViewContent> {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: Colors.black.withValues(alpha: 0.2),
                       blurRadius: 6,
                       offset: const Offset(0, 3))
                 ]
@@ -855,7 +869,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.2),
+                            color: Colors.white.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(12)),
                         child: Icon(isModif ? Icons.edit : Icons.restaurant,
                             color: Colors.white, size: 34),
@@ -881,8 +895,8 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                       style: OutlinedButton.styleFrom(
                           foregroundColor: Colors.white,
                           side: BorderSide(
-                              color: Colors.white.withOpacity(0.6), width: 3),
-                          backgroundColor: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.6), width: 3),
+                          backgroundColor: Colors.white.withValues(alpha: 0.1),
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(35)),
                           padding: const EdgeInsets.symmetric(
@@ -958,7 +972,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
               color: Colors.white,
               boxShadow: [
                 BoxShadow(
-                    color: Colors.black.withOpacity(0.2),
+                    color: Colors.black.withValues(alpha: 0.2),
                     blurRadius: 30,
                     offset: const Offset(0, -5))
               ],
@@ -1092,7 +1106,7 @@ class _ProductOptionsPageState extends State<ProductOptionsPage> {
                   boxShadow: [
                     if (isSelected)
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
+                          color: Colors.black.withValues(alpha: 0.12),
                           blurRadius: 12,
                           offset: const Offset(0, 5))
                   ],

@@ -220,7 +220,7 @@ class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
                 color: isOverPaid
-                    ? Colors.red.withOpacity(0.1)
+                    ? Colors.red.withValues(alpha: 0.1)
                     : Colors.blue.shade50,
                 border: Border.all(
                     color: isOverPaid ? Colors.red : Colors.blue.shade800,
@@ -261,7 +261,7 @@ class _TicketPaymentDialogState extends State<TicketPaymentDialog> {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: [
                   BoxShadow(
-                      color: Colors.orange.withOpacity(0.2), blurRadius: 8)
+                      color: Colors.orange.withValues(alpha: 0.2), blurRadius: 8)
                 ],
               ),
               child: Row(
@@ -382,7 +382,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         border: Border.all(color: color, width: 2),
         borderRadius: BorderRadius.circular(12),
       ),
@@ -422,7 +422,7 @@ class _MixedPaymentDialogState extends State<MixedPaymentDialog> {
               width: isSelected ? 3 : 1),
           borderRadius: BorderRadius.circular(12),
           boxShadow: isSelected
-              ? [BoxShadow(color: color.withOpacity(0.2), blurRadius: 4)]
+              ? [BoxShadow(color: color.withValues(alpha: 0.2), blurRadius: 4)]
               : [],
         ),
         child: Row(

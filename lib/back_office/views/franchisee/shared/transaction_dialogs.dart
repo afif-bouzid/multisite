@@ -89,9 +89,9 @@ Widget _buildPaymentChips(Transaction tx, {bool showAmount = false}) {
       return Container(
         padding: EdgeInsets.symmetric(horizontal: showAmount ? 10 : 8, vertical: showAmount ? 6 : 4),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
+            color: color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: color.withOpacity(0.3))),
+            border: Border.all(color: color.withValues(alpha: 0.3))),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -144,7 +144,7 @@ class SessionTransactionsDialog extends StatelessWidget {
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ExpansionTile(
                 leading: CircleAvatar(
-                  backgroundColor: primaryColor.withOpacity(0.15),
+                  backgroundColor: primaryColor.withValues(alpha: 0.15),
                   child: Icon(primaryIcon, color: primaryColor, size: 20),
                 ),
                 title: Text("Commande #$idShort à $time", style: const TextStyle(fontWeight: FontWeight.bold)),

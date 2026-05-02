@@ -123,7 +123,7 @@ class SessionTransactionsDetailView extends StatelessWidget {
                       OrderType.takeaway.toString().split('.').last;
                   final primaryColor =
                       isTakeaway ? AppColors.bkBlue : AppColors.bkGreen;
-                  final lightAccentColor = primaryColor.withOpacity(0.12);
+                  final lightAccentColor = primaryColor.withValues(alpha: 0.12);
                   return Card(
                     elevation: 0,
                     margin:

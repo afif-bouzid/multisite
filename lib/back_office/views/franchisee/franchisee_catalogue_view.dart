@@ -663,7 +663,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
           settings: settings ??
               FranchiseeMenuItem(
                   masterProductId: product.productId,
-                  price: product.price ?? 0.0),
+                  price: product.price),
           franchiseeId: franchiseeId!,
           franchisorId: franchisorId!,
           franchiseeMenuRef: franchiseeMenuRef,
@@ -877,7 +877,8 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                           decoration: isAvailable
                               ? TextDecoration.none
                               : TextDecoration.lineThrough)),
-                  trailing: Text("${item.settings.price.toStringAsFixed(2)} €",
+                  trailing: Text(
+                      "${(item.settings.price ?? item.product.price ?? 0.0).toStringAsFixed(2)} €",
                       style: const TextStyle(
                           fontSize: 13, fontWeight: FontWeight.bold)),
                 ),
@@ -916,10 +917,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
       required String franchisorId,
       List<MasterProduct>? allProducts,
       Map<String, FranchiseeMenuItem>? franchiseeSettings}) {
-    String initialPrice = '';
-    if (currentSettings != null) {
-      initialPrice = currentSettings.price.toStringAsFixed(2);
-    }
+    final String initialPrice = currentSettings?.price?.toStringAsFixed(2) ?? '';
     final priceController = TextEditingController(text: initialPrice);
     final Map<String, TextEditingController> optionControllers = {};
     for (var opt in product.options) {
@@ -1047,7 +1045,7 @@ class _FranchiseeCatalogueViewState extends State<FranchiseeCatalogueView> {
                       decoration: InputDecoration(
                         labelText: "Prix TTC (€)",
                         hintText:
-                            "Conseillé : ${product.price?.toStringAsFixed(2)} €",
+                            "Conseillé : ${product.price?.toStringAsFixed(2) ?? '0.00'} €",
                         helperText: "Laissez vide pour le prix franchiseur",
                         prefixIcon: const Icon(Icons.euro),
                         border: const OutlineInputBorder(),
@@ -1331,7 +1329,7 @@ class FranchiseeProductCard extends StatelessWidget {
                             isMissing: true),
                       if (!isVisible)
                         Container(
-                          color: Colors.white.withOpacity(0.85),
+                          color: Colors.white.withValues(alpha: 0.85),
                           alignment: Alignment.center,
                           child: const Chip(
                               label: Text("MASQUÉ",
@@ -1341,7 +1339,7 @@ class FranchiseeProductCard extends StatelessWidget {
                         )
                       else if (!isAvailable)
                         Container(
-                          color: Colors.black.withOpacity(0.6),
+                          color: Colors.black.withValues(alpha: 0.6),
                           alignment: Alignment.center,
                           child: const Icon(Icons.remove_shopping_cart,
                               color: Colors.white, size: 30),
@@ -1409,7 +1407,7 @@ class FranchiseeProductCard extends StatelessWidget {
                                     : Colors.transparent,
                                 borderRadius: BorderRadius.circular(8)),
                             child: Text(
-                              "${settings.price.toStringAsFixed(2)} €",
+                              "${(settings.price ?? product.price ?? 0.0).toStringAsFixed(2)} €",
                               style: TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.w900,
@@ -1535,7 +1533,7 @@ class FranchiseeProductCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(isMissing ? Icons.image_not_supported : icon,
-                size: 30, color: color.withOpacity(0.4)),
+                size: 30, color: color.withValues(alpha: 0.4)),
             if (isMissing)
               Padding(
                   padding: const EdgeInsets.only(top: 4),

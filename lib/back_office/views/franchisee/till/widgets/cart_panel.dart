@@ -104,7 +104,7 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                       style: TextStyle(
                           fontSize: 40,
                           fontWeight: FontWeight.bold,
-                          color: currentInput.isEmpty ? Colors.blue.withOpacity(0.3) : Colors.blue.shade900),
+                          color: currentInput.isEmpty ? Colors.blue.withValues(alpha: 0.3) : Colors.blue.shade900),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -841,14 +841,19 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                   separatorBuilder: (_, __) => const Divider(height: 1, color: Color(0xFFE0E0E0)),
                   itemBuilder: (context, index) {
                     final item = cart.items[index];
-                    return _CartItemCard(item: item, cart: cart, posData: widget.posData);
+                    return _CartItemCard(
+                      item: item,
+                      cart: cart,
+                      posData: widget.posData,
+                      franchiseeId: widget.franchiseeId,
+                    );
                   },
                 ),
               ),
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(color: Colors.white, boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 15, offset: const Offset(0, -5))
+                  BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 15, offset: const Offset(0, -5))
                 ]),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -964,7 +969,7 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
           decoration: BoxDecoration(
               color: isSelected ? Colors.white : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
-              boxShadow: isSelected ? [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4)] : []),
+              boxShadow: isSelected ? [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 4)] : []),
           alignment: Alignment.center,
           child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             Icon(icon, size: 18, color: isSelected ? Colors.black87 : Colors.grey),
@@ -997,7 +1002,12 @@ class _CartPanelState extends State<CartPanel> with SingleTickerProviderStateMix
                 IconButton(onPressed: () => Navigator.pop(ctx), icon: const Icon(Icons.close))
               ]),
               const Divider(),
-              ...cart.items.map((item) => _CartItemCard(item: item, cart: cart, posData: widget.posData)),
+              ...cart.items.map((item) => _CartItemCard(
+                    item: item,
+                    cart: cart,
+                    posData: widget.posData,
+                    franchiseeId: widget.franchiseeId,
+                  )),
               const Divider(),
               _buildTotalsAndActions(context, cart)
             ],
@@ -1025,13 +1035,19 @@ class _CartItemCard extends StatelessWidget {
   final CartItem item;
   final CartProvider cart;
   final PosData posData;
+  final String franchiseeId;
+
   const _CartItemCard({
     required this.item,
     required this.cart,
     required this.posData,
+    required this.franchiseeId,
   });
+
   Future<void> _editItem(BuildContext context) async {
-    final sections = posData.allSections.where((s) => item.product.sectionIds.contains(s.sectionId)).toList();
+    final sections = posData.allSections
+        .where((s) => item.product.sectionIds.contains(s.sectionId))
+        .toList();
     final CartItem? editedItem = await Navigator.of(context).push(
       MaterialPageRoute(
         fullscreenDialog: true,
@@ -1041,8 +1057,8 @@ class _CartItemCard extends StatelessWidget {
           vatRate: item.vatRate,
           sections: sections,
           initialOptions: item.selectedOptions,
-          franchiseeId: '',
-          allProductsRef: [],
+          franchiseeId: franchiseeId,
+          allProductsRef: posData.products,
           initialRemovedIngredientIds: item.removedIngredientProductIds,
         ),
       ),
@@ -1056,7 +1072,15 @@ class _CartItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final Map<String, List<SectionItem>> groupedOptions = item.selectedOptions;
     final List<String> sortedSectionIds = groupedOptions.keys.toList();
-    final bool isEditable = item.product.sectionIds.isNotEmpty || item.product.isComposite;
+    
+    // Vérification réelle de l'existence des sections pour le bouton Modifier
+    final bool hasRealSections = item.product.sectionIds.any((id) => 
+      posData.allSections.any((s) => s.sectionId == id));
+      
+    final bool isEditable = hasRealSections || 
+                           item.product.isComposite || 
+                           item.product.ingredientProductIds.isNotEmpty;
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(

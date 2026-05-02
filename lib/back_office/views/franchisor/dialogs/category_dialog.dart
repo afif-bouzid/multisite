@@ -170,7 +170,7 @@ class _KioskViewState extends State<KioskView> {
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(color: Colors.white, boxShadow: [
         BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             offset: const Offset(0, 4),
             blurRadius: 10)
       ]),
@@ -243,6 +243,10 @@ class _CategoryCardState extends State<CategoryCard> {
             ));
     if (confirm == true) {
       await widget.repository.deleteKioskCategory(widget.category.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Catégorie supprimée")),
+      );
     }
   }
 
@@ -271,7 +275,7 @@ class _CategoryCardState extends State<CategoryCard> {
             border: Border.all(color: Colors.grey.shade200),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
+                  color: Colors.black.withValues(alpha: 0.02),
                   offset: const Offset(0, 4),
                   blurRadius: 12)
             ],
@@ -454,9 +458,9 @@ class _CategoryCardState extends State<CategoryCard> {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: seedColor.withOpacity(0.05),
+        color: seedColor.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: seedColor.withOpacity(0.2)),
+        border: Border.all(color: seedColor.withValues(alpha: 0.2)),
       ),
       child: ListTile(
         visualDensity: VisualDensity.compact,
@@ -467,7 +471,7 @@ class _CategoryCardState extends State<CategoryCard> {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: seedColor.withOpacity(0.3)),
+            border: Border.all(color: seedColor.withValues(alpha: 0.3)),
             image: (filter.imageUrl != null && filter.imageUrl!.isNotEmpty)
                 ? DecorationImage(
                     image: CachedNetworkImageProvider(filter.imageUrl!),

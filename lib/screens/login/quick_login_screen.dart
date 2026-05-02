@@ -146,7 +146,7 @@ class _QuickLoginScreenState extends State<QuickLoginScreen> {
                   borderRadius: BorderRadius.circular(isMobile ? 20 : 30),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.cyan.withOpacity(0.2),
+                        color: Colors.cyan.withValues(alpha: 0.2),
                         blurRadius: 30,
                         offset: const Offset(0, 10))
                   ]),
@@ -399,7 +399,7 @@ class _TactileCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(30),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withOpacity(0.04),
+                color: Colors.black.withValues(alpha: 0.04),
                 blurRadius: 20,
                 offset: const Offset(0, 10))
           ],
@@ -415,7 +415,7 @@ class _TactileCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.cyan.withOpacity(0.3),
+                        color: Colors.cyan.withValues(alpha: 0.3),
                         blurRadius: 15,
                         spreadRadius: 2
                     )

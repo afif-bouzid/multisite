@@ -141,7 +141,7 @@ class KioskCustomizationScreen extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(isActive ? 0.2 : 0.05),
+              color: Colors.black.withValues(alpha: isActive ? 0.2 : 0.05),
               blurRadius: isActive ? 12 : 8,
               offset: const Offset(0, 4),
             )
@@ -163,7 +163,7 @@ class KioskCustomizationScreen extends StatelessWidget {
                     flex: 1,
                     child: Container(
                       color: isActive
-                          ? const Color(0xFF417228).withOpacity(0.05)
+                          ? const Color(0xFF417228).withValues(alpha: 0.05)
                           : Colors.white,
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       alignment: Alignment.centerLeft,
@@ -217,7 +217,7 @@ class KioskCustomizationScreen extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
+                    color: Colors.black.withValues(alpha: 0.6),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
@@ -265,7 +265,7 @@ class KioskCustomizationScreen extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.4),
+                    color: Colors.black.withValues(alpha: 0.4),
                     shape: BoxShape.circle),
                 child: const Icon(Icons.play_arrow_rounded,
                     color: Colors.white, size: 32),

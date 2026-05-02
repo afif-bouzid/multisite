@@ -149,7 +149,7 @@ class _PosViewState extends State<PosView> {
 
   void _addToCart(MasterProduct product, PosData posData) {
     final settings = posData.menuSettings[product.productId];
-    final double price = settings?.price ?? 0.0;
+    final double price = settings?.price ?? product.price ?? 0.0;
     context.read<CartProvider>().addItem(CartItem(
           product: product,
           price: price,
@@ -201,8 +201,8 @@ class _PosViewState extends State<PosView> {
                     itemCount: children.length,
                     itemBuilder: (ctx, index) {
                       final child = children[index];
-                      final price =
-                          posData.menuSettings[child.productId]?.price ?? 0.0;
+                      final settings = posData.menuSettings[child.productId];
+                      final price = settings?.price ?? child.price ?? 0.0;
                       return InkWell(
                         onTap: () => _addToCart(child, posData),
                         child: Card(
@@ -342,7 +342,7 @@ class _PosViewState extends State<PosView> {
                           final bool showAsFolder = isFolder || hasChildren;
                           final settings =
                               posData.menuSettings[product.productId];
-                          final price = settings?.price ?? 0.0;
+                          final price = settings?.price ?? product.price ?? 0.0;
 
                           return InkWell(
                             onTap: () {

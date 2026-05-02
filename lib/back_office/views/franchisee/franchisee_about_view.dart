@@ -121,7 +121,7 @@ class _FranchiseeAboutViewState extends State<FranchiseeAboutView> {
                             child: LinearProgressIndicator(
                               value: updateProv.progress,
                               color: Colors.green,
-                              backgroundColor: Colors.green.withOpacity(0.15),
+                              backgroundColor: Colors.green.withValues(alpha: 0.15),
                               minHeight: 10,
                             ),
                           ),

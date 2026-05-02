@@ -88,7 +88,7 @@ class FranchiseeDashboardView extends StatelessWidget {
                 borderRadius: BorderRadius.circular(32),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.3),
+                    color: Colors.black.withValues(alpha: 0.3),
                     blurRadius: 30,
                     offset: const Offset(-10, 0),
                   )
@@ -116,10 +116,10 @@ class _BrandAvatar extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Colors.white.withOpacity(0.1), Colors.transparent],
+          colors: [Colors.white.withValues(alpha: 0.1), Colors.transparent],
         ),
         shape: BoxShape.circle,
-        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.5),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
       ),
       alignment: Alignment.center,
       child: Text(
@@ -157,7 +157,7 @@ class _PremiumNavIcon extends StatelessWidget {
       child: InkWell(
         onTap: () => context.go(route),
         borderRadius: BorderRadius.circular(24),
-        splashColor: activeColor.withOpacity(0.1),
+        splashColor: activeColor.withValues(alpha: 0.1),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeOutCubic,
@@ -165,10 +165,10 @@ class _PremiumNavIcon extends StatelessWidget {
           height: 80,
           decoration: BoxDecoration(
             color:
-            isActive ? activeColor.withOpacity(0.15) : Colors.transparent,
+            isActive ? activeColor.withValues(alpha: 0.15) : Colors.transparent,
             borderRadius: BorderRadius.circular(24),
             border: isActive
-                ? Border.all(color: activeColor.withOpacity(0.5), width: 1.5)
+                ? Border.all(color: activeColor.withValues(alpha: 0.5), width: 1.5)
                 : Border.all(color: Colors.transparent),
           ),
           child: Column(
@@ -212,10 +212,10 @@ class _MenuTriggerButton extends StatelessWidget {
           decoration: BoxDecoration(
             color: const Color(0xFF252525),
             borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: Colors.white.withOpacity(0.1)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.5),
+                color: Colors.black.withValues(alpha: 0.5),
                 blurRadius: 15,
                 offset: const Offset(0, 5),
               )
@@ -231,7 +231,7 @@ class _MenuTriggerButton extends StatelessWidget {
       context: context,
       barrierDismissible: true,
       barrierLabel: "Fermer",
-      barrierColor: Colors.black.withOpacity(0.8),
+      barrierColor: Colors.black.withValues(alpha: 0.8),
       transitionDuration: const Duration(milliseconds: 300),
       pageBuilder: (ctx, anim1, anim2) {
         return _AdminMenuOverlay(parentContext: context);
@@ -270,10 +270,10 @@ class _AdminMenuOverlay extends StatelessWidget {
         decoration: BoxDecoration(
           color: const Color(0xFF1E1E24),
           borderRadius: BorderRadius.circular(40),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.6),
+              color: Colors.black.withValues(alpha: 0.6),
               blurRadius: 100,
               spreadRadius: 20,
             )
@@ -298,7 +298,7 @@ class _AdminMenuOverlay extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                          color: const Color(0xFFD4AF37).withOpacity(0.2),
+                          color: const Color(0xFFD4AF37).withValues(alpha: 0.2),
                           borderRadius: BorderRadius.circular(8)),
                       child: Text((user?.companyName ?? "").toUpperCase(),
                           style: const TextStyle(
@@ -413,19 +413,19 @@ class _AdminTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white.withOpacity(0.05),
+      color: Colors.white.withValues(alpha: 0.05),
       borderRadius: BorderRadius.circular(32),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(32),
-        hoverColor: color.withOpacity(0.2),
-        splashColor: color.withOpacity(0.4),
+        hoverColor: color.withValues(alpha: 0.2),
+        splashColor: color.withValues(alpha: 0.4),
         child: Container(
           width: 175,
           height: 175,
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-              border: Border.all(color: Colors.white.withOpacity(0.05)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
               borderRadius: BorderRadius.circular(32)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -471,7 +471,7 @@ class _LogoutHoldTileState extends State<_LogoutHoldTile>
   bool _confirmed = false;
   bool _midwayHapticDone = false;
 
-  static const Duration _holdDuration = Duration(seconds: 5);
+  static const Duration _holdDuration = Duration(seconds: 2);
 
   @override
   void initState() {
@@ -528,23 +528,21 @@ class _LogoutHoldTileState extends State<_LogoutHoldTile>
     final bool isHolding = progress > 0;
     final Color color = Colors.redAccent;
 
-    return GestureDetector(
-      onTapDown: (_) => _start(),
-      onTapUp: (_) => _cancel(),
-      onTapCancel: _cancel,
-      onLongPressDown: (_) => _start(),
-      onLongPressUp: _cancel,
-      onLongPressCancel: _cancel,
+    return Listener(
+      behavior: HitTestBehavior.opaque,
+      onPointerDown: (_) => _start(),
+      onPointerUp: (_) => _cancel(),
+      onPointerCancel: (_) => _cancel(),
       child: Container(
         width: 175,
         height: 175,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(32),
           border: Border.all(
             color: isHolding
-                ? color.withOpacity(0.4)
-                : Colors.white.withOpacity(0.05),
+                ? color.withValues(alpha: 0.4)
+                : Colors.white.withValues(alpha: 0.05),
             width: isHolding ? 2 : 1,
           ),
         ),
@@ -559,7 +557,7 @@ class _LogoutHoldTileState extends State<_LogoutHoldTile>
                 child: CircularProgressIndicator(
                   value: progress,
                   strokeWidth: 5,
-                  backgroundColor: Colors.white.withOpacity(0.08),
+                  backgroundColor: Colors.white.withValues(alpha: 0.08),
                   valueColor: AlwaysStoppedAnimation<Color>(color),
                 ),
               ),
@@ -589,10 +587,10 @@ class _LogoutHoldTileState extends State<_LogoutHoldTile>
                     opacity: isHolding ? 1 : 0.6,
                     child: Text(
                       isHolding
-                          ? "${(5 - progress * 5).ceil()}s"
-                          : "Appui long 5s",
+                          ? "${(2 - progress * 2).ceil()}s"
+                          : "Appui long 2s",
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.5),
+                        color: Colors.white.withValues(alpha: 0.5),
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                       ),
@@ -624,24 +622,24 @@ class _CloseTillTile extends StatelessWidget {
         final activeSession = snapshot.data;
         final bool hasSession = activeSession != null;
         final Color color =
-        hasSession ? Colors.redAccent : Colors.white.withOpacity(0.2);
+        hasSession ? Colors.redAccent : Colors.white.withValues(alpha: 0.2);
 
         return Material(
-          color: Colors.white.withOpacity(0.05),
+          color: Colors.white.withValues(alpha: 0.05),
           borderRadius: BorderRadius.circular(32),
           child: InkWell(
             onTap: hasSession
                 ? () => _openCloseDialog(context, activeSession)
                 : null,
             borderRadius: BorderRadius.circular(32),
-            hoverColor: color.withOpacity(0.2),
-            splashColor: color.withOpacity(0.4),
+            hoverColor: color.withValues(alpha: 0.2),
+            splashColor: color.withValues(alpha: 0.4),
             child: Container(
               width: 175,
               height: 175,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
                   borderRadius: BorderRadius.circular(32)),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -656,7 +654,7 @@ class _CloseTillTile extends StatelessWidget {
                     style: TextStyle(
                       color: hasSession
                           ? Colors.white
-                          : Colors.white.withOpacity(0.4),
+                          : Colors.white.withValues(alpha: 0.4),
                       fontWeight: FontWeight.w600,
                       fontSize: 16,
                     ),
@@ -877,16 +875,16 @@ class _KioskSwitchButton extends StatelessWidget {
                       SetOptions(merge: true));
                 },
                 borderRadius: BorderRadius.circular(24),
-                splashColor: color.withOpacity(0.2),
+                splashColor: color.withValues(alpha: 0.2),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(24),
                     border:
-                    Border.all(color: color.withOpacity(0.5), width: 1.5),
+                    Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -961,16 +959,16 @@ class _ClickAndCollectSwitchButton extends StatelessWidget {
                   }, SetOptions(merge: true));
                 },
                 borderRadius: BorderRadius.circular(24),
-                splashColor: color.withOpacity(0.2),
+                splashColor: color.withValues(alpha: 0.2),
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
                   width: 80,
                   height: 80,
                   decoration: BoxDecoration(
-                    color: color.withOpacity(0.15),
+                    color: color.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(24),
                     border:
-                    Border.all(color: color.withOpacity(0.5), width: 1.5),
+                    Border.all(color: color.withValues(alpha: 0.5), width: 1.5),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,

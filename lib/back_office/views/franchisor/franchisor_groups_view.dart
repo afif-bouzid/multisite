@@ -146,7 +146,7 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             offset: const Offset(0, 4),
             blurRadius: 10,
           )
@@ -256,7 +256,7 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withValues(alpha: 0.04),
             offset: const Offset(0, 2),
             blurRadius: 8,
           )
@@ -351,7 +351,7 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
         padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: color.withOpacity(0.2)),
+          border: Border.all(color: color.withValues(alpha: 0.2)),
         ),
         child: Icon(icon, size: 18, color: color),
       ),
@@ -368,6 +368,10 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
     );
     _LocalSectionCache.invalidate();
     await repository.duplicateSectionGroup(group);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Groupe dupliqué")),
+    );
   }
 
   void _deleteGroup(BuildContext context, FranchiseRepository repository,
@@ -394,8 +398,15 @@ class _SectionGroupsViewState extends State<SectionGroupsView> {
                     child: const Text("Supprimer"))
               ],
             ));
+
+    if (!mounted) return;
+
     if (confirm == true) {
       await repository.deleteSectionGroup(group.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Groupe supprimé")),
+      );
     }
   }
 }
@@ -516,7 +527,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
                       color: Colors.white,
                       boxShadow: [
                         BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             offset: const Offset(0, 4),
                             blurRadius: 10)
                       ],
@@ -626,7 +637,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
         return Container(
           decoration: BoxDecoration(
             color: candidateData.isNotEmpty
-                ? Colors.blue.withOpacity(0.05)
+                ? Colors.blue.withValues(alpha: 0.05)
                 : Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
@@ -635,7 +646,7 @@ class _SectionGroupFormViewState extends State<SectionGroupFormView> {
                     : Colors.transparent),
             boxShadow: [
               BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
+                  color: Colors.black.withValues(alpha: 0.03),
                   blurRadius: 10,
                   offset: const Offset(0, 4))
             ],

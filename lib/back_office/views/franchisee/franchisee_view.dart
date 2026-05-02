@@ -244,7 +244,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 children: [
                   Container(
                     margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.withOpacity(0.3))),
+                    decoration: BoxDecoration(color: Colors.green.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.green.withValues(alpha: 0.3))),
                     child: Row(
                       children: [
                         const PulseDot(color: Colors.greenAccent),
@@ -255,7 +255,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                         ])),
                         ElevatedButton(
                           onPressed: () => _openSessionDetailModal(session),
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withOpacity(0.2), foregroundColor: Colors.greenAccent, elevation: 0),
+                          style: ElevatedButton.styleFrom(backgroundColor: Colors.green.withValues(alpha: 0.2), foregroundColor: Colors.greenAccent, elevation: 0),
                           child: const Text("DÉTAILS", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11)),
                         )
                       ],
@@ -273,7 +273,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                   ),
                   Container(
                     margin: const EdgeInsets.all(16), padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.05))),
+                    decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -455,12 +455,12 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                               final revenue = stats.productCA[e.key] ?? 0.0;
                               return Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05)))),
+                                decoration: BoxDecoration(border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
                                 child: Row(
                                   children: [
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      decoration: BoxDecoration(color: Colors.indigo.withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                      decoration: BoxDecoration(color: Colors.indigo.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
                                       child: Text("${e.value}x", style: const TextStyle(color: Colors.indigoAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                                     ),
                                     const SizedBox(width: 12),
@@ -530,7 +530,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
                 style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
+                  fillColor: Colors.white.withValues(alpha: 0.05),
                   hintText: "Rechercher un ticket (Nom client, N°...)",
                   hintStyle: const TextStyle(color: Colors.white38),
                   prefixIcon: const Icon(Icons.search, color: Colors.indigoAccent),
@@ -602,9 +602,9 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
       child: Container(
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         decoration: BoxDecoration(
-          color: isActive ? Colors.greenAccent.withOpacity(0.05) : kCardBg,
+          color: isActive ? Colors.greenAccent.withValues(alpha: 0.05) : kCardBg,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isActive ? Colors.greenAccent.withOpacity(0.3) : Colors.white.withOpacity(0.05)),
+          border: Border.all(color: isActive ? Colors.greenAccent.withValues(alpha: 0.3) : Colors.white.withValues(alpha: 0.05)),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         child: Row(
@@ -612,7 +612,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isActive ? Colors.greenAccent.withOpacity(0.1) : Colors.indigoAccent.withOpacity(0.1),
+                color: isActive ? Colors.greenAccent.withValues(alpha: 0.1) : Colors.indigoAccent.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(isActive ? Icons.point_of_sale : Icons.history, color: isActive ? Colors.greenAccent : Colors.indigoAccent),
@@ -648,7 +648,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
   Widget _buildFilterBar(String storeId) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withOpacity(0.05)))),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: Colors.white.withValues(alpha: 0.05)))),
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -673,9 +673,9 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
         margin: const EdgeInsets.only(right: 8),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
-          color: active ? Colors.white : Colors.white.withOpacity(0.07),
+          color: active ? Colors.white : Colors.white.withValues(alpha: 0.07),
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: active ? Colors.white : Colors.white.withOpacity(0.15)),
+          border: Border.all(color: active ? Colors.white : Colors.white.withValues(alpha: 0.15)),
         ),
         child: Row(
           children: [
@@ -710,11 +710,11 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      color: Colors.white.withOpacity(0.04),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+      color: Colors.white.withValues(alpha: 0.04),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: primaryColor.withOpacity(0.1),
+          backgroundColor: primaryColor.withValues(alpha: 0.1),
           child: _getPaymentIcon(tx, size: 20, color: primaryColor),
         ),
         title: Text("$mainTitle - ${DateFormat('HH:mm').format(tx.timestamp)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
@@ -780,7 +780,7 @@ class _MobileStatsViewState extends State<MobileStatsView> with TickerProviderSt
   Widget _chipBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
@@ -903,7 +903,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))),
+                          decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withValues(alpha: 0.05))),
                           child: Row(
                             children: [
                               Expanded(child: _buildInfoRow("Fond Initial", widget.session.initialCash, Colors.white)),
@@ -979,7 +979,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
   Widget _buildSummaryCard(String label, double amount, IconData icon, Color color) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.3), width: 1.5)),
+      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1005,7 +1005,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
               selected: isSelected,
               onSelected: (val) => setState(() => _activeFilter = filter),
               selectedColor: Colors.white,
-              backgroundColor: Colors.white.withOpacity(0.05),
+              backgroundColor: Colors.white.withValues(alpha: 0.05),
               side: BorderSide(color: isSelected ? Colors.white : Colors.transparent),
             ),
           );
@@ -1023,10 +1023,10 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
     return Card(
       elevation: 0,
       margin: const EdgeInsets.symmetric(vertical: 4),
-      color: Colors.white.withOpacity(0.04),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withOpacity(0.05))),
+      color: Colors.white.withValues(alpha: 0.04),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: Colors.white.withValues(alpha: 0.05))),
       child: ListTile(
-        leading: CircleAvatar(backgroundColor: primaryColor.withOpacity(0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
+        leading: CircleAvatar(backgroundColor: primaryColor.withValues(alpha: 0.1), child: _getPaymentIcon(tx, size: 20, color: primaryColor)),
         title: Text("$mainTitle - ${DateFormat('HH:mm').format(tx.timestamp)}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
         subtitle: Padding(padding: const EdgeInsets.only(top: 6.0), child: _buildPaymentChips(tx)),
         trailing: Text("${tx.total.toStringAsFixed(2)} €", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 14)),
@@ -1087,7 +1087,7 @@ class _MobileSessionDetailModalState extends State<MobileSessionDetailModal> {
   Widget _chipBadge(String label, Color color) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withOpacity(0.3))),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(4), border: Border.all(color: color.withValues(alpha: 0.3))),
       child: Text(label, style: TextStyle(fontSize: 9, color: color, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
     );
   }
@@ -1109,7 +1109,7 @@ class MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.all(small ? 16 : 20),
-      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.2))),
+      decoration: BoxDecoration(color: kCardBg, borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withValues(alpha: 0.2))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1137,7 +1137,7 @@ class _PulseDotState extends State<PulseDot> with SingleTickerProviderStateMixin
   @override
   void dispose() { _c.dispose(); super.dispose(); }
   @override
-  Widget build(BuildContext context) { return FadeTransition(opacity: Tween(begin: 0.4, end: 1.0).animate(_c), child: Container(width: 10, height: 10, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: widget.color.withOpacity(0.6), blurRadius: 6)]))); }
+  Widget build(BuildContext context) { return FadeTransition(opacity: Tween(begin: 0.4, end: 1.0).animate(_c), child: Container(width: 10, height: 10, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle, boxShadow: [BoxShadow(color: widget.color.withValues(alpha: 0.6), blurRadius: 6)]))); }
 }
 
 class HourlyChart extends StatelessWidget {

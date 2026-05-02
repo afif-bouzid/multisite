@@ -63,7 +63,7 @@ class FiltersView extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                     boxShadow: [
                       BoxShadow(
-                          color: Colors.black.withOpacity(0.03),
+                          color: Colors.black.withValues(alpha: 0.03),
                           blurRadius: 8,
                           offset: const Offset(0, 2))
                     ]),
@@ -72,9 +72,9 @@ class FiltersView extends StatelessWidget {
                     width: 40,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.2),
+                      color: color.withValues(alpha: 0.2),
                       shape: BoxShape.circle,
-                      border: Border.all(color: color.withOpacity(0.5)),
+                      border: Border.all(color: color.withValues(alpha: 0.5)),
                     ),
                     child: Icon(Icons.label, color: color, size: 20),
                   ),
@@ -257,7 +257,7 @@ class _FilterDialogContentState extends State<_FilterDialogContent> {
                     boxShadow: isSelected
                         ? [
                             BoxShadow(
-                                color: color.withOpacity(0.4), blurRadius: 6)
+                                color: color.withValues(alpha: 0.4), blurRadius: 6)
                           ]
                         : null),
                 child: isSelected
